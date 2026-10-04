@@ -1,12 +1,15 @@
 class_name BlackHoleGenerator
 extends Weapon
 ## Black Hole Generator: spawns a BlackHoleCore inside the containment chamber
-## (at the model's Black_Hole_Projectile_Spawn marker). The core stays its own
-## node so firing can later detach it and send it out of Muzzle_Exit.
+## (at the model's Black_Hole_Projectile_Spawn marker). Firing releases that
+## core as a BlackHoleProjectile; a new core then forms in the chamber.
+
+signal fired(projectile: BlackHoleProjectile)
 
 const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 
 @export var core_scene: PackedScene
+@export var projectile_scene: PackedScene
 ## Size of the core inside the chamber (m across).
 @export var core_size := 0.28
 ## Orientation of the core in the chamber (degrees).
@@ -15,33 +18,88 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 ## accretion disk is seen from changing angles. Applied to a pivot, not to
 ## the core's own animation.
 @export var tumble_speed := Vector3(0.55, 0.37, 0.23)
+## Seconds after firing before a new core starts forming.
+@export var recharge_delay := 0.6
+## Seconds for the new core to grow to full size.
+@export var recharge_grow := 0.4
 
 var core: BlackHoleCore
 var _tumble: Node3D
 var _t := 0.0
+var _recharge := 0.0      # >0 while waiting for a new core
+var _grow := 1.0          # 0..1 growth of the current core
 
 
 func _ready() -> void:
+	_spawn_core()
+	_grow = 1.0
+	_apply_core_scale()
+
+
+func _spawn_core() -> void:
 	var chamber := find_marker(CHAMBER_MARKER)
-	if chamber and core_scene:
-		core = core_scene.instantiate()
-		core.name = "BlackHoleCore"
-		core.scale = Vector3.ONE * core_size
-		core.rotation_degrees = core_rotation_degrees
+	if chamber == null or core_scene == null:
+		return
+	if _tumble == null:
 		_tumble = Node3D.new()
 		_tumble.name = "CoreTumble"
 		chamber.add_child(_tumble)
-		_tumble.add_child(core)
+	core = core_scene.instantiate()
+	core.name = "BlackHoleCore"
+	core.rotation_degrees = core_rotation_degrees
+	_tumble.add_child(core)
+	_grow = 0.0
+	_apply_core_scale()
+
+
+func _apply_core_scale() -> void:
+	if core:
+		var g := ease(clampf(_grow, 0.0, 1.0), 0.4)
+		core.scale = Vector3.ONE * maxf(core_size * g, 0.001)
 
 
 func _process(delta: float) -> void:
-	if _tumble == null or core == null:
-		return
 	_t += delta
-	_tumble.rotation = tumble_speed * _t
+	if _tumble:
+		_tumble.rotation = tumble_speed * _t
+	if core == null and _recharge > 0.0:
+		_recharge -= delta
+		if _recharge <= 0.0:
+			_spawn_core()
+	if core and _grow < 1.0:
+		_grow = minf(_grow + delta / recharge_grow, 1.0)
+		_apply_core_scale()
 
 
-## For later: release the core (e.g. to fire it). Caller re-parents it.
+func can_fire() -> bool:
+	return core != null and _grow >= 1.0 and projectile_scene != null
+
+
+func fire(shooter: Node3D, aim_origin: Vector3, aim_dir: Vector3) -> bool:
+	if not can_fire():
+		return false
+	var start := core.global_position
+	var target := resolve_aim_point(shooter, aim_origin, aim_dir)
+	var dir := (target - start).normalized()
+	var barrel := global_basis.x.normalized()
+	# Never shoot backwards/sideways out of the gun if the aim point is behind
+	# or right next to the muzzle; fall back to the camera direction.
+	if dir.dot(barrel) < 0.3 or start.distance_to(target) < 1.5:
+		dir = aim_dir.normalized()
+	var world: Node = get_tree().current_scene
+	if world == null:
+		world = get_tree().root
+	var projectile: BlackHoleProjectile = projectile_scene.instantiate()
+	world.add_child(projectile)
+	projectile.global_position = start
+	var c := detach_core()
+	projectile.launch(c, dir, shooter)
+	_recharge = recharge_delay
+	fired.emit(projectile)
+	return true
+
+
+## Release the core (keeps its world pose; caller re-parents it).
 func detach_core() -> BlackHoleCore:
 	var c := core
 	if c:

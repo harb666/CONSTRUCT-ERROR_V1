@@ -5,6 +5,12 @@ extends Node
 ## works for any weapon and for local or (later) remote players.
 
 signal weapon_equipped(definition: WeaponDefinition)
+signal weapon_fired(weapon: Weapon)
+
+## How long the player keeps facing the aim after a shot.
+@export var aim_face_time := 0.9
+## A shot waits (at most this long) for the body to turn towards the aim.
+@export var max_turn_wait := 0.2
 
 @export var visual_path: NodePath = ^"../Visual/GrinchVisual"
 
@@ -12,6 +18,35 @@ var current: Weapon
 var current_definition: WeaponDefinition
 var _attachment: BoneAttachment3D
 var _socket := Transform3D.IDENTITY
+var _fire_request := 0.0
+
+
+func _ready() -> void:
+	var player := get_parent() as PlayerController
+	if player:
+		player.command_processed.connect(_on_command)
+
+
+## Trigger handling, driven by the player's per-tick command (so it works the
+## same for local and, later, network-fed players).
+func _on_command(cmd: PlayerCommand, delta: float) -> void:
+	if current == null:
+		return
+	var player := get_parent() as PlayerController
+	if cmd.fire_pressed or (cmd.fire_held and current.auto_fire and current.can_fire()):
+		if _fire_request <= 0.0:
+			_fire_request = max_turn_wait
+	if _fire_request <= 0.0:
+		return
+	player.face_aim_for(aim_face_time)
+	_fire_request -= delta
+	var facing := player.is_facing_yaw(cmd.view_yaw, 0.3)
+	if current.can_fire() and (facing or _fire_request <= 0.0):
+		if current.fire(player, cmd.aim_origin, cmd.aim_dir):
+			weapon_fired.emit(current)
+		_fire_request = 0.0
+	elif not current.can_fire():
+		_fire_request = 0.0
 
 
 func _skeleton() -> Skeleton3D:
@@ -34,11 +69,17 @@ func equip(definition: WeaponDefinition) -> Weapon:
 	_attachment = BoneAttachment3D.new()
 	_attachment.name = "WeaponMount"
 	_attachment.bone_name = definition.mount_bone
+	# Posed every rendered frame from the skeleton, so not physics-interpolated.
+	_attachment.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	sk.add_child(_attachment)
 
 	var weapon: Weapon = definition.weapon_scene.instantiate()
 	weapon.definition = definition
 	_attachment.add_child(weapon)
+	# Placed in world space every rendered frame from the skeleton's
+	# interpolated pose (like the camera), so it never lags the character.
+	weapon.top_level = true
+	weapon.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_socket = weapon.get_socket_transform()
 	if not sk.skeleton_updated.is_connected(_align_weapon):
 		sk.skeleton_updated.connect(_align_weapon)
@@ -63,7 +104,7 @@ func _align_weapon() -> void:
 	var def := current_definition
 	# Read the final (post-modifier) pose straight from the skeleton.
 	var sk := _attachment.get_parent() as Skeleton3D
-	var bone := sk.global_transform * sk.get_bone_global_pose(_attachment.bone_idx)
+	var bone := sk.get_global_transform_interpolated() * sk.get_bone_global_pose(_attachment.bone_idx)
 	var axis := bone.basis.y.normalized()
 	var up := Vector3.UP - axis * axis.dot(Vector3.UP)
 	if up.length_squared() < 1e-4:

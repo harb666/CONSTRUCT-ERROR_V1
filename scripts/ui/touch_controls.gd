@@ -16,6 +16,8 @@ const BUTTONS := [
 	{"action": "jump", "label": "JUMP", "radius": 70.0, "offset": Vector2(-120, -120)},
 	{"action": "dodge", "label": "DODGE", "radius": 54.0, "offset": Vector2(-280, -90)},
 	{"action": "sprint", "label": "SPRINT", "radius": 48.0, "offset": Vector2(-110, -290), "toggle": true},
+	# Hold to fire; dragging the same finger also aims the camera.
+	{"action": "fire", "label": "FIRE", "radius": 62.0, "offset": Vector2(-270, -250), "look": true},
 ]
 
 var _move_finger := -1
@@ -25,6 +27,9 @@ var _look_finger := -1
 var _look_last := Vector2.ZERO
 var _button_fingers: Array[int] = []
 var _sprint_toggled := false
+var _button_last: Array[Vector2] = []
+## Actions whose buttons are currently hidden (e.g. FIRE while unarmed).
+var _hidden := {"fire": true}
 var _font: Font
 
 
@@ -34,6 +39,7 @@ func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	_button_fingers.resize(BUTTONS.size())
 	_button_fingers.fill(-1)
+	_button_last.resize(BUTTONS.size())
 	visible = DisplayServer.is_touchscreen_available()
 
 
@@ -63,8 +69,11 @@ func _input(event: InputEvent) -> void:
 
 func _on_touch_down(index: int, pos: Vector2) -> void:
 	for i in BUTTONS.size():
+		if _hidden.has(BUTTONS[i].action):
+			continue
 		if _button_fingers[i] == -1 and pos.distance_to(_button_center(i)) <= BUTTONS[i].radius * 1.25:
 			_button_fingers[i] = index
+			_button_last[i] = pos
 			_press_button(i)
 			queue_redraw()
 			return
@@ -93,6 +102,12 @@ func _on_touch_drag(index: int, pos: Vector2) -> void:
 		var d := pos - _look_last
 		_look_last = pos
 		look_dragged.emit(d * look_sensitivity)
+	else:
+		for i in BUTTONS.size():
+			if _button_fingers[i] == index and BUTTONS[i].get("look", false):
+				var d := pos - _button_last[i]
+				_button_last[i] = pos
+				look_dragged.emit(d * look_sensitivity)
 
 
 func _on_touch_up(index: int) -> void:
@@ -109,6 +124,18 @@ func _on_touch_up(index: int) -> void:
 			_button_fingers[i] = -1
 			if not BUTTONS[i].get("toggle", false):
 				Input.action_release(BUTTONS[i].action)
+	queue_redraw()
+
+
+func set_action_enabled(action: String, enabled: bool) -> void:
+	if enabled:
+		_hidden.erase(action)
+	else:
+		_hidden[action] = true
+		for i in BUTTONS.size():
+			if BUTTONS[i].action == action and _button_fingers[i] != -1:
+				_button_fingers[i] = -1
+				Input.action_release(action)
 	queue_redraw()
 
 
@@ -156,6 +183,8 @@ func _draw() -> void:
 	# Buttons.
 	for i in BUTTONS.size():
 		var b: Dictionary = BUTTONS[i]
+		if _hidden.has(b.action):
+			continue
 		var c := _button_center(i)
 		var active: bool = _button_fingers[i] != -1 or (b.get("toggle", false) and _sprint_toggled)
 		draw_circle(c, b.radius, Color(1, 0.75, 0.2, 0.45) if active else base_col)

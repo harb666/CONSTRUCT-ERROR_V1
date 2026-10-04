@@ -44,4 +44,10 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
 		debug_hud.player = player
+		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
+		if holder:
+			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
+				touch_controls.set_action_enabled("fire", true)
+				rig.aiming = true
+				$UI/Crosshair.visible = true)
 	return player

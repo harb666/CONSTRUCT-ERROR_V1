@@ -14,6 +14,7 @@ var camera_rig: CameraRig
 # lost or doubled regardless of how render frames and physics ticks line up.
 var _prev_jump := false
 var _prev_dodge := false
+var _prev_fire := false
 
 
 func get_command() -> PlayerCommand:
@@ -26,6 +27,13 @@ func get_command() -> PlayerCommand:
 	c.dodge_pressed = dodge_held and not _prev_dodge
 	_prev_jump = c.jump_held
 	_prev_dodge = dodge_held
+	c.fire_held = Input.is_action_pressed("fire")
+	c.fire_pressed = c.fire_held and not _prev_fire
+	_prev_fire = c.fire_held
+	if camera_rig:
+		var cam := camera_rig.camera
+		c.aim_origin = cam.global_position
+		c.aim_dir = -cam.global_basis.z
 	c.sprint_held = Input.is_action_pressed("sprint")
 	return c
 

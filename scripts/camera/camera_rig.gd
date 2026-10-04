@@ -9,6 +9,14 @@ extends Node3D
 @export var pitch_min_deg := -70.0
 @export var pitch_max_deg := 45.0
 @export var start_pitch_deg := -14.0
+## Over-the-shoulder offset used while armed (x = right, in camera yaw space),
+## so the character doesn't sit on the crosshair.
+@export var aim_offset := Vector3(-0.65, 0.15, 0.0)
+@export var aim_offset_rate := 6.0
+
+## 0..1: how much of aim_offset is applied (eased towards `aiming`).
+var aim_blend := 0.0
+var aiming := false
 
 @onready var arm: SpringArm3D = $Arm
 @onready var camera: Camera3D = $Arm/Camera3D
@@ -37,11 +45,13 @@ func add_look(radians: Vector2) -> void:
 	pitch = clampf(pitch - radians.y, deg_to_rad(pitch_min_deg), deg_to_rad(pitch_max_deg))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, delta * aim_offset_rate * 0.5)
 	_update_transform()
 
 
 func _update_transform() -> void:
 	if target:
-		global_position = target.get_global_transform_interpolated().origin + Vector3.UP * height
+		var offset := Basis(Vector3.UP, yaw) * aim_offset * smoothstep(0.0, 1.0, aim_blend)
+		global_position = target.get_global_transform_interpolated().origin + Vector3.UP * height + offset
 	rotation = Vector3(pitch, yaw, 0.0)

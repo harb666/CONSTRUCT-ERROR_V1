@@ -7,6 +7,8 @@ signal jumped(is_air_jump: bool)
 signal dodged(direction: Vector3)
 ## impact_speed: downward speed (m/s) just before touching the ground.
 signal landed(impact_speed: float)
+## Emitted after each movement tick with the command used (weapons etc. hook here).
+signal command_processed(cmd: PlayerCommand, delta: float)
 
 @export var player_id := 1
 
@@ -44,6 +46,8 @@ signal landed(impact_speed: float)
 @export_group("Rotation")
 ## Higher = snappier facing. Exponential smoothing rate.
 @export var turn_rate := 16.0
+## Facing speed while aiming/shooting.
+@export var aim_turn_rate := 22.0
 
 var input: PlayerInput
 var spawn_transform: Transform3D
@@ -62,6 +66,7 @@ var _dodge_timer := 0.0
 var _dodge_cooldown_timer := 0.0
 var _dodge_dir := Vector3.FORWARD
 var _was_on_floor := true
+var _aim_face_timer := 0.0
 var _fall_speed := 0.0
 
 
@@ -77,6 +82,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	var cmd := input.get_command() if input else PlayerCommand.new()
 	simulate(cmd, delta)
+	command_processed.emit(cmd, delta)
 
 
 ## Advance this player by one tick. Kept self-contained so it can later be
@@ -153,10 +159,15 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	move_and_slide()
 
 	# --- facing ---
-	var face_dir := _dodge_dir if is_dodging else wish_dir
-	if face_dir != Vector3.ZERO:
-		var target_yaw := atan2(-face_dir.x, -face_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-turn_rate * delta))
+	_aim_face_timer = maxf(_aim_face_timer - delta, 0.0)
+	if _aim_face_timer > 0.0 and not is_dodging:
+		# Shooting: face the camera's aim and strafe.
+		rotation.y = lerp_angle(rotation.y, cmd.view_yaw, 1.0 - exp(-aim_turn_rate * delta))
+	else:
+		var face_dir := _dodge_dir if is_dodging else wish_dir
+		if face_dir != Vector3.ZERO:
+			var target_yaw := atan2(-face_dir.x, -face_dir.z)
+			rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-turn_rate * delta))
 
 	var now_on_floor := is_on_floor()
 	if now_on_floor and not _was_on_floor:
@@ -165,6 +176,15 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	if global_position.y < -30.0:
 		respawn()
+
+
+## Face the aim direction (camera yaw) for `seconds`, e.g. while shooting.
+func face_aim_for(seconds: float) -> void:
+	_aim_face_timer = maxf(_aim_face_timer, seconds)
+
+
+func is_facing_yaw(yaw: float, tolerance: float) -> bool:
+	return absf(wrapf(rotation.y - yaw, -PI, PI)) <= tolerance
 
 
 func _start_dodge(wish_dir: Vector3, on_floor: bool) -> void:

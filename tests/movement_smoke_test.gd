@@ -201,5 +201,53 @@ func _run() -> void:
 	_check(air_ticks < 6, "stays grounded sprinting across (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z > pad.global_position.z + 1.5, "sprints off the far side")
 
+	# Firing: aim straight at Dummy2 and shoot the Black Hole Generator.
+	var dummy: TargetDummy = main.get_node("Targets/Dummy2")
+	p.global_position = Vector3(dummy.global_position.x, 0.05, dummy.global_position.z + 9.0)
+	p.velocity = Vector3.ZERO
+	p.rotation.y = PI * 0.5  # facing sideways: firing must turn the body to the aim
+	p.reset_physics_interpolation()
+	var rig: CameraRig = main.get_node("CameraRig")
+	rig.aim_blend = 1.0
+	rig.pitch = 0.0
+	# Put the crosshair on the dummy (camera is over the shoulder).
+	var aim_at := dummy.global_position + Vector3(0, 1.2, 0)
+	for k in 3:
+		await process_frame
+		var cam_pos := rig.camera.global_position
+		rig.yaw = atan2(-(aim_at.x - cam_pos.x), -(aim_at.z - cam_pos.z))
+	await _ticks(20)
+	_check(gun.can_fire(), "gun is charged")
+	var fired_projectile: Array = []
+	gun.fired.connect(func(pr: BlackHoleProjectile) -> void: fired_projectile.append(pr))
+	Input.action_press("fire")
+	for i in 20:
+		await _ticks(1)
+		if fired_projectile.size() > 0:
+			break
+	Input.action_release("fire")
+	_check(fired_projectile.size() == 1, "FIRE launches a black hole")
+	_check(p.is_facing_yaw(rig.yaw, 0.35), "player turned to face the aim when firing")
+	_check(gun.core == null, "core left the chamber")
+	if fired_projectile.size() == 1:
+		var pr: BlackHoleProjectile = fired_projectile[0]
+		_check(pr.core != null and pr.is_ancestor_of(pr.core), "the same black hole is the projectile")
+		var anim_pr: AnimationPlayer = pr.core.find_child("AnimationPlayer", true, false)
+		_check(anim_pr.is_playing(), "projectile keeps its spin animation")
+	var hits_before := dummy.hits
+	for i in 60:
+		await _ticks(1)
+		if dummy.hits > hits_before:
+			break
+	_check(dummy.hits > hits_before, "black hole hits the target dummy")
+	await _ticks(30)
+	_check(fired_projectile.size() == 1 and not is_instance_valid(fired_projectile[0]), "projectile collapses after impact")
+	await _ticks(60)
+	_check(gun.core != null and gun.can_fire(), "a new black hole forms in the chamber")
+	Input.action_press("fire")
+	await _ticks(15)
+	Input.action_release("fire")
+	_check(fired_projectile.size() == 2, "can fire again after recharging")
+
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)

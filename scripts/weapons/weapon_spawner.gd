@@ -24,6 +24,8 @@ var _time := 0.0
 func _ready() -> void:
 	_pivot = Node3D.new()
 	_pivot.name = "DisplayPivot"
+	# Spun/bobbed every rendered frame, so not physics-interpolated.
+	_pivot.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_pivot)
 
 	_area = Area3D.new()

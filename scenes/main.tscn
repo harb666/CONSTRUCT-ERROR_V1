@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/world/test_arena.gd" id="2"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/props/weapon_spawn_pad.tscn" id="5"]
 [ext_resource type="Resource" path="res://resources/weapons/black_hole_generator.tres" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/props/target_dummy.tscn" id="7"]
+[ext_resource type="Script" path="res://scripts/ui/crosshair.gd" id="8"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -30,7 +32,7 @@ transform = Transform3D(0.819152, 0.469846, -0.328990, 0.000000, 0.573576, 0.819
 light_energy = 1.1
 shadow_enabled = true
 directional_shadow_mode = 0
-directional_shadow_max_distance = 40.0
+directional_shadow_max_distance = 25.0
 
 [node name="TestArena" type="Node3D" parent="."]
 script = ExtResource("2")
@@ -38,6 +40,17 @@ script = ExtResource("2")
 [node name="WeaponSpawnPad" parent="." instance=ExtResource("5")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
 weapon = ExtResource("6")
+
+[node name="Targets" type="Node3D" parent="."]
+
+[node name="Dummy1" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -8)
+
+[node name="Dummy2" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -12)
+
+[node name="Dummy3" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -9)
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 
@@ -56,6 +69,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6)
 [node name="Players" type="Node3D" parent="."]
 
 [node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Crosshair" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8")
 
 [node name="TouchControls" type="Control" parent="UI"]
 layout_mode = 3
