@@ -44,3 +44,8 @@ The HUD shows the branch/commit of the running build.
 | SharpTurnRight | Run Sharp Turn Right (plant segment) | fast right turn while running |
 | Dead | Dead | `CharacterAnimator.play_death()` (no death gameplay yet) |
 | Climb | Climb Attempt and Fall 5 | defined, not triggered yet |
+
+## Props
+- `scenes/props/weapon_spawn_pad.tscn` – **drop-in prefab**: purple weapon spawn pad + matching walk-on ramp + collision. Instance it anywhere (it sits on y = 0 of wherever you place it).
+  - `assets/props/weapon_spawn_pad/weapon_spawn_pad.glb` – optimized pad model (8.5 MB).
+  - `pad_ramp_mesh.res`, `pad_ramp_shape.res`, `pad_ramp_material.tres` – ramp ring (r 0.88 → 2.0 m, 0.3 m rise, ~15°), textured with a plain dark-metal patch of the pad's own texture atlas. Regenerate with `godot --headless --path . -s tools/build_pad_ramp.gd`.

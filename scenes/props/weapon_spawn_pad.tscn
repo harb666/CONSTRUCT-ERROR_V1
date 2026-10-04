@@ -1,8 +1,10 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="PackedScene" path="res://assets/props/weapon_spawn_pad/weapon_spawn_pad.glb" id="1"]
+[ext_resource type="ArrayMesh" path="res://assets/props/weapon_spawn_pad/pad_ramp_mesh.res" id="2"]
+[ext_resource type="Shape3D" path="res://assets/props/weapon_spawn_pad/pad_ramp_shape.res" id="3"]
 
-[sub_resource type="CylinderShape3D" id="shape"]
+[sub_resource type="CylinderShape3D" id="top"]
 height = 0.3
 radius = 0.92
 
@@ -11,6 +13,12 @@ radius = 0.92
 [node name="Model" parent="." instance=ExtResource("1")]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.15, 0)
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="Ramp" type="MeshInstance3D" parent="."]
+mesh = ExtResource("2")
+
+[node name="TopCollision" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
-shape = SubResource("shape")
+shape = SubResource("top")
+
+[node name="RampCollision" type="CollisionShape3D" parent="."]
+shape = ExtResource("3")
