@@ -53,6 +53,11 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 @export var supernova_damage := 3.0
 @export var supernova_launch_force := 24.0
 @export var fizzle_time := 0.35
+## Direct hit on whatever it strikes (before the well forms): ordinary
+## damage, modest force (DamageInfo.impact_force). The supernova does the
+## violent part.
+@export var impact_damage := 1.0
+@export var impact_force := 6.0
 
 @export_group("Audio")
 ## Each sound is full volume within its "near" distance (m) of the player
@@ -230,7 +235,9 @@ func _stick(hit: Dictionary) -> void:
 	var collider: Object = hit.collider
 	_surface_normal = hit.normal if hit.normal.length_squared() > 0.1 else -direction
 	ImpactBurst.spawn(get_parent(), global_position, maxf(_size, 0.6) * 0.8)
-	if collider and collider.has_method("on_projectile_hit"):
+	if collider and collider.has_method("apply_damage"):
+		collider.apply_damage(DamageInfo.make(impact_damage, DamageInfo.Type.ENERGY, global_position, direction, impact_force, 0.0, self))
+	elif collider and collider.has_method("on_projectile_hit"):
 		collider.on_projectile_hit(self)
 	impacted.emit(global_position, collider)
 	if not gravity_wells_enabled:

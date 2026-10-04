@@ -1,0 +1,120 @@
+[gd_resource type="Resource" script_class="BreakSectionSet" format=3]
+
+[ext_resource type="Script" path="res://scripts/destruction/break_section_set.gd" id="1_2aldi"]
+[ext_resource type="Script" path="res://scripts/destruction/break_section.gd" id="2_ih3o5"]
+
+[sub_resource type="Resource" id="Resource_7jndw"]
+script = ExtResource("2_ih3o5")
+section_name = &"Pelvis"
+mesh_names = PackedStringArray("Pelvis")
+bone = &"mixamorig_Hips"
+joint_bone = &"mixamorig_Hips"
+tier = 2
+
+[sub_resource type="Resource" id="Resource_tg5ch"]
+script = ExtResource("2_ih3o5")
+section_name = &"Torso"
+mesh_names = PackedStringArray("Torso")
+parent = &"Pelvis"
+bone = &"mixamorig_Spine2"
+joint_bone = &"mixamorig_Spine"
+tier = 2
+
+[sub_resource type="Resource" id="Resource_odvja"]
+script = ExtResource("2_ih3o5")
+section_name = &"Head"
+mesh_names = PackedStringArray("Head")
+parent = &"Torso"
+bone = &"mixamorig_Head"
+joint_bone = &"mixamorig_Neck"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_nbegy"]
+script = ExtResource("2_ih3o5")
+section_name = &"Left_Upper_Arm"
+mesh_names = PackedStringArray("Left_Upper_Arm")
+parent = &"Torso"
+bone = &"mixamorig_LeftArm"
+joint_bone = &"mixamorig_LeftArm"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_v7yl0"]
+script = ExtResource("2_ih3o5")
+section_name = &"Left_Forearm_Weapon"
+mesh_names = PackedStringArray("Left_Forearm_Weapon", "Left_Forearm_Weapon_Joint_Seal")
+parent = &"Left_Upper_Arm"
+bone = &"mixamorig_LeftForeArm"
+joint_bone = &"mixamorig_LeftForeArm"
+
+[sub_resource type="Resource" id="Resource_qw88l"]
+script = ExtResource("2_ih3o5")
+section_name = &"Right_Upper_Arm"
+mesh_names = PackedStringArray("Right_Upper_Arm")
+parent = &"Torso"
+bone = &"mixamorig_RightArm"
+joint_bone = &"mixamorig_RightArm"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_ngdr4"]
+script = ExtResource("2_ih3o5")
+section_name = &"Right_Forearm_Weapon"
+mesh_names = PackedStringArray("Right_Forearm_Weapon", "Right_Forearm_Weapon_Joint_Seal")
+parent = &"Right_Upper_Arm"
+bone = &"mixamorig_RightForeArm"
+joint_bone = &"mixamorig_RightForeArm"
+
+[sub_resource type="Resource" id="Resource_5bq6i"]
+script = ExtResource("2_ih3o5")
+section_name = &"Left_Thigh"
+mesh_names = PackedStringArray("Left_Thigh")
+parent = &"Pelvis"
+bone = &"mixamorig_LeftUpLeg"
+joint_bone = &"mixamorig_LeftUpLeg"
+tier = 2
+
+[sub_resource type="Resource" id="Resource_arvtq"]
+script = ExtResource("2_ih3o5")
+section_name = &"Left_Shin"
+mesh_names = PackedStringArray("Left_Shin")
+parent = &"Left_Thigh"
+bone = &"mixamorig_LeftLeg"
+joint_bone = &"mixamorig_LeftLeg"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_f0jdb"]
+script = ExtResource("2_ih3o5")
+section_name = &"Left_Foot"
+mesh_names = PackedStringArray("Left_Foot")
+parent = &"Left_Shin"
+bone = &"mixamorig_LeftFoot"
+joint_bone = &"mixamorig_LeftFoot"
+
+[sub_resource type="Resource" id="Resource_vt6wj"]
+script = ExtResource("2_ih3o5")
+section_name = &"Right_Thigh"
+mesh_names = PackedStringArray("Right_Thigh")
+parent = &"Pelvis"
+bone = &"mixamorig_RightUpLeg"
+joint_bone = &"mixamorig_RightUpLeg"
+tier = 2
+
+[sub_resource type="Resource" id="Resource_gyyke"]
+script = ExtResource("2_ih3o5")
+section_name = &"Right_Shin"
+mesh_names = PackedStringArray("Right_Shin")
+parent = &"Right_Thigh"
+bone = &"mixamorig_RightLeg"
+joint_bone = &"mixamorig_RightLeg"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_cuqkt"]
+script = ExtResource("2_ih3o5")
+section_name = &"Right_Foot"
+mesh_names = PackedStringArray("Right_Foot")
+parent = &"Right_Shin"
+bone = &"mixamorig_RightFoot"
+joint_bone = &"mixamorig_RightFoot"
+
+[resource]
+script = ExtResource("1_2aldi")
+sections = Array[ExtResource("2_ih3o5")]([SubResource("Resource_7jndw"), SubResource("Resource_tg5ch"), SubResource("Resource_odvja"), SubResource("Resource_nbegy"), SubResource("Resource_v7yl0"), SubResource("Resource_qw88l"), SubResource("Resource_ngdr4"), SubResource("Resource_5bq6i"), SubResource("Resource_arvtq"), SubResource("Resource_f0jdb"), SubResource("Resource_vt6wj"), SubResource("Resource_gyyke"), SubResource("Resource_cuqkt")])

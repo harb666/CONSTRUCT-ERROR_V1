@@ -49,6 +49,9 @@ const MOVABLE_LAYER := 2
 @export var supernova_launch_force := 24.0
 @export var max_launch_speed := 24.0
 @export var player_supernova_push := 14.0
+## Blast force reported to damaged targets at point blank (DamageInfo
+## explosive_force, scaled by distance); drives how violently enemies die.
+@export var supernova_explosive_force := 42.0
 
 ## 0..1 instability ramp (set by the projectile): strengthens suction.
 var intensity := 0.0
@@ -232,7 +235,7 @@ func supernova() -> void:
 			var f := 1.0 - clampf(to.length() / supernova_radius, 0.0, 1.0)
 			_set_visual(b, 1.0, 0.0)
 			_launch(b, _away(to), f)
-			_damage(b, f)
+			_damage(b, f, _away(to))
 		elif b is CharacterBody3D and b.has_method("apply_external_impulse"):
 			var to2: Vector3 = b.global_position - c
 			var f2 := 1.0 - clampf(to2.length() / supernova_radius, 0.0, 1.0)
@@ -296,7 +299,7 @@ func _release_one(entry: Array) -> void:
 		_restore_visual_smooth(b)
 	else:
 		restore_visual(b)
-	_damage(b, 1.0)
+	_damage(b, 1.0, dir)
 
 
 ## ONE controlled outward launch, capped, with a little lift.
@@ -308,9 +311,11 @@ func _launch(b: RigidBody3D, dir: Vector3, falloff: float) -> void:
 	b.sleeping = false
 
 
-func _damage(b: Object, falloff: float) -> void:
-	if b.has_method("take_damage"):
-		b.take_damage(supernova_damage * (0.5 + 0.5 * falloff), global_position)
+func _damage(b: Object, falloff: float, dir: Vector3) -> void:
+	var info := DamageInfo.make(supernova_damage * (0.5 + 0.5 * falloff), DamageInfo.Type.SUPERNOVA,
+		global_position, dir, 0.0, supernova_explosive_force * falloff)
+	info.impact_position = global_position  # blast centre
+	DamageInfo.apply(b, info)
 
 
 func release_all_now() -> void:
@@ -336,9 +341,10 @@ func is_done() -> bool:
 static func _visuals(b: Node3D) -> Array:
 	if not b.has_meta("gw_visuals"):
 		var vis: Array = []
-		for ch in b.get_children():
-			if ch is GeometryInstance3D:
-				vis.append([ch, (ch as Node3D).transform])
+		# Bodies can name their visual root(s); default: direct mesh children.
+		var nodes: Array = b.gravity_visual_nodes() if b.has_method("gravity_visual_nodes") else b.get_children().filter(func(ch: Node) -> bool: return ch is GeometryInstance3D)
+		for ch in nodes:
+			vis.append([ch, (ch as Node3D).transform])
 		b.set_meta("gw_visuals", vis)
 	return b.get_meta("gw_visuals")
 

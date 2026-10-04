@@ -232,8 +232,16 @@ func _run() -> void:
 	var tc2: TouchControls = main.get_node("UI/TouchControls")
 	var lock: TargetLock = p.get_node("TargetLock")
 	var selector: TargetSelector = p.get_node("Input/TargetSelector")
-	var d1: TargetDummy = main.get_node("Targets/Dummy1")
-	var d2: TargetDummy = main.get_node("Targets/Dummy2")
+	var d1: RobotEnemy = main.get_node("Targets/Robot1")
+	var d2: RobotEnemy = main.get_node("Targets/Robot2")
+	# Hold still for the targeting checks; quick corpse/respawn.
+	for r: RobotEnemy in [d1, d2]:
+		r.patrol_distance = 0.0
+		r.corpse_time = 1.0
+		r.respawn_time = 0.5
+	# The tracking target must survive several hits.
+	d2.max_health = 50.0
+	d2.health = 50.0
 	p.global_position = Vector3(1.0, 0.05, 2.0)
 	p.velocity = Vector3.ZERO
 	p.reset_physics_interpolation()
@@ -252,7 +260,7 @@ func _run() -> void:
 		projs.append(pr)
 		pr.impacted.connect(func(_at: Vector3, col: Object) -> void: stuck_on.append(col)))
 
-	# Tap a little off the dummy's mesh: must still select it (forgiving).
+	# Tap a little off the robot's mesh: must still select it (forgiving).
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()) + Vector2(35, 20))
 	await _ticks(2)
 	_check(lock.current == d2.get_node("Targetable"), "tap near enemy locks it")
@@ -347,7 +355,7 @@ func _run() -> void:
 	await _ticks(60)
 	_check(shots.size() == shots_dead, "stops firing after the kill")
 	await _ticks(260)
-	_check(d1.health == d1.max_health and d1.visible, "dummy respawns")
+	_check(d1.alive and d1.health == d1.max_health and d1.get_node("Targetable").is_valid_target(), "robot respawns")
 
 	# Out of range: lock clears.
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
@@ -360,6 +368,7 @@ func _run() -> void:
 
 	await _gravity_well_tests(main, p, holder)
 	await _cooldown_audio_tests(main)
+	await _robot_tests(main)
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -525,3 +534,117 @@ func _check_once(cond: bool, msg: String) -> void:
 	if not cond and not _once_failed.has(msg):
 		_once_failed[msg] = true
 		_check(false, msg)
+
+
+func _spawn_robot(main: Node, at: Vector3) -> RobotEnemy:
+	var r: RobotEnemy = load("res://scenes/enemies/robot_enemy.tscn").instantiate()
+	r.patrol_distance = 0.0
+	r.respawn_time = -1.0
+	main.add_child(r)
+	r.global_position = at
+	r.reset_physics_interpolation()
+	return r
+
+
+func _robot_tests(main: Node) -> void:
+	var spot := Vector3(30, 0, 30)
+	var r := _spawn_robot(main, spot)
+	await _ticks(10)
+	_check(r.get_skeleton() != null and r.get_breaker().sections.size() == 13, "robot model loaded with its 13 detachable sections")
+	var anim: AnimationPlayer = r._anim
+	for clip in [r.death_anim_electric, r.death_anim_from_front] + r.death_anims_from_behind:
+		_check_once(anim.has_animation(clip), "death clip %s exists in the robot GLB" % clip)
+	# Destruction level depends on the killing hit (with some randomness).
+	var br := r.get_breaker()
+	var low := DamageInfo.make(1, DamageInfo.Type.BULLET, spot, Vector3.FORWARD, 2.0, 0.0)
+	var mid := DamageInfo.make(3, DamageInfo.Type.EXPLOSION, spot, Vector3.FORWARD, 0.0, 20.0)
+	var big := DamageInfo.make(3, DamageInfo.Type.SUPERNOVA, spot, Vector3.FORWARD, 0.0, 42.0)
+	var counts := {"low": [0, 0, 0, 0, 0], "mid": [0, 0, 0, 0, 0], "big": [0, 0, 0, 0, 0]}
+	for i in 300:
+		counts.low[br.choose_level(low)] += 1
+		counts.mid[br.choose_level(mid)] += 1
+		counts.big[br.choose_level(big)] += 1
+	_check(counts.low[0] > 270, "ordinary hits almost always leave the robot whole (%s)" % [counts.low])
+	_check(counts.mid[0] < 30 and counts.mid[1] + counts.mid[2] + counts.mid[3] > 200, "explosions mostly break it partly, varied (%s)" % [counts.mid])
+	_check(counts.big[4] + counts.big[3] > 270 and counts.big[4] > 120, "point-blank supernova breaks it heavily/extremely (%s)" % [counts.big])
+
+	# Normal death: assembled, death clip, behaviour stops, target invalid.
+	var r2 := _spawn_robot(main, spot + Vector3(4, 0, 0))
+	await _ticks(10)
+	r2.apply_damage(DamageInfo.make(10, DamageInfo.Type.BULLET, r2.global_position + Vector3(0, 1, 2), Vector3(0, 0, -1), 1.0))
+	_check(not r2.alive and r2.last_destruction == BreakApart.Level.NONE, "low-force kill: dies whole")
+	_check(r2._anim.current_animation == String(r2.last_death_anim) and r2.last_death_anim != &"Walking", "plays one of its own death clips (%s)" % r2.last_death_anim)
+	_check(not r2.get_node("Targetable").is_valid_target(), "dead robot can't be targeted")
+	await _ticks(90)
+	_check(r2.get_breaker().detached_count() == 0, "stays assembled")
+	_check(Vector2(r2.linear_velocity.x, r2.linear_velocity.z).length() < 0.2, "stops walking when dead")
+	_check(JointSparks.active_count() > 0, "subtle electrical failure sparks on the corpse")
+
+	# Extreme breakup: pieces keep their exact pose and fly.
+	var r3 := _spawn_robot(main, spot + Vector3(-4, 0, 0))
+	await _ticks(10)
+	var sk := r3.get_skeleton()
+	var head_b := sk.find_bone("mixamorig_Head")
+	var cuts: Array[BreakSection] = []
+	cuts.assign(r3.get_breaker().sections)
+	var head_before := (sk.global_transform * sk.get_bone_global_pose(head_b))
+	r3.alive = false
+	var pieces := r3.get_breaker().detach(cuts, big, Vector3.ZERO)
+	_check(pieces.size() == 13, "extreme: every prepared section becomes its own piece (%d)" % pieces.size())
+	var head_piece: DebrisPiece = null
+	for pc in pieces:
+		if pc.section == &"Head":
+			head_piece = pc
+	var head_after := head_piece.pose.global_transform * head_piece.pose.get_bone_global_pose(head_b) if head_piece else Transform3D()
+	_check(head_piece != null and head_after.origin.distance_to(head_before.origin) < 0.01, "detached piece keeps its exact world pose (%.3f m)" % head_after.origin.distance_to(head_before.origin))
+	_check(head_piece != null and head_piece.find_children("*", "MeshInstance3D", true, false).size() == 1 and sk.find_children("*", "MeshInstance3D", true, false).is_empty(), "meshes moved off the body onto the pieces (not cut)")
+	_check(JointSparks.active_count() >= 6, "sparks at the broken joints (%d)" % JointSparks.active_count())
+	var max_v := 0.0
+	var min_y := 99.0
+	for i in 240:
+		await _ticks(1)
+		for pc in pieces:
+			if is_instance_valid(pc):
+				max_v = maxf(max_v, pc.linear_velocity.length())
+				min_y = minf(min_y, pc.global_position.y)
+	_check(max_v <= 16.01, "debris speed stays clamped (max %.1f m/s)" % max_v)
+	_check(min_y > -0.1, "no debris falls through the floor (min y %.2f)" % min_y)
+	var resting := 0
+	for pc in pieces:
+		if is_instance_valid(pc) and (pc.freeze or pc.sleeping or pc.linear_velocity.length() < 0.3):
+			resting += 1
+	_check(resting == pieces.size(), "debris settles calmly (%d/%d at rest)" % [resting, pieces.size()])
+	await _ticks(Engine.physics_ticks_per_second * 3)
+	var frozen := pieces.filter(func(pc: DebrisPiece) -> bool: return is_instance_valid(pc) and pc.freeze and not pc.is_physics_processing()).size()
+	_check(frozen == pieces.size(), "settled debris is frozen and stops processing (%d/%d)" % [frozen, pieces.size()])
+	_check(JointSparks.active_count() == 0, "joint sparks die away")
+
+	# Heavy explosive kill through the real path (cascade of breaks).
+	var r4 := _spawn_robot(main, spot + Vector3(0, 0, -5))
+	await _ticks(10)
+	var blast := DamageInfo.make(5, DamageInfo.Type.EXPLOSION, r4.global_position + Vector3(0, 0.5, 1.5), Vector3(0, 0.2, -1), 0.0, 30.0)
+	var tries := 0
+	r4.apply_damage(blast)
+	await _ticks(45)
+	_check(r4.last_destruction >= BreakApart.Level.LIGHT and (r4.last_destruction == BreakApart.Level.LIGHT or r4.get_breaker().detached_count() > 0),
+		"explosive kill breaks it apart (%s, %d sections off)" % [BreakApart.Level.keys()[r4.last_destruction], r4.get_breaker().detached_count()])
+
+	# Mobile cap on simultaneous debris.
+	var old_max := DebrisPiece.max_active
+	DebrisPiece.max_active = 10
+	var r5 := _spawn_robot(main, spot + Vector3(4, 0, -5))
+	await _ticks(5)
+	var all5: Array[BreakSection] = []
+	all5.assign(r5.get_breaker().sections)
+	r5.alive = false
+	r5.get_breaker().detach(all5, big, Vector3.ZERO)
+	await _ticks(2)
+	_check(DebrisPiece.active_count() <= 10, "active debris capped (%d)" % DebrisPiece.active_count())
+	DebrisPiece.max_active = old_max
+
+	# Corpse stops costing anything once its clip ends and it has settled.
+	await _ticks(Engine.physics_ticks_per_second * 5)
+	_check(not r2.is_physics_processing() and r2.freeze, "settled corpse stops processing")
+	for n in [r, r2, r3, r4, r5]:
+		if is_instance_valid(n):
+			n.queue_free()
