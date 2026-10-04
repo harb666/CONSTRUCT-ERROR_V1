@@ -48,4 +48,4 @@ The HUD shows the branch/commit of the running build.
 ## Props
 - `scenes/props/weapon_spawn_pad.tscn` – **drop-in prefab**: purple weapon spawn pad + matching walk-on ramp + collision. Instance it anywhere (it sits on y = 0 of wherever you place it).
   - `assets/props/weapon_spawn_pad/weapon_spawn_pad.glb` – optimized pad model (8.5 MB).
-  - `pad_ramp_mesh.res`, `pad_ramp_shape.res`, `pad_ramp_material.tres` – pad sunk 0.15 m into the floor; ramp lip (r 0.88 → 1.07 m, 0.15 m rise, ~40°), textured with a plain dark-metal patch of the pad's own texture atlas. Regenerate with `godot --headless --path . -s tools/build_pad_ramp.gd`.
+  - `pad_ramp_mesh.res`, `pad_ramp_shape.res`, `pad_ramp_material.tres` – pad sunk 0.15 m into the floor; ramp lip (tucked under the pad rim → r 1.07 m, 0.15 m rise), textured with the atlas patch that best matches the pad's outer wall colour; auto-LODs disabled on the pad. Regenerate with `godot --headless --path . -s tools/build_pad_ramp.gd`.
