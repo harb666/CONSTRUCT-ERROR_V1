@@ -54,6 +54,17 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 @export var supernova_launch_force := 24.0
 @export var fizzle_time := 0.35
 
+@export_group("Audio")
+## Energy hum that follows the black hole from the barrel to the explosion.
+@export var loop_volume_db := 0.0
+## Distance (m) at which the hum is at full volume; it falls off beyond.
+@export var loop_unit_size := 3.0
+@export var loop_max_distance := 45.0
+## Energy burst starts this many seconds before the supernova.
+@export var burst_lead_time := 1.3
+@export var burst_volume_db := 2.0
+@export var explode_volume_db := 4.0
+
 static var _active_wells: Array = []
 ## Test/debug switch: when false, impacts fizzle out instead of forming wells.
 static var gravity_wells_enabled := true
@@ -78,6 +89,8 @@ var _fizzle := false
 var _surface_normal := Vector3.UP
 var _pulse_seed := randf() * 100.0
 var _star: MeshInstance3D
+var _hum: AudioStreamPlayer3D
+var _burst_played := false
 
 ## Current solid radius (m) and the wider influence radius.
 var collision_radius: float:
@@ -106,6 +119,8 @@ func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
 		_vfx.exclude = [_shooter_rid]
 	_vfx.size = _start_size
 	add_child(_vfx)
+	_hum = Sfx.emitter(self, Sfx.BH_LOOP, loop_volume_db, loop_unit_size, loop_max_distance)
+	_hum.play()
 	state = State.TRAVELLING
 
 
@@ -247,8 +262,22 @@ func _stuck(delta: float) -> void:
 	_set_anim_speed(1.0 + k * 2.5)
 	if _vfx:
 		_vfx.set_instability(k)
+	if _state_t >= _time_to_supernova() - burst_lead_time:
+		_play_burst()
 	if _state_t >= gravity_well_duration:
 		_enter(State.COLLAPSING)
+
+
+## Seconds from sticking to the supernova (when the well runs its course).
+func _time_to_supernova() -> float:
+	return gravity_well_duration + collapse_time + compression_hold
+
+
+func _play_burst() -> void:
+	if _burst_played:
+		return
+	_burst_played = true
+	Sfx.play_at(get_parent(), Sfx.BH_BURST, global_position, burst_volume_db, 4.0, 60.0)
 
 
 # --- COLLAPSING ---
@@ -284,13 +313,17 @@ func _enter(s: State) -> void:
 			if well:
 				well.intensity = 1.0
 			if not _fizzle:
+				# Cut short (e.g. too many wells): still warn before blowing.
+				_play_burst()
 				_star = Vfx.quad("star", Vfx.HOT, Vector2.ONE)
 				_star.top_level = true
 				_star.visible = false
 				add_child(_star)
 				_star.global_position = global_position
-			elif _vfx:
-				_vfx.fade_out(fizzle_time)
+			else:
+				Sfx.fade_out(_hum, fizzle_time)
+				if _vfx:
+					_vfx.fade_out(fizzle_time)
 		State.SUPERNOVA:
 			_supernova()
 
@@ -308,6 +341,9 @@ func _supernova() -> void:
 		_vfx.fade_out(0.15)
 		_vfx = null
 	SupernovaBlast.spawn(get_parent(), at, supernova_radius, _surface_normal)
+	if _hum:
+		_hum.stop()
+	Sfx.play_at(get_parent(), Sfx.BH_EXPLODE, at, explode_volume_db, 6.0, 90.0)
 	if well:
 		well.supernova()
 	get_tree().call_group("camera_rigs", "supernova_feedback", at, supernova_radius)

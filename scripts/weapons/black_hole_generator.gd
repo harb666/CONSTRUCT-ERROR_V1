@@ -28,6 +28,8 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 @export var recharge_delay := 12.0
 ## Seconds for the new core to grow to full size.
 @export var recharge_grow := 3.0
+## Gun firing sound volume.
+@export var fire_volume_db := 0.0
 
 var core: BlackHoleCore
 var _tumble: Node3D
@@ -181,6 +183,10 @@ func _launch() -> void:
 	var muzzle := find_marker(MUZZLE_MARKER)
 	if muzzle:
 		MuzzleFlash.spawn(muzzle)
+	# Rides along with the gun so it stays with the player while they move.
+	var shot := Sfx.emitter(muzzle if muzzle else self, Sfx.BH_FIRE, fire_volume_db, 4.0, 60.0)
+	shot.finished.connect(shot.queue_free)
+	shot.play()
 	projectile.launch(c, dir, shooter)
 	_recharge = recharge_delay
 	_mech_t = 0.0

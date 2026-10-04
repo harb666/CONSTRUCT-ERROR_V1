@@ -93,3 +93,11 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 - Collapse: rapid shrink to a pinpoint + brief bright compression, then `SupernovaBlast` (flash, two shock rings, distortion bubble, sparks, light) and `GravityWell.supernova()`: captured bodies released one per physics tick at spread, ray-checked positions with restored collision/size, ONE capped launch each (`max_launch_speed`), radial damage (`take_damage`), brief camera kick for nearby local players.
 - Tunables on the projectile: gravity_well_duration, gravity_radius, gravity_strength, player_gravity_strength, capture_radius, orbit_strength, shrink_rate, pulse_amount, pulse_speed, supernova_radius, supernova_damage, supernova_launch_force, maximum_affected_objects, maximum_captured_objects, max_active_wells.
 - Arena: dummies are now heavy upright RigidBody3D enemies; `Props/` has light crates, barrels and a heavy block (`PhysicsProp`).
+
+## Black hole audio
+`scripts/audio/sfx.gd` (`Sfx`) plays positional `AudioStreamPlayer3D` sounds (inverse-distance falloff from the camera). Files in `assets/audio/black_hole/`:
+- `fire.ogg` — the gun, on launch (with the muzzle flash), attached to the muzzle.
+- `energy_loop.ogg` — looping hum attached to the black hole from the barrel until the supernova (fades on a fizzle). Louder the closer you are (`loop_unit_size`, `loop_max_distance`).
+- `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova (immediately if a well is collapsed early).
+- `explode.ogg` — at the supernova.
+Volumes are exports on `BlackHoleProjectile` (Audio group) and `BlackHoleGenerator.fire_volume_db`.

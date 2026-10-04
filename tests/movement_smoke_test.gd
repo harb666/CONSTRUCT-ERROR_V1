@@ -258,14 +258,17 @@ func _run() -> void:
 	var kick_peak := 0.0
 	var cam_kicked := false
 	var launched := false
+	var fire_sound := false
 	for i in 40:
 		await process_frame
-		if projs.size() > 0:
+		if projs.size() > 0 and not launched:
 			launched = true
+			fire_sound = _sound_playing(holder.current, Sfx.BH_FIRE)
 		kick_peak = maxf(kick_peak, anim2.recoil)
 		cam_kicked = cam_kicked or rig2.camera.fov > rig2._base_fov + 1.0
 	_check(launched and kick_peak > 0.6, "heavy recoil kick on launch (peak %.2f)" % kick_peak)
 	_check(not cam_kicked, "no camera shake on launch")
+	_check(fire_sound, "gun fire sound plays as the shot leaves the barrel")
 	await _ticks(60)
 	_check(absf(anim2.recoil) < 0.1 and absf(rig2.camera.fov - rig2._base_fov) < 0.01, "recoil and camera recover")
 	var n_before := projs.size()
@@ -371,6 +374,8 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	core.scale = Vector3.ONE * 0.28
 	pr.launch(core, Vector3.DOWN, p)
 	pr._travelled = 2.0
+	_check(pr._hum != null and pr._hum.stream == Sfx.BH_LOOP and pr._hum.playing, "energy hum plays as soon as it leaves the barrel")
+	_check(pr._hum.attenuation_model != AudioStreamPlayer3D.ATTENUATION_DISABLED, "energy hum is positional (louder when close)")
 	var crate_d0 := crate.global_position.distance_to(spot)
 	var heavy_d0 := heavy.global_position.distance_to(spot)
 	for i in 30:
@@ -414,16 +419,37 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	# Wait for collapse + supernova.
 	var saw_collapse := false
 	var saw_supernova := false
+	var burst_lead := -1.0
+	var burst_cfg := pr.burst_lead_time
+	var hum_until_supernova := true
+	var explode_played := false
 	for i in 400:
 		await _ticks(1)
 		if not is_instance_valid(pr):
 			break
+		if burst_lead < 0.0 and pr._burst_played:
+			burst_lead = pr._time_to_supernova() - pr._state_t
+		if pr.state != BlackHoleProjectile.State.SUPERNOVA and not pr._hum.playing:
+			hum_until_supernova = false
+		if pr.state == BlackHoleProjectile.State.SUPERNOVA and not explode_played:
+			explode_played = _sound_playing(main, Sfx.BH_EXPLODE)
+			_check(not pr._hum.playing, "energy hum stops at the explosion")
 		saw_collapse = saw_collapse or pr.state == BlackHoleProjectile.State.COLLAPSING
 		saw_supernova = saw_supernova or pr.state == BlackHoleProjectile.State.SUPERNOVA
 	_check(saw_collapse and saw_supernova, "collapses then goes supernova")
+	_check(hum_until_supernova, "energy hum keeps playing until the explosion")
+	_check(absf(burst_lead - burst_cfg) < 0.1, "energy burst starts %.2f s before the explosion" % burst_lead)
+	_check(explode_played, "explosion sound plays at the supernova")
 	await _ticks(30)
 	_check(not crate.freeze and crate.collision_layer != 0, "captured objects are released with collision restored")
 	var vis2: Array = crate.get_meta("gw_visuals", [])
 	_check(vis2.is_empty() or absf((vis2[0][0] as Node3D).scale.x - 1.0) < 0.01, "released objects get their normal size back")
 	_check(crate.linear_velocity.length() < 30.0 and heavy.linear_velocity.length() < 30.0, "launch speeds stay capped")
 	_check(not is_instance_valid(pr), "projectile finishes and frees itself")
+
+
+func _sound_playing(root: Node, stream: AudioStream) -> bool:
+	for n: AudioStreamPlayer3D in root.find_children("*", "AudioStreamPlayer3D", true, false):
+		if n.stream == stream and n.playing:
+			return true
+	return false
