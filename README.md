@@ -25,6 +25,7 @@ The HUD shows the branch/commit of the running build.
 - `scripts/camera/camera_rig.gd` – per-local-player orbit camera; owns view yaw used for camera-relative movement.
 - `scripts/ui/touch_controls.gd` – multi-touch stick / look / buttons.
 - `scripts/character/character_animator.gd` – builds the AnimationTree state machine and drives it from the controller (visual only, no root motion).
+- `scripts/character/arm_aim_modifier.gd` – procedural upper-body layer: raises both arms so the forearm cannons point forward while running/sprinting (re-poses only the existing UpperArm/ForeArm bones at runtime).
 - `scripts/character/hips_corrector.gd` – runtime-only Hips pose fix-up that keeps clips with baked travel/turning in place.
 - `assets/characters/grinch/grinch.glb` – source character (28-joint Mixamo rig; never modified). Textures are extracted next to it and imported at 1024 px.
 - `scripts/main.gd` – `spawn_player(id, is_local)`; the future network layer plugs in here.

@@ -1,0 +1,68 @@
+class_name ArmAimModifier
+extends SkeletonModifier3D
+## Procedural upper-body layer: raises both arms so the forearms (arm cannons)
+## point forward, on top of whatever the AnimationTree produced. Only the
+## existing UpperArm/ForeArm bones are re-posed at runtime; shoulders, spine,
+## hands and the source clips are untouched. Each bone is turned by the
+## smallest rotation onto its aim direction, so the animated twist and the
+## natural running sway of the torso are kept.
+
+## 0..1, driven by the CharacterAnimator (smoothed there).
+var weight := 0.0
+
+## Aim directions in character space (x = character's left, y = up, z = forward).
+## Upper arm reaches forward-down; forearm points straight ahead, slightly inward.
+@export var upper_arm_dir := Vector3(0.12, -0.55, 0.83)
+@export var forearm_dir := Vector3(-0.06, 0.04, 1.0)
+## How much of the chest's animated yaw/roll sway the aim follows (0 = locked to
+## the body's facing, 1 = rigidly attached to the chest).
+@export var chest_follow := 0.35
+## Fraction of the original upper-arm swing that is kept.
+@export var keep_upper_swing := 0.12
+
+var _bones := {}
+
+
+func _ready() -> void:
+	var sk := get_skeleton()
+	for side in ["Left", "Right"]:
+		_bones[side] = [sk.find_bone("mixamorig_%sArm" % side), sk.find_bone("mixamorig_%sForeArm" % side)]
+	_bones["chest"] = sk.find_bone("mixamorig_Spine2")
+
+
+func _process_modification_with_delta(_delta: float) -> void:
+	if weight <= 0.001:
+		return
+	var sk := get_skeleton()
+	if sk == null or _bones.is_empty():
+		return
+	# Character frame: skeleton space faces +Z. Follow part of the chest's
+	# yaw sway so the arms ride with the torso instead of looking bolted on.
+	var chest := sk.get_bone_global_pose(_bones.chest).basis
+	var chest_fwd := Vector3(chest.z.x, 0.0, chest.z.z).normalized()
+	var frame := Basis.IDENTITY
+	if chest_fwd.length_squared() > 0.5:
+		var sway := atan2(chest_fwd.x, chest_fwd.z)
+		frame = Basis(Vector3.UP, sway * chest_follow)
+
+	for side in ["Left", "Right"]:
+		var mirror := 1.0 if side == "Left" else -1.0
+		var ids: Array = _bones[side]
+		var up_dir := frame * Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
+		var fore_dir := frame * Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
+		_aim_bone(sk, ids[0], up_dir, weight * (1.0 - keep_upper_swing))
+		_aim_bone(sk, ids[1], fore_dir, weight)
+
+
+## Rotate a bone (globally) so its +Y axis points along `dir`, by `amount`.
+func _aim_bone(sk: Skeleton3D, bone: int, dir: Vector3, amount: float) -> void:
+	var gp := sk.get_bone_global_pose(bone)
+	var cur := gp.basis.y.normalized()
+	var axis := cur.cross(dir)
+	var s := axis.length()
+	var angle := atan2(s, cur.dot(dir))
+	if s < 1e-5 or angle < 1e-4:
+		return
+	var rot := Basis(axis / s, angle * amount)
+	gp.basis = rot * gp.basis
+	sk.set_bone_global_pose(bone, gp)

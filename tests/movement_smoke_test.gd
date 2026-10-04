@@ -42,10 +42,17 @@ func _run() -> void:
 	var sprint := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(absf(sprint - p.sprint_speed) < 0.2, "reaches sprint speed (%.2f)" % sprint)
 	_check(anim.current_state == "Locomotion", "anim sprint stays Locomotion")
+	_check(anim._arm_aim.weight > 0.9, "arms aim forward while sprinting (%.2f)" % anim._arm_aim.weight)
 	Input.action_release("sprint")
 	Input.action_release("move_forward")
 	await _ticks(20)
 	_check(Vector2(p.velocity.x, p.velocity.z).length() < 0.1, "stops after release")
+	_check(anim._arm_aim.weight > 0.02 and anim._arm_aim.weight < 0.3, "arms ease down after stopping (%.2f)" % anim._arm_aim.weight)
+	Input.action_press("move_forward", 0.4)
+	await _ticks(30)
+	_check(anim._arm_aim.weight < 0.05, "arms not aiming while walking (%.2f)" % anim._arm_aim.weight)
+	Input.action_release("move_forward")
+	await _ticks(30)
 
 	# Jump + double jump.
 	var y0 := p.global_position.y

@@ -27,6 +27,10 @@ extends Node3D
 @export var long_fall_lift := 0.75
 @export var min_land_impact := 5.0
 
+@export_group("Arm aim")
+## Arms come up as the Running clip blends in (between walk_to and run_from).
+@export var aim_blend_rate := 10.0
+
 @export_group("Turning")
 ## Body yaw rate (rad/s) needed to trigger turn clips.
 @export var idle_turn_rate := 3.0
@@ -72,6 +76,7 @@ var _fall_time := 0.0
 var _pending_jump := ""
 var _pending_land := false
 var _state_time := 0.0
+var _arm_aim: ArmAimModifier
 
 
 func _ready() -> void:
@@ -88,6 +93,11 @@ func _ready() -> void:
 	corrector.bone = skeleton.find_bone(HIPS)
 	corrector.provider = _hips_correction
 	skeleton.add_child(corrector)
+
+	# Added after the HipsCorrector so it works on the final body pose.
+	_arm_aim = ArmAimModifier.new()
+	_arm_aim.name = "ArmAimModifier"
+	skeleton.add_child(_arm_aim)
 
 	if controller:
 		controller.jumped.connect(_on_jumped)
@@ -227,6 +237,13 @@ func _process(delta: float) -> void:
 		current_state = want
 		_state_time = 0.0
 		playback.travel(want)
+
+	# Arms up only while running/sprinting in Locomotion; smoothed so it eases
+	# in and out with the existing crossfades (jump, fall, dodge, stopping).
+	var aim_target := 0.0
+	if current_state == "Locomotion" and on_floor:
+		aim_target = smoothstep(walk_to, run_from, speed)
+	_arm_aim.weight = lerpf(_arm_aim.weight, aim_target, 1.0 - exp(-aim_blend_rate * delta))
 
 
 func _choose_state(on_floor: bool, speed: float, vy: float) -> String:
