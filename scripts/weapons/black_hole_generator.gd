@@ -25,6 +25,7 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 
 var core: BlackHoleCore
 var _tumble: Node3D
+var _arcs: ChamberArcs
 var _t := 0.0
 var _recharge := 0.0      # >0 while waiting for a new core
 var _grow := 1.0          # 0..1 growth of the current core
@@ -44,6 +45,9 @@ func _spawn_core() -> void:
 		_tumble = Node3D.new()
 		_tumble.name = "CoreTumble"
 		chamber.add_child(_tumble)
+		_arcs = ChamberArcs.new()
+		_arcs.name = "ChamberArcs"
+		chamber.add_child(_arcs)
 	core = core_scene.instantiate()
 	core.name = "BlackHoleCore"
 	core.rotation_degrees = core_rotation_degrees
@@ -69,6 +73,8 @@ func _process(delta: float) -> void:
 	if core and _grow < 1.0:
 		_grow = minf(_grow + delta / recharge_grow, 1.0)
 		_apply_core_scale()
+	if _arcs:
+		_arcs.intensity = _grow if core else 0.0
 
 
 func can_fire() -> bool:
@@ -91,6 +97,9 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	world.add_child(projectile)
 	projectile.global_position = start
 	var c := detach_core()
+	var muzzle := find_marker(MUZZLE_MARKER)
+	if muzzle:
+		MuzzleFlash.spawn(muzzle)
 	projectile.launch(c, dir, shooter)
 	_recharge = recharge_delay
 	fired.emit(projectile)

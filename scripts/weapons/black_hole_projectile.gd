@@ -27,6 +27,7 @@ var _age := 0.0
 var _start_size := 0.28
 var _collapsing := -1.0
 var _start_basis := Basis.IDENTITY
+var _vfx: BlackHoleFlightVfx
 var _flight_basis := Basis.IDENTITY
 
 
@@ -42,6 +43,10 @@ func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
 		_flight_basis = _disk_facing(direction)
 		add_child(core)
 		core.transform = Transform3D(_start_basis * _start_size, Vector3.ZERO)
+	_vfx = BlackHoleFlightVfx.new()
+	_vfx.follow = self
+	_vfx.size = _start_size
+	add_child(_vfx)
 
 
 ## Core's disk lies in its local XZ plane (normal +Y): point the normal back
@@ -86,12 +91,17 @@ func _physics_process(delta: float) -> void:
 
 func _impact(collider: Object) -> void:
 	_collapsing = 0.0
+	ImpactBurst.spawn(get_parent(), global_position, flight_size * 1.1)
+	if _vfx:
+		_vfx.fade_out(collapse_time)
 	if collider and collider.has_method("on_projectile_hit"):
 		collider.on_projectile_hit(self)
 	impacted.emit(global_position, collider)
 
 
 func _set_size(size: float) -> void:
+	if _vfx and _collapsing < 0.0:
+		_vfx.set_size(size)
 	if core:
 		var k := clampf(_age / turn_time, 0.0, 1.0)
 		var q := _start_basis.get_rotation_quaternion().slerp(_flight_basis.get_rotation_quaternion(), smoothstep(0.0, 1.0, k))

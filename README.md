@@ -69,3 +69,10 @@ Four separate, reusable pieces (any weapon/enemy can use them):
 - `BlackHoleGenerator.fire_at()` releases the chamber core as a `BlackHoleProjectile` (same node, animation keeps playing; disk turned to face back along the flight path). It flies straight, stops on the first hit (calls `on_projectile_hit` if the collider has it), collapses and frees. A new core grows in the chamber after `recharge_delay`.
 - `BlackHoleProjectile.impacted` is the hook for gravity / damage / supernova later.
 - Armed: camera eases to an over-the-shoulder offset.
+
+## VFX (Black Hole Generator)
+`scripts/vfx/` – visual only, no gameplay logic. Textures: 10 greyscale sprites from Kenney's Particle Pack (CC0, `assets/vfx/`, 52 KB total) tinted at runtime with additive unshaded materials; CPUParticles3D (WebGL-safe).
+- `MuzzleFlash` – crossed flame quads along the barrel, star pop, brief purple light.
+- `ChamberArcs` – flickering lightning strips between the contained core and the containment ring (only while charged).
+- `BlackHoleFlightVfx` – gravity distortion (`gravity_distortion.gdshader`, screen-texture lens/twist), event-horizon ring, counter-rotating swirls, matter spiralling in, crackles. `Vfx.distortion_enabled` turns the distortion off if a device struggles.
+- `ImpactBurst` – flash, scorch star, expanding shock ring, sparks, light pop.
