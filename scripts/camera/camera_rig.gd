@@ -37,6 +37,7 @@ var pitch := 0.0
 
 
 func _ready() -> void:
+	add_to_group("camera_rigs")
 	top_level = true
 	# Moved every rendered frame from the target's interpolated transform,
 	# so it must not be physics-interpolated itself.
@@ -55,6 +56,16 @@ func _ready() -> void:
 func add_look(radians: Vector2) -> void:
 	yaw = wrapf(yaw - radians.x, -PI, PI)
 	pitch = clampf(pitch - radians.y, deg_to_rad(pitch_min_deg), deg_to_rad(pitch_max_deg))
+
+
+## Supernova: strong but brief kick, fading with distance to the blast.
+func supernova_feedback(at: Vector3, radius: float) -> void:
+	if target == null:
+		return
+	var d := target.global_position.distance_to(at)
+	var s := clampf(1.6 - d / (radius * 2.5), 0.0, 1.4)
+	if s > 0.05:
+		kick(s)
 
 
 func kick(strength := 1.0) -> void:

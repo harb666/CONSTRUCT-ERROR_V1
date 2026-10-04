@@ -68,6 +68,12 @@ var _dodge_dir := Vector3.FORWARD
 var _was_on_floor := true
 var _aim_face_timer := 0.0
 var _idle_face_timer := 0.0
+
+## Velocity from outside forces (gravity wells, blasts), added on top of the
+## player's own movement so input, jumping and escaping always still work.
+## Zero normally; decays when nothing keeps pushing.
+var external_velocity := Vector3.ZERO
+@export var external_decay := 5.0
 var _idle_face_yaw := 0.0
 var _fall_speed := 0.0
 
@@ -158,7 +164,16 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	if not on_floor:
 		_fall_speed = maxf(-velocity.y, 0.0)
+	var ext := external_velocity
+	velocity += ext
 	move_and_slide()
+	velocity -= ext
+	if ext != Vector3.ZERO:
+		if is_on_wall():
+			external_velocity = external_velocity.slide(get_wall_normal())
+		if is_on_floor() and external_velocity.y < 0.0:
+			external_velocity.y = 0.0
+		external_velocity = external_velocity.move_toward(Vector3.ZERO, external_decay * delta)
 
 	# --- facing ---
 	_aim_face_timer = maxf(_aim_face_timer - delta, 0.0)
@@ -187,6 +202,19 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 ## Face the aim direction (camera yaw) for `seconds`, e.g. while shooting.
 func face_aim_for(seconds: float) -> void:
 	_aim_face_timer = maxf(_aim_face_timer, seconds)
+
+
+## Gravity-well pull: horizontal velocity added on top of movement, capped.
+func apply_gravity_pull(dv: Vector3, max_speed: float) -> void:
+	var add := Vector3(dv.x, 0.0, dv.z)
+	external_velocity = (external_velocity + add).limit_length(maxf(max_speed, external_velocity.length()))
+
+
+## One-off shove (e.g. supernova): capped, decays naturally.
+func apply_external_impulse(v: Vector3) -> void:
+	external_velocity = (external_velocity + Vector3(v.x, 0.0, v.z)).limit_length(16.0)
+	if v.y > 0.0 and is_on_floor():
+		velocity.y = maxf(velocity.y, v.y)
 
 
 ## While standing still (no move input), turn towards `yaw`.

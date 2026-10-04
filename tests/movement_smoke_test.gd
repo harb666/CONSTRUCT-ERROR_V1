@@ -216,7 +216,9 @@ func _run() -> void:
 	_check(air_ticks < 6, "stays grounded sprinting across (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z > pad.global_position.z + 1.5, "sprints off the far side")
 
-	# Tap-to-target auto fire.
+	# Tap-to-target auto fire (gravity wells off here so the dummies stay
+	# put; wells are tested separately below).
+	BlackHoleProjectile.gravity_wells_enabled = false
 	var rig: CameraRig = main.get_node("CameraRig")
 	var tc2: TouchControls = main.get_node("UI/TouchControls")
 	var lock: TargetLock = p.get_node("TargetLock")
@@ -232,7 +234,11 @@ func _run() -> void:
 	var shots: Array = []
 	holder.weapon_fired.connect(func(_w) -> void: shots.append(1))
 	var projs: Array = []
-	(holder.current as BlackHoleGenerator).fired.connect(func(pr: BlackHoleProjectile) -> void: projs.append(pr))
+	var stuck_on: Array = []
+	var hits_at_lock := d2.hits
+	(holder.current as BlackHoleGenerator).fired.connect(func(pr: BlackHoleProjectile) -> void:
+		projs.append(pr)
+		pr.impacted.connect(func(_at: Vector3, col: Object) -> void: stuck_on.append(col)))
 
 	# Tap a little off the dummy's mesh: must still select it (forgiving).
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()) + Vector2(35, 20))
@@ -280,12 +286,7 @@ func _run() -> void:
 					if n.mesh is ImmediateMesh and n.visible:
 						bolts += 1
 			_check(bolts > 0, "electric bolts lash out while in flight")
-	var h0 := d2.hits
-	for i in 60:
-		await _ticks(1)
-		if d2.hits > h0:
-			break
-	_check(d2.hits > h0, "shot hits the locked enemy")
+	_check(d2.hits > hits_at_lock, "shot hits the locked enemy")
 
 	# Independent movement while locked: strafe right, legs follow movement.
 	var shots_before := shots.size()
@@ -342,5 +343,84 @@ func _run() -> void:
 	await _ticks(3)
 	_check(not lock.has_target(), "lock clears when the enemy is out of range")
 
+	await _gravity_well_tests(main, p, holder)
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
+
+
+func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) -> void:
+	BlackHoleProjectile.gravity_wells_enabled = true
+	await _ticks(120)
+	var crate: RigidBody3D = main.get_node("Props/Crate1")
+	var heavy: RigidBody3D = main.get_node("Props/HeavyBlock")
+	var gun := holder.current as BlackHoleGenerator
+	# Fire straight at the floor next to the crate, with the player far away.
+	p.global_position = Vector3(-14.0, 0.05, -2.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(30)
+	var spot := crate.global_position + Vector3(1.5, 0.0, 0.5)
+	spot.y = 0.0
+	var pr: BlackHoleProjectile = gun.projectile_scene.instantiate()
+	main.add_child(pr)
+	pr.global_position = spot + Vector3(0, 1.4, 0)
+	var core: BlackHoleCore = gun.core_scene.instantiate()
+	core.scale = Vector3.ONE * 0.28
+	pr.launch(core, Vector3.DOWN, p)
+	pr._travelled = 2.0
+	var crate_d0 := crate.global_position.distance_to(spot)
+	var heavy_d0 := heavy.global_position.distance_to(spot)
+	for i in 30:
+		await _ticks(1)
+		if pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL:
+			break
+	_check(pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL, "black hole sticks to the floor as a gravity well")
+	var stuck_at := pr.global_position
+	var sizes: Array = []
+	var shrunk := false
+	var captured_max := 0
+	for i in 150:
+		await _ticks(1)
+		sizes.append(pr._size)
+		var vis: Array = crate.get_meta("gw_visuals", [])
+		if vis.size() > 0 and (vis[0][0] as Node3D).scale.x < 0.9:
+			shrunk = true
+		if pr.well:
+			captured_max = maxi(captured_max, pr.well.captured_count())
+	_check(pr.global_position.distance_to(stuck_at) < 0.01, "stays stuck at the impact point")
+	_check(sizes.max() - sizes.min() > 0.3, "size pulses while stuck (%.2f..%.2f m)" % [sizes.min(), sizes.max()])
+	_check(crate.global_position.distance_to(spot) < crate_d0 - 0.5 or captured_max > 0, "light crate is pulled in")
+	_check(shrunk, "pulled object shrinks visually near the core")
+	_check(captured_max > 0, "objects get captured (%d)" % captured_max)
+	_check(absf(crate.scale.x - 1.0) < 0.001, "body's real scale is never changed")
+	var heavy_moved := heavy_d0 - heavy.global_position.distance_to(spot)
+	_check(heavy_moved < crate_d0 - crate.global_position.distance_to(spot) + 0.01 or captured_max > 0, "heavy block resists more than the light crate")
+	# Player inside the field gets pulled but can still move away.
+	p.global_position = spot + Vector3(0.0, 0.05, 5.0)
+	p.reset_physics_interpolation()
+	await _ticks(20)
+	_check(p.external_velocity.length() > 1.0, "player feels the pull (%.1f m/s)" % p.external_velocity.length())
+	main.get_node("CameraRig").yaw = 0.0
+	Input.action_press("move_back")
+	Input.action_press("sprint")
+	var z0 := p.global_position.z
+	await _ticks(40)
+	Input.action_release("move_back")
+	Input.action_release("sprint")
+	_check(p.global_position.z > z0 + 2.0, "player can still sprint out of the pull (%.1f m)" % (p.global_position.z - z0))
+	# Wait for collapse + supernova.
+	var saw_collapse := false
+	var saw_supernova := false
+	for i in 400:
+		await _ticks(1)
+		if not is_instance_valid(pr):
+			break
+		saw_collapse = saw_collapse or pr.state == BlackHoleProjectile.State.COLLAPSING
+		saw_supernova = saw_supernova or pr.state == BlackHoleProjectile.State.SUPERNOVA
+	_check(saw_collapse and saw_supernova, "collapses then goes supernova")
+	await _ticks(30)
+	_check(not crate.freeze and crate.collision_layer != 0, "captured objects are released with collision restored")
+	var vis2: Array = crate.get_meta("gw_visuals", [])
+	_check(vis2.is_empty() or absf((vis2[0][0] as Node3D).scale.x - 1.0) < 0.01, "released objects get their normal size back")
+	_check(crate.linear_velocity.length() < 30.0 and heavy.linear_velocity.length() < 30.0, "launch speeds stay capped")
+	_check(not is_instance_valid(pr), "projectile finishes and frees itself")

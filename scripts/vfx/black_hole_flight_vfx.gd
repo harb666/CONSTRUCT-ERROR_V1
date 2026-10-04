@@ -20,6 +20,8 @@ var _infall: CPUParticles3D
 var _lightning: BlackHoleLightning
 var _t := 0.0
 var _crackle_t := 0.0
+var _swirl_a := 0.0
+var _swirl_b := 0.0
 var _crackle_size := 1.0
 var _crackle_roll := 0.0
 
@@ -81,8 +83,10 @@ func _process(delta: float) -> void:
 	if _distortion:
 		Vfx.face_camera(_distortion, size * 2.0)
 	Vfx.face_camera(_ring, size * 1.45, _t * 0.5)
-	Vfx.face_camera(_swirls[0], size * 1.9, _t * 2.4)
-	Vfx.face_camera(_swirls[1], size * 1.6, -_t * 1.7 + 1.0)
+	_swirl_a += delta * 2.4 * (1.0 + instability * 2.5)
+	_swirl_b -= delta * 1.7 * (1.0 + instability * 2.5)
+	Vfx.face_camera(_swirls[0], size * 1.9, _swirl_a)
+	Vfx.face_camera(_swirls[1], size * 1.6, _swirl_b + 1.0)
 	Vfx.set_alpha(_swirls[0], 0.55)
 	Vfx.set_alpha(_swirls[1], 0.45)
 	_crackle_t -= delta
@@ -93,6 +97,22 @@ func _process(delta: float) -> void:
 		_crackle_roll = randf() * TAU
 		Vfx.set_alpha(_crackle, randf_range(0.4, 0.9))
 	Vfx.face_camera(_crackle, size * _crackle_size, _crackle_roll)
+
+
+## 0..1 gravity-well instability: stronger distortion, faster swirls,
+## more energetic particles and more violent lightning.
+var instability := 0.0
+
+
+func set_instability(k: float) -> void:
+	instability = k
+	if _distortion:
+		(_distortion.material_override as ShaderMaterial).set_shader_parameter("strength", 0.55 * (1.0 + k * 1.2))
+		(_distortion.material_override as ShaderMaterial).set_shader_parameter("spin_speed", 1.3 * (1.0 + k * 2.0))
+	if _infall:
+		_infall.speed_scale = 1.0 + k * 2.0
+	if _lightning:
+		_lightning.violence = k
 
 
 ## Fade everything out over `seconds`, then free.

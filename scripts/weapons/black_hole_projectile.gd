@@ -1,52 +1,89 @@
 class_name BlackHoleProjectile
 extends Node3D
 ## A fired black hole: carries the BlackHoleCore that left the gun's chamber
-## (its own spin animation keeps playing), flies straight, and stops on the
-## first thing it hits. Gravity pull, damage and the supernova hook in at
-## `impacted` later; for now it just collapses and disappears.
+## (its own spin animation keeps playing).
+##
+## States: FIRED -> TRAVELLING -> STUCK_GRAVITY_WELL -> COLLAPSING ->
+##         SUPERNOVA -> FINISHED
+## On hitting anything it sticks at the contact point and becomes an unstable
+## gravity well (GravityWell) for `gravity_well_duration`, building up, then
+## collapses to a point and goes supernova. If it flies its full range
+## without hitting anything it just fizzles out.
 
 signal impacted(position: Vector3, collider: Object)
+signal supernova_exploded(position: Vector3)
 
+enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINISHED }
+
+@export_group("Flight")
 @export var speed := 18.0
 @export var max_distance := 80.0
 ## Size it surges to once clear of the gun (m across; ~1.75x player height).
 @export var flight_size := 3.0
 ## Distance travelled at chamber size before it expands (clears the barrel).
 @export var clear_distance := 1.4
-## Duration of the expansion surge (ease-out with a slight overshoot).
 @export var expand_time := 0.32
 @export var expand_overshoot := 1.4
-## Solid collision radius as a fraction of the visible diameter (the dark
-## core, not the faint outer disk), so it can skim along at chest height.
+## Solid collision radius as a fraction of the visible diameter.
 @export var collision_fraction := 0.22
-@export var collapse_time := 0.35
-## In flight the accretion disk faces back towards the shooter, tilted by this
-## much so it reads as a 3D disk rather than a flat circle.
 @export var flight_tilt_degrees := 30.0
-## Seconds to turn from its chamber orientation to the flight orientation.
 @export var turn_time := 0.15
 
+@export_group("Gravity well")
+@export var gravity_well_duration := 5.0
+@export var gravity_radius := 9.0
+@export var gravity_strength := 26.0
+@export var player_gravity_strength := 20.0
+@export var capture_radius := 1.0
+@export var orbit_strength := 12.0
+@export var shrink_rate := 1.6
+## Size pulse while stuck (fraction of size) and its base speed; both grow
+## with instability, and the pulse is deliberately irregular.
+@export var pulse_amount := 0.1
+@export var pulse_speed := 6.0
+@export var maximum_affected_objects := 12
+@export var maximum_captured_objects := 6
+## Max simultaneous wells (mobile): the oldest collapses early if exceeded.
+@export var max_active_wells := 3
+
+@export_group("Collapse / supernova")
+@export var collapse_time := 0.28
+@export var compression_hold := 0.08
+@export var supernova_radius := 11.0
+@export var supernova_damage := 3.0
+@export var supernova_launch_force := 24.0
+@export var fizzle_time := 0.35
+
+static var _active_wells: Array = []
+## Test/debug switch: when false, impacts fizzle out instead of forming wells.
+static var gravity_wells_enabled := true
+
+var state := State.FIRED
 var core: BlackHoleCore
 var direction := Vector3.FORWARD
+var well: GravityWell
 var _shooter_rid: RID
 var _travelled := 0.0
 var _age := 0.0
 var _start_size := 0.28
-var _collapsing := -1.0
 var _start_basis := Basis.IDENTITY
-var _vfx: BlackHoleFlightVfx
 var _flight_basis := Basis.IDENTITY
+var _vfx: BlackHoleFlightVfx
 var _size := 0.28
 var _expand_t := -1.0
 var _sphere := SphereShape3D.new()
+var _state_t := 0.0
 var _collapse_from := 0.0
+var _fizzle := false
+var _surface_normal := Vector3.UP
+var _pulse_seed := randf() * 100.0
+var _star: MeshInstance3D
 
-## Current solid radius (m) and the wider radius of its influence (used by
-## the electricity now, gravity later). Both scale with the expansion.
+## Current solid radius (m) and the wider influence radius.
 var collision_radius: float:
 	get: return _size * collision_fraction
 var influence_radius: float:
-	get: return _size * 1.2
+	get: return gravity_radius if state == State.STUCK_GRAVITY_WELL else _size * 1.2
 
 
 func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
@@ -65,10 +102,11 @@ func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
 	_vfx = BlackHoleFlightVfx.new()
 	_vfx.follow = self
 	_vfx.projectile = self
-	if shooter is CollisionObject3D:
-		_vfx.exclude = [(shooter as CollisionObject3D).get_rid()]
+	if _shooter_rid.is_valid():
+		_vfx.exclude = [_shooter_rid]
 	_vfx.size = _start_size
 	add_child(_vfx)
+	state = State.TRAVELLING
 
 
 ## Core's disk lies in its local XZ plane (normal +Y): point the normal back
@@ -86,36 +124,49 @@ func _disk_facing(dir: Vector3) -> Basis:
 
 func _physics_process(delta: float) -> void:
 	_age += delta
-	if _collapsing >= 0.0:
-		_collapsing += delta
-		var k := 1.0 - clampf(_collapsing / collapse_time, 0.0, 1.0)
-		_set_size(_collapse_from * k)
-		if k <= 0.0:
-			queue_free()
-		return
+	_state_t += delta
+	match state:
+		State.TRAVELLING:
+			_travel(delta)
+		State.STUCK_GRAVITY_WELL:
+			_stuck(delta)
+		State.COLLAPSING:
+			_collapse()
+		State.SUPERNOVA:
+			if _state_t > 1.2 and (well == null or well.is_done()):
+				_finish()
+		State.FINISHED:
+			pass
 
+
+# --- TRAVELLING ---
+
+func _travel(delta: float) -> void:
 	# Small while leaving the gun, then a fast, overshooting surge.
 	if _expand_t < 0.0 and _travelled >= clear_distance:
 		_expand_t = 0.0
 		ImpactBurst.spawn(get_parent(), global_position, flight_size * 0.55)
-	if _expand_t >= 0.0:
-		_expand_t += delta
-		var k := clampf(_expand_t / expand_time, 0.0, 1.0)
-		_set_size(lerpf(_start_size, flight_size, _ease_out_back(k)))
-	else:
-		_set_size(_start_size)
-
+	_set_size(_expansion_size(delta))
 	var from := global_position
 	var motion := direction * speed * delta
 	var hit := _sweep(from, motion)
 	if not hit.is_empty():
 		global_position = hit.position
-		_impact(hit.collider)
+		_stick(hit)
 		return
 	global_position = from + motion
 	_travelled += motion.length()
 	if _travelled >= max_distance:
-		_impact(null)
+		_fizzle = true
+		_enter(State.COLLAPSING)
+
+
+func _expansion_size(delta: float) -> float:
+	if _expand_t < 0.0:
+		return _start_size
+	_expand_t += delta
+	var k := clampf(_expand_t / expand_time, 0.0, 1.0)
+	return lerpf(_start_size, flight_size, _ease_out_back(k))
 
 
 func _ease_out_back(k: float) -> float:
@@ -142,23 +193,151 @@ func _sweep(from: Vector3, motion: Vector3) -> Dictionary:
 	var info := space.get_rest_info(q)
 	if info.is_empty():
 		return {}
-	return {"position": from + motion * frac[0], "collider": instance_from_id(info.collider_id)}
+	return {"position": from + motion * frac[0], "collider": instance_from_id(info.collider_id), "normal": info.normal}
 
 
-func _impact(collider: Object) -> void:
-	_collapsing = 0.0
-	_collapse_from = _size
-	ImpactBurst.spawn(get_parent(), global_position, maxf(_size, 0.6) * 1.1)
-	if _vfx:
-		_vfx.fade_out(collapse_time)
+# --- STUCK_GRAVITY_WELL ---
+
+func _stick(hit: Dictionary) -> void:
+	var collider: Object = hit.collider
+	_surface_normal = hit.normal if hit.normal.length_squared() > 0.1 else -direction
+	ImpactBurst.spawn(get_parent(), global_position, maxf(_size, 0.6) * 0.8)
 	if collider and collider.has_method("on_projectile_hit"):
 		collider.on_projectile_hit(self)
 	impacted.emit(global_position, collider)
+	if not gravity_wells_enabled:
+		_fizzle = true
+		_enter(State.COLLAPSING)
+		return
+	# Finish expanding if it hit before fully surging out.
+	if _expand_t < 0.0:
+		_expand_t = 0.0
+	well = GravityWell.new()
+	well.surface_normal = _surface_normal
+	well.gravity_radius = gravity_radius
+	well.gravity_strength = gravity_strength
+	well.player_gravity_strength = player_gravity_strength
+	well.capture_radius = capture_radius
+	well.orbit_strength = orbit_strength
+	well.shrink_rate = shrink_rate
+	well.max_affected_objects = maximum_affected_objects
+	well.max_captured_objects = maximum_captured_objects
+	well.supernova_radius = supernova_radius
+	well.supernova_damage = supernova_damage
+	well.supernova_launch_force = supernova_launch_force
+	add_child(well)
+	_enter(State.STUCK_GRAVITY_WELL)
+	_active_wells.append(self)
+	while _active_wells.size() > max_active_wells:
+		var oldest: BlackHoleProjectile = _active_wells.pop_front()
+		if is_instance_valid(oldest) and oldest.state == State.STUCK_GRAVITY_WELL:
+			oldest._enter(State.COLLAPSING)
+
+
+func _stuck(delta: float) -> void:
+	var k := clampf(_state_t / gravity_well_duration, 0.0, 1.0)  # instability
+	var base := _expansion_size(delta)
+	# Irregular, building pulse: three incommensurate waves + slow drift.
+	var t := _state_t * pulse_speed * (1.0 + k * 0.8) + _pulse_seed
+	var wave := sin(t) * 0.6 + sin(t * 1.73 + 1.3) * 0.28 + sin(t * 2.91 + 0.4) * 0.12
+	wave += (sin(_state_t * 0.9 + _pulse_seed) * 0.5 + 0.5) * 0.3 * k
+	_set_size(base * (1.0 + pulse_amount * (1.0 + k * 1.6) * wave))
+	if well:
+		well.intensity = k
+	_set_anim_speed(1.0 + k * 2.5)
+	if _vfx:
+		_vfx.set_instability(k)
+	if _state_t >= gravity_well_duration:
+		_enter(State.COLLAPSING)
+
+
+# --- COLLAPSING ---
+
+func _collapse() -> void:
+	if _fizzle:
+		var f := 1.0 - clampf(_state_t / fizzle_time, 0.0, 1.0)
+		_set_size(_collapse_from * f)
+		if f <= 0.0:
+			_finish()
+		return
+	# Everything rushes inward to a point, a brief moment of extreme
+	# compression (bright pinpoint), then the supernova.
+	var k := clampf(_state_t / collapse_time, 0.0, 1.0)
+	_set_size(lerpf(_collapse_from, 0.03, k * k * k))
+	_set_anim_speed(4.0 + k * 6.0)
+	if _star:
+		var glow := clampf((_state_t - collapse_time * 0.5) / (collapse_time * 0.5 + compression_hold), 0.0, 1.0)
+		_star.visible = glow > 0.0
+		Vfx.face_camera(_star, 0.4 + glow * 0.9, _state_t * 8.0)
+		Vfx.set_alpha(_star, glow)
+	if _state_t >= collapse_time + compression_hold:
+		_enter(State.SUPERNOVA)
+
+
+func _enter(s: State) -> void:
+	state = s
+	_state_t = 0.0
+	match s:
+		State.COLLAPSING:
+			_collapse_from = _size
+			_active_wells.erase(self)
+			if well:
+				well.intensity = 1.0
+			if not _fizzle:
+				_star = Vfx.quad("star", Vfx.HOT, Vector2.ONE)
+				_star.top_level = true
+				_star.visible = false
+				add_child(_star)
+				_star.global_position = global_position
+			elif _vfx:
+				_vfx.fade_out(fizzle_time)
+		State.SUPERNOVA:
+			_supernova()
+
+
+# --- SUPERNOVA ---
+
+func _supernova() -> void:
+	var at := global_position
+	if core:
+		core.visible = false
+	if _star:
+		_star.queue_free()
+		_star = null
+	if _vfx:
+		_vfx.fade_out(0.15)
+		_vfx = null
+	SupernovaBlast.spawn(get_parent(), at, supernova_radius, _surface_normal)
+	if well:
+		well.supernova()
+	get_tree().call_group("camera_rigs", "supernova_feedback", at, supernova_radius)
+	supernova_exploded.emit(at)
+
+
+func _finish() -> void:
+	state = State.FINISHED
+	if well and not well.is_done():
+		well.release_all_now()
+	queue_free()
+
+
+func _exit_tree() -> void:
+	_active_wells.erase(self)
+	# Never leave bodies captured if we're removed unexpectedly.
+	if well and is_instance_valid(well) and not well.is_done():
+		well.release_all_now()
+
+
+func _set_anim_speed(s: float) -> void:
+	if core:
+		var ap := core.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		if ap:
+			ap.speed_scale = s
 
 
 func _set_size(size: float) -> void:
 	_size = size
-	if _vfx and _collapsing < 0.0:
+	if _vfx:
 		_vfx.set_size(size)
 	if core:
 		var k := clampf(_age / turn_time, 0.0, 1.0)

@@ -84,3 +84,12 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 - `ArmAimModifier` applies the spring additively: firing arm's elbow driven back + forearm/muzzle climb; chest (Spine2 only) leans back and twists. Hips/legs and movement untouched.
 - `WeaponHolder._align_weapon` slides the weapon back along its barrel and pitches the muzzle up with the same spring.
 - Gun mechanics: `Front_Muzzle_Deep_Bore` slams back and rebounds; `Finished_Containment_Interior` spins 120° per shot.
+
+## Black hole impact → gravity well → supernova
+`BlackHoleProjectile` states: FIRED → TRAVELLING → STUCK_GRAVITY_WELL → COLLAPSING → SUPERNOVA → FINISHED (flying full range without a hit just fizzles).
+- On hitting anything it sticks at the contact point for `gravity_well_duration` (5 s), pulsing irregularly; instability ramps up suction, spin (core animation speed_scale), lightning violence, particles and distortion. At most `max_active_wells` (3) at once; the oldest collapses early.
+- `GravityWell` (`scripts/weapons/gravity_well.gd`): one sphere query every 0.15 s on the **movable** physics layer (layer 2: props, enemies, players), nearest `max_affected_objects` kept. Clamped inward/orbital/total speeds, mass resistance (sqrt(mass/ref)), lift near the core, visual shrink/spin via the body's mesh children (original transforms stored; body scale never touched). Inside `capture_radius` bodies are captured: collision off, kinematic, tiny orbit in the core (max `max_captured_objects`).
+- Players: `PlayerController.external_velocity` – the pull is added on top of normal movement (capped at 8 m/s; sprint escapes). Supernova shoves via `apply_external_impulse`.
+- Collapse: rapid shrink to a pinpoint + brief bright compression, then `SupernovaBlast` (flash, two shock rings, distortion bubble, sparks, light) and `GravityWell.supernova()`: captured bodies released one per physics tick at spread, ray-checked positions with restored collision/size, ONE capped launch each (`max_launch_speed`), radial damage (`take_damage`), brief camera kick for nearby local players.
+- Tunables on the projectile: gravity_well_duration, gravity_radius, gravity_strength, player_gravity_strength, capture_radius, orbit_strength, shrink_rate, pulse_amount, pulse_speed, supernova_radius, supernova_damage, supernova_launch_force, maximum_affected_objects, maximum_captured_objects, max_active_wells.
+- Arena: dummies are now heavy upright RigidBody3D enemies; `Props/` has light crates, barrels and a heavy block (`PhysicsProp`).

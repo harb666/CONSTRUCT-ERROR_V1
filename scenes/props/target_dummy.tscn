@@ -21,7 +21,9 @@ top_radius = 0.5
 bottom_radius = 0.6
 height = 0.1
 
-[node name="TargetDummy" type="StaticBody3D"]
+[node name="TargetDummy" type="RigidBody3D"]
+mass = 70.0
+lock_rotation = true
 script = ExtResource("1")
 
 [node name="Mesh" type="MeshInstance3D" parent="."]

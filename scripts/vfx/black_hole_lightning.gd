@@ -22,6 +22,8 @@ var radius := 3.0
 ## Physics bodies the rays ignore (the shooter).
 var exclude: Array[RID] = []
 var active := true
+## 0..1 gravity-well instability: more frequent, longer, bigger bolts.
+var violence := 0.0
 
 var _bolts: Array[Dictionary] = []
 var _flashes: Array[MeshInstance3D] = []
@@ -88,11 +90,12 @@ func _process(delta: float) -> void:
 	if active and radius > 0.8:
 		_minor_t -= delta
 		_major_t -= delta
+		var rate := 1.0 - violence * 0.55
 		if _minor_t <= 0.0:
-			_minor_t = randf_range(minor_interval.x, minor_interval.y)
+			_minor_t = randf_range(minor_interval.x, minor_interval.y) * rate
 			_strike(false, center)
 		if _major_t <= 0.0:
-			_major_t = randf_range(major_interval.x, major_interval.y)
+			_major_t = randf_range(major_interval.x, major_interval.y) * rate
 			_strike(true, center)
 	for b in _bolts:
 		var mi: MeshInstance3D = b.mi
@@ -129,7 +132,7 @@ func _strike(major: bool, center: Vector3) -> void:
 	if b.is_empty():
 		return
 	var shell := radius * 0.18  # edge of the dark core
-	var reach := radius * 0.6 + (4.5 if major else 2.0)
+	var reach := (radius * 0.6 + (4.5 if major else 2.0)) * (1.0 + violence * 0.6)
 	var end := Vector3.ZERO
 	var hit_surface := false
 	# Big bolts sometimes go for an enemy in reach.
