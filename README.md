@@ -73,6 +73,6 @@ Four separate, reusable pieces (any weapon/enemy can use them):
 ## VFX (Black Hole Generator)
 `scripts/vfx/` – visual only, no gameplay logic. Textures: 10 greyscale sprites from Kenney's Particle Pack (CC0, `assets/vfx/`, 52 KB total) tinted at runtime with additive unshaded materials; CPUParticles3D (WebGL-safe).
 - `MuzzleFlash` – crossed flame quads along the barrel, star pop, brief purple light.
-- `ChamberArcs` – flickering lightning strips between the contained core and the containment ring (only while charged).
+- `ChamberArcs` – flickering lightning strips between the contained core and the containment ring (only while charged). The chamber also has a small, subtle distortion disc (`chamber_lens_size`/`chamber_lens_strength` on the gun) that fades out before the chamber frame.
 - `BlackHoleFlightVfx` – gravity distortion (`gravity_distortion.gdshader`, screen-texture lens/twist), event-horizon ring, counter-rotating swirls, matter spiralling in, crackles. `Vfx.distortion_enabled` turns the distortion off if a device struggles.
 - `ImpactBurst` – flash, scorch star, expanding shock ring, sparks, light pop.

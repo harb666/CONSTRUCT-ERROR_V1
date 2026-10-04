@@ -26,6 +26,11 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 var core: BlackHoleCore
 var _tumble: Node3D
 var _arcs: ChamberArcs
+var _lens: MeshInstance3D
+## Subtle gravity distortion around the contained core: disc diameter (m)
+## and strength, kept small so only the chamber area bends, not the gun.
+@export var chamber_lens_size := 0.38
+@export var chamber_lens_strength := 0.22
 var _t := 0.0
 var _recharge := 0.0      # >0 while waiting for a new core
 var _grow := 1.0          # 0..1 growth of the current core
@@ -48,6 +53,20 @@ func _spawn_core() -> void:
 		_arcs = ChamberArcs.new()
 		_arcs.name = "ChamberArcs"
 		chamber.add_child(_arcs)
+		if Vfx.distortion_enabled:
+			_lens = MeshInstance3D.new()
+			_lens.name = "ChamberLens"
+			_lens.mesh = QuadMesh.new()
+			var m := ShaderMaterial.new()
+			m.shader = BlackHoleFlightVfx.DISTORTION
+			m.render_priority = -1
+			m.set_shader_parameter("strength", chamber_lens_strength)
+			m.set_shader_parameter("swirl", 1.2)
+			m.set_shader_parameter("spin_speed", 0.9)
+			m.set_shader_parameter("tint_amount", 0.06)
+			_lens.material_override = m
+			_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			chamber.add_child(_lens)
 	core = core_scene.instantiate()
 	core.name = "BlackHoleCore"
 	core.rotation_degrees = core_rotation_degrees
@@ -75,6 +94,11 @@ func _process(delta: float) -> void:
 		_apply_core_scale()
 	if _arcs:
 		_arcs.intensity = _grow if core else 0.0
+	if _lens:
+		# Grows with the core; gone while the chamber is empty.
+		var k := ease(clampf(_grow, 0.0, 1.0), 0.4) if core else 0.0
+		_lens.visible = k > 0.01
+		_lens.scale = Vector3.ONE * maxf(chamber_lens_size * k, 0.001)
 
 
 func can_fire() -> bool:
