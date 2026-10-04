@@ -25,9 +25,9 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 @export var interior_spin_deg := 120.0
 
 ## Seconds after firing before a new core starts forming.
-@export var recharge_delay := 0.6
+@export var recharge_delay := 12.0
 ## Seconds for the new core to grow to full size.
-@export var recharge_grow := 0.4
+@export var recharge_grow := 3.0
 
 var core: BlackHoleCore
 var _tumble: Node3D

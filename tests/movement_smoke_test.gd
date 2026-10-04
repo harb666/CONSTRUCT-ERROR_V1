@@ -231,6 +231,9 @@ func _run() -> void:
 	rig.yaw = 0.0
 	rig.pitch = deg_to_rad(-8)
 	await _ticks(30)
+	# Real cooldown is 15 s; shorten it so the repeat-fire checks stay quick.
+	(holder.current as BlackHoleGenerator).recharge_delay = 0.6
+	(holder.current as BlackHoleGenerator).recharge_grow = 0.4
 	var shots: Array = []
 	holder.weapon_fired.connect(func(_w) -> void: shots.append(1))
 	var projs: Array = []

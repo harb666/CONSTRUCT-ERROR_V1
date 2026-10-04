@@ -66,7 +66,7 @@ Four separate, reusable pieces (any weapon/enemy can use them):
 - Upper body: `ArmAimModifier` twists the spine (±60°) and aims the armed arm at the target; hips/legs keep following movement. Standing still, the player turns to face the target.
 - UI: lock-on ring (`scripts/ui/target_marker.gd`). The old FIRE button and crosshair are gone.
 - Test dummies are enemies: 5 hits to destroy, respawn after 4 s.
-- `BlackHoleGenerator.fire_at()` releases the chamber core as a `BlackHoleProjectile` (same node, animation keeps playing; disk turned to face back along the flight path). It flies straight, stops on the first hit (calls `on_projectile_hit` if the collider has it), collapses and frees. A new core grows in the chamber after `recharge_delay`.
+- `BlackHoleGenerator.fire_at()` releases the chamber core as a `BlackHoleProjectile` (same node, animation keeps playing; disk turned to face back along the flight path). It flies straight, stops on the first hit (calls `on_projectile_hit` if the collider has it), collapses and frees. A new core grows in the chamber after `recharge_delay` (12 s) over `recharge_grow` (3 s): 15 s between shots.
 - `BlackHoleProjectile.impacted` is the hook for gravity / damage / supernova later.
 - Armed: camera eases to an over-the-shoulder offset.
 
