@@ -1,0 +1,84 @@
+name: Web build
+
+# Builds the Godot Web export on every push and publishes it to the
+# gh-pages branch (served by GitHub Pages) so it can be played on a phone.
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: web-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_RELEASE: stable
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-web
+
+      - name: Download Godot + web export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          V="${GODOT_VERSION}-${GODOT_RELEASE}"
+          BASE="https://github.com/godotengine/godot-builds/releases/download/${V}"
+          mkdir -p ~/godot/templates && cd ~/godot
+          curl -fsSL -o godot.zip "${BASE}/Godot_v${V}_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v${V}_linux.x86_64" godot && rm godot.zip
+          curl -fsSL -o templates.tpz "${BASE}/Godot_v${V}_export_templates.tpz"
+          unzip -q templates.tpz 'templates/web*' 'templates/version.txt' -d tpl
+          mv tpl/templates/* templates/ && rm -rf tpl templates.tpz
+
+      - name: Install Godot
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates
+          ln -sfn ~/godot/templates "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_RELEASE}"
+          echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - name: Stamp build info
+        run: echo "${GITHUB_REF_NAME} ${GITHUB_SHA::7} $(date -u +'%Y-%m-%d %H:%M UTC')" > build_info.txt
+
+      - name: Import project
+        run: godot --headless --path . --import
+
+      - name: Movement smoke test
+        run: godot --headless --path . -s tests/movement_smoke_test.gd
+
+      - name: Export Web
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+          test -s build/web/index.wasm
+          touch build/web/.nojekyll
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
+          cd build/web
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Web build ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

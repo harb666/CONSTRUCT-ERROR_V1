@@ -1,0 +1,6 @@
+# Godot
+.godot/
+/build/
+*.tmp
+export_credentials.cfg
+build_info.txt
