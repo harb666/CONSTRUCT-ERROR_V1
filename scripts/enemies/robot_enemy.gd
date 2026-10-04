@@ -43,6 +43,10 @@ const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
 ## Respawn at the start position this long after the corpse is cleared
 ## (testing convenience; < 0 = never).
 @export var respawn_time := 5.0
+## Torn apart by a black hole's core: blast force (sets how completely it
+## breaks) and how hard the pieces are thrown (gently, they get pulled back).
+@export var swallow_force := 45.0
+@export var swallow_launch_scale := 0.3
 
 var health := 0.0
 var hits := 0
@@ -65,8 +69,6 @@ var _phase := 0.0
 var _dead_t := 0.0
 var _settled := false
 var _pulled_frame := -100
-## Killed inside a black hole, waiting to be thrown out.
-var swallowed := false
 
 
 func _ready() -> void:
@@ -117,22 +119,21 @@ func _build_model() -> void:
 	_visual.rotation.y = _yaw
 
 
-## Visual root for gravity-well shrink/spin (nothing once dead: the corpse
-## and its flying parts must keep their real size).
+## Gravity wells shrink/spin these; a living robot stays full size (it is
+## torn apart near the core and its pieces are what shrink).
 func gravity_visual_nodes() -> Array:
-	return [_visual] if (alive or swallowed) and _visual else []
+	return []
 
 
-## Reached the centre of a black hole: dead on the spot (so nothing stays
-## locked onto it), but its death plays out when the supernova spits it out.
-func on_swallowed() -> void:
+## Got too close to a black hole's core: torn apart on the spot. The pieces
+## burst out only gently so the black hole can pull them back in.
+func on_swallowed(well: Node3D) -> void:
 	if not alive:
 		return
-	alive = false
-	swallowed = true
-	health = 0.0
-	if _targetable:
-		_targetable.kill()
+	var info := DamageInfo.make(max_health + 1.0, DamageInfo.Type.SUPERNOVA, well.global_position,
+		global_position - well.global_position, 0.0, swallow_force, well)
+	info.launch_scale = swallow_launch_scale
+	die(info)
 
 
 func get_breaker() -> BreakApart:
@@ -146,8 +147,6 @@ func get_skeleton() -> Skeleton3D:
 # --- Behaviour ---
 
 func _physics_process(delta: float) -> void:
-	if swallowed:
-		return  # the black hole owns it until it is thrown out
 	if alive:
 		_patrol(delta)
 	else:
@@ -205,9 +204,6 @@ func take_damage(amount: float, from := Vector3.ZERO) -> void:
 
 
 func apply_damage(info: DamageInfo) -> void:
-	if swallowed:
-		die(info)  # thrown out of the black hole: now it falls/breaks
-		return
 	if not alive:
 		return
 	hits += 1
@@ -222,9 +218,8 @@ func apply_damage(info: DamageInfo) -> void:
 
 
 func die(info: DamageInfo) -> void:
-	if not alive and not swallowed:
+	if not alive:
 		return
-	swallowed = false
 	alive = false
 	health = 0.0
 	if _targetable:

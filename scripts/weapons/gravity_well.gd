@@ -29,6 +29,9 @@ extends Node3D
 ## their weight resists the pull at most this much.
 @export var enemy_pull_multiplier := 2.6
 @export var enemy_max_resist := 1.3
+## Enemies are torn apart this close to the core (their pieces then spiral
+## in, shrink past the event horizon and are swallowed).
+@export var enemy_kill_radius := 2.4
 ## Enemies are always captured (and shrunk away) once inside the event
 ## horizon, even when the prop capture limit is reached.
 @export var max_captured_enemies := 12
@@ -85,6 +88,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Bodies can be removed at any time (e.g. old debris despawning).
+	_captured = _captured.filter(func(e: Dictionary) -> bool: return is_instance_valid(e.body))
+	_release_queue = _release_queue.filter(func(q: Array) -> bool: return is_instance_valid(q[0].body))
+	_bodies = _bodies.filter(func(b: Variant) -> bool: return is_instance_valid(b))
 	if active:
 		_query_t -= delta
 		if _query_t <= 0.0:
@@ -122,6 +129,10 @@ func _refresh() -> void:
 	# Nearest first, enemies ahead of props (they must never be left out).
 	found.sort_custom(func(a, b): return _center_of(a).distance_squared_to(c) - (100.0 if _is_enemy(a) else 0.0) < _center_of(b).distance_squared_to(c) - (100.0 if _is_enemy(b) else 0.0))
 	var keep := found.slice(0, max_affected_objects)
+	# Players are always affected, however crowded the field is.
+	for f in found.slice(max_affected_objects):
+		if f is CharacterBody3D:
+			keep.append(f)
 	# Anything that dropped out of the field gets its look back.
 	for b in _bodies:
 		if is_instance_valid(b) and not keep.has(b) and not _is_captured(b):
@@ -140,14 +151,19 @@ func _resist(b: RigidBody3D) -> float:
 	return r
 
 
-static func _is_enemy(b: Object) -> bool:
-	return b is Node and (b as Node).is_in_group(&"enemies")
+static func _is_enemy(b: Variant) -> bool:
+	return is_instance_valid(b) and b is Node and (b as Node).is_in_group(&"enemies")
 
 
 func _pull_body(b: RigidBody3D, delta: float) -> void:
+	if b.collision_layer == 0:
+		return  # dead/removed since the last query
 	var to := global_position - _center_of(b)
 	var d := to.length()
 	if d < 0.001 or d > gravity_radius:
+		return
+	if d < enemy_kill_radius and _is_enemy(b) and b.has_method("on_swallowed"):
+		b.on_swallowed(self)
 		return
 	var dir := to / d
 	var close := 1.0 - d / gravity_radius
@@ -214,8 +230,6 @@ func _capture(b: RigidBody3D) -> void:
 		"angle": randf() * TAU, "radius": randf_range(0.12, 0.3), "phase": randf() * TAU})
 	b.collision_layer = 0
 	b.collision_mask = 0
-	if b.has_method("on_swallowed"):
-		b.on_swallowed()  # touching the core kills enemies outright
 	b.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	b.freeze = true
 	b.linear_velocity = Vector3.ZERO

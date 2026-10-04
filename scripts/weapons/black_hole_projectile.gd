@@ -41,8 +41,8 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 ## with instability, and the pulse is deliberately irregular.
 @export var pulse_amount := 0.1
 @export var pulse_speed := 6.0
-@export var maximum_affected_objects := 12
-@export var maximum_captured_objects := 6
+@export var maximum_affected_objects := 20
+@export var maximum_captured_objects := 10
 ## Max simultaneous wells (mobile): the oldest collapses early if exceeded.
 @export var max_active_wells := 3
 

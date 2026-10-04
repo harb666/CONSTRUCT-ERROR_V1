@@ -19,6 +19,9 @@ var impact_force := 0.0
 ## ~10 = grenade edge, 40 = point-blank supernova).
 var explosive_force := 0.0
 var source: Node
+## Scales how hard broken-off parts are thrown (e.g. < 1 when a black hole
+## tears an enemy apart and should keep the pieces).
+var launch_scale := 1.0
 
 
 static func make(amount: float, type: Type, position: Vector3, direction: Vector3,

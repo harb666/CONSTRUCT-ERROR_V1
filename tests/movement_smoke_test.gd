@@ -657,16 +657,22 @@ func _robot_tests(main: Node) -> void:
 	bh_core.scale = Vector3.ONE * 0.28
 	bh.launch(bh_core, Vector3.DOWN, null)
 	bh._travelled = 2.0
-	var swallowed_ok := false
-	var thrown_out_dead := false
+	var torn_near := -1.0
+	var pieces_swallowed := false
+	var pieces_shrunk := false
 	for i in Engine.physics_ticks_per_second * 8:
 		await _ticks(1)
-		if is_instance_valid(bh) and bh.well and bh.well._is_captured(r6):
-			swallowed_ok = swallowed_ok or (not r6.alive and not r6.get_node("Targetable").is_valid_target())
-		if swallowed_ok and not r6.swallowed and r6.last_death_anim != &"":
-			thrown_out_dead = true
-	_check(swallowed_ok, "enemy touching the black hole's core dies (no longer targetable)")
-	_check(thrown_out_dead, "its death and breakup play out when the supernova throws it out (%s)" % BreakApart.Level.keys()[r6.last_destruction])
+		if torn_near < 0.0 and not r6.alive and is_instance_valid(bh):
+			torn_near = (r6.global_position + Vector3.UP * 0.9).distance_to(bh.global_position)
+		if is_instance_valid(bh) and bh.well:
+			for e in bh.well._captured:
+				if e.body is DebrisPiece:
+					pieces_swallowed = true
+					if (e.body as DebrisPiece).pose.scale.x < 0.5:
+						pieces_shrunk = true
+	_check(torn_near > 0.0 and torn_near < 2.6 and not r6.get_node("Targetable").is_valid_target(), "enemy near the core dies there, untargetable (%.1f m from it)" % torn_near)
+	_check(r6.last_destruction == BreakApart.Level.EXTREME and r6.get_breaker().detached_count() > 0, "and visibly tears apart on the spot")
+	_check(pieces_swallowed and pieces_shrunk, "its pieces are pulled in, swallowed and shrunk by the black hole")
 	gun.free()
 
 	for n in [r, r2, r3, r4, r5, r6]:

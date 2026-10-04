@@ -288,7 +288,7 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 	var radial := center - info.impact_position
 	radial = radial.normalized() if radial.length_squared() > 1e-4 else info.impact_direction
 	var dir := (radial * (1.0 - direction_bias) + info.impact_direction * direction_bias + Vector3.UP * upward_bias).normalized()
-	var speed := minf(base_launch_speed + power * launch_per_power, max_launch_speed) * randf_range(0.7, 1.1)
+	var speed := minf(base_launch_speed + power * launch_per_power, max_launch_speed) * randf_range(0.7, 1.1) * info.launch_scale
 	speed /= clampf(sqrt(piece.mass / 6.0), 1.0, 2.5)
 	var spin := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized() * minf(3.0 + power * 8.0, max_spin) * randf_range(0.5, 1.0)
 	piece.launch(base_velocity * 0.6 + dir * speed, spin)

@@ -7,6 +7,8 @@ extends RigidBody3D
 ## settled pieces are frozen (no ongoing cost), and old pieces shrink away.
 
 const DEBRIS_LAYER := 4  # physics layer 3 "debris"
+## Also "movable": black holes pull, swallow and throw debris too.
+const MOVABLE_LAYER := 2
 
 ## Max debris pieces alive at once (mobile); the oldest go first.
 static var max_active := 36
@@ -33,7 +35,7 @@ var _despawning := false
 
 
 func _init() -> void:
-	collision_layer = DEBRIS_LAYER
+	collision_layer = DEBRIS_LAYER | MOVABLE_LAYER
 	collision_mask = 1  # world/props only at first
 	continuous_cd = false
 	can_sleep = true
@@ -54,6 +56,11 @@ func _ready() -> void:
 	get_tree().create_timer(self_collision_delay, false, true).timeout.connect(func() -> void:
 		if is_instance_valid(self) and not _despawning:
 			collision_mask |= DEBRIS_LAYER)
+
+
+## What a gravity well shrinks/spins as the piece nears its core.
+func gravity_visual_nodes() -> Array:
+	return [pose] if pose else []
 
 
 func _exit_tree() -> void:
