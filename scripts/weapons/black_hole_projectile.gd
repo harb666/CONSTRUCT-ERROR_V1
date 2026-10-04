@@ -55,6 +55,8 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 @export var supernova_damage := 3.0
 @export var supernova_launch_force := 24.0
 @export var fizzle_time := 0.35
+## Plasma burst reaches this far beyond the damage radius (m).
+@export var supernova_finish_margin := 1.0
 ## Direct hit on whatever it strikes (before the well forms): ordinary
 ## damage, modest force (DamageInfo.impact_force). The supernova does the
 ## violent part.
@@ -450,6 +452,8 @@ func _supernova() -> void:
 		_vfx.fade_out(0.15)
 		_vfx = null
 	SupernovaBlast.spawn(get_parent(), at, supernova_radius, _surface_normal)
+	# Expanding plasma burst, reaching just past the damage radius.
+	SupernovaFinish.spawn(get_parent(), at, supernova_radius + supernova_finish_margin)
 	if _hum:
 		_hum.stop()
 	if _charge_snd and is_instance_valid(_charge_snd):

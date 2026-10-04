@@ -370,6 +370,7 @@ func _run() -> void:
 	await _cooldown_audio_tests(main)
 	await _robot_tests(main)
 	await _flight_gravity_tests(main)
+	await _supernova_finish_tests(main)
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -747,3 +748,19 @@ func _flight_gravity_tests(main: Node) -> void:
 	if is_instance_valid(pr):
 		pr.queue_free()
 	await _ticks(5)
+
+
+func _supernova_finish_tests(main: Node) -> void:
+	var f := SupernovaFinish.spawn(main, Vector3(-30, 1, -30), 12.0)
+	await _ticks(2)
+	var reach := float(f._burst.get_meta("extent")) * f._burst.scale.x * 0.5
+	_check(absf(reach - 12.0) < 0.05, "supernova burst reaches just past the damage radius (%.1f m)" % reach)
+	_check(f._mats[0].transparency == BaseMaterial3D.TRANSPARENCY_ALPHA and f._mats[0].albedo_color.a < 0.5 and f._mats[0].depth_draw_mode == BaseMaterial3D.DEPTH_DRAW_DISABLED, "burst is translucent")
+	var t := 0.0
+	while is_instance_valid(f) and t < 2.0:
+		await _ticks(1)
+		t += 1.0 / Engine.physics_ticks_per_second
+	_check(not is_instance_valid(f) and t <= 0.85, "whole burst plays in 0.8 s (%.2f s)" % t)
+	var bp: BlackHoleProjectile = load("res://scenes/weapons/black_hole_projectile.tscn").instantiate()
+	_check(bp.supernova_radius + bp.supernova_finish_margin > bp.supernova_radius, "burst set just beyond the supernova's damage radius")
+	bp.free()
