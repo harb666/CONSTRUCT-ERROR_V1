@@ -155,6 +155,25 @@ func _run() -> void:
 	_check(top_y > 0.12, "walks up onto the pad (%.2f m)" % top_y)
 	_check(air_ticks < 6, "stays grounded crossing the pad (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z < pad.global_position.z - 1.5, "walks across and off the far side")
+	# Same at sprint speed, coming from the other side.
+	p.global_position = pad.global_position + Vector3(0, 0.05, -5.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	top_y = 0.0
+	air_ticks = 0
+	Input.action_press("move_back")
+	Input.action_press("sprint")
+	for i in 50:
+		await _ticks(1)
+		top_y = maxf(top_y, p.global_position.y - pad.global_position.y)
+		if not p.is_on_floor():
+			air_ticks += 1
+	Input.action_release("move_back")
+	Input.action_release("sprint")
+	_check(top_y > 0.12, "sprints up onto the pad (%.2f m)" % top_y)
+	_check(air_ticks < 6, "stays grounded sprinting across (%d airborne ticks)" % air_ticks)
+	_check(p.global_position.z > pad.global_position.z + 1.5, "sprints off the far side")
 
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)

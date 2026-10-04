@@ -6,7 +6,7 @@
 
 [sub_resource type="CylinderShape3D" id="top"]
 height = 0.15
-radius = 0.92
+radius = 0.86
 
 [node name="WeaponSpawnPad" type="StaticBody3D"]
 
