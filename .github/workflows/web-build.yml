@@ -66,6 +66,12 @@ jobs:
           test -s build/web/index.wasm
           touch build/web/.nojekyll
 
+      - name: Smoke test the exported package
+        # Catches anything that works in the project but is lost on export.
+        run: |
+          mkdir -p /tmp/pcktest && cd /tmp/pcktest
+          godot --headless --main-pack "$GITHUB_WORKSPACE/build/web/index.pck" -s "$GITHUB_WORKSPACE/tests/movement_smoke_test.gd"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:

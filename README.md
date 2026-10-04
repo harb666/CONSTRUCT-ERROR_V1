@@ -53,6 +53,6 @@ The HUD shows the branch/commit of the running build.
 ## Weapons (pickup/spawn system)
 - `WeaponDefinition` (`scripts/weapons/weapon_definition.gd`, instances in `resources/weapons/`) – data for one weapon: scene, mount bone/side/offset, pickup display height. New weapons = new definition + weapon scene; no new pickup code.
 - `Weapon` (`scripts/weapons/weapon.gd`) – base for weapon scenes; finds standard markers (`Arm_Socket_Attachment`, `Muzzle_Exit`).
-- `WeaponSpawner` (child of the spawn pad prefab) – set its `weapon` to any definition: floats, spins and bobs the weapon and hands it to the first player with a `WeaponHolder` entering the zone (`respawn_time` optional).
+- `WeaponSpawnPad` (pad prefab root) – set its `weapon` to any definition on each placed pad; its `WeaponSpawner` child floats, spins and bobs the weapon and hands it to the first player with a `WeaponHolder` entering the zone (`respawn_time` optional).
 - `WeaponHolder` (on the player) – equips onto an existing bone via `BoneAttachment3D`; keeps the socket on the forearm axis and the weapon upright each frame. While armed, that arm is held raised by the existing arm-aim layer.
 - Black Hole Generator: `scenes/weapons/black_hole_generator.tscn` (gun GLB, optimized 28 MB → 10 MB) spawns `scenes/weapons/black_hole_core.tscn` (separate, unmodified animated black-hole GLB, normalized to 1 m) at the gun's `Black_Hole_Projectile_Spawn` marker. `detach_core()` is there for firing later.

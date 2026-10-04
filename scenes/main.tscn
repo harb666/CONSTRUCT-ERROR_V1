@@ -37,8 +37,6 @@ script = ExtResource("2")
 
 [node name="WeaponSpawnPad" parent="." instance=ExtResource("5")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
-
-[node name="WeaponSpawner" parent="WeaponSpawnPad"]
 weapon = ExtResource("6")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
