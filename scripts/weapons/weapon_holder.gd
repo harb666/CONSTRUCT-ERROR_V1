@@ -7,18 +7,17 @@ extends Node
 signal weapon_equipped(definition: WeaponDefinition)
 signal weapon_fired(weapon: Weapon)
 
-## How long the player keeps facing the aim after a shot.
-@export var aim_face_time := 0.9
-## A shot waits (at most this long) for the body to turn towards the aim.
-@export var max_turn_wait := 0.2
+## Fire only when the barrel is within this angle of the target (degrees),
+## so shots always leave the gun the way it points.
+@export var fire_cone_degrees := 25.0
 
 @export var visual_path: NodePath = ^"../Visual/GrinchVisual"
+@export var target_lock_path: NodePath = ^"../TargetLock"
 
 var current: Weapon
 var current_definition: WeaponDefinition
 var _attachment: BoneAttachment3D
 var _socket := Transform3D.IDENTITY
-var _fire_request := 0.0
 
 
 func _ready() -> void:
@@ -27,26 +26,27 @@ func _ready() -> void:
 		player.command_processed.connect(_on_command)
 
 
-## Trigger handling, driven by the player's per-tick command (so it works the
-## same for local and, later, network-fed players).
-func _on_command(cmd: PlayerCommand, delta: float) -> void:
-	if current == null:
+## Auto-fire: each tick, if a target is locked and the (upper-body-aimed)
+## weapon points at it, fire as fast as the weapon allows. Movement is never
+## touched here, except turning a standing player towards a target that is
+## outside the upper body's reach.
+func _on_command(cmd: PlayerCommand, _delta: float) -> void:
+	var lock := get_node_or_null(target_lock_path) as TargetLock
+	if current == null or lock == null or not lock.has_target():
 		return
 	var player := get_parent() as PlayerController
-	if cmd.fire_pressed or (cmd.fire_held and current.auto_fire and current.can_fire()):
-		if _fire_request <= 0.0:
-			_fire_request = max_turn_wait
-	if _fire_request <= 0.0:
+	var point := lock.get_aim_point()
+	var to := point - current.global_position
+	to.y = 0.0
+	if cmd.move.length() < 0.1 and to.length() > 0.01:
+		player.face_yaw_when_idle(atan2(-to.x, -to.z))
+	if not current.can_fire():
 		return
-	player.face_aim_for(aim_face_time)
-	_fire_request -= delta
-	var facing := player.is_facing_yaw(cmd.view_yaw, 0.3)
-	if current.can_fire() and (facing or _fire_request <= 0.0):
-		if current.fire(player, cmd.aim_origin, cmd.aim_dir):
-			weapon_fired.emit(current)
-		_fire_request = 0.0
-	elif not current.can_fire():
-		_fire_request = 0.0
+	var aim_dir := (point - current.global_position).normalized()
+	if current.get_barrel_direction().angle_to(aim_dir) > deg_to_rad(fire_cone_degrees):
+		return
+	if current.fire_at(player, point):
+		weapon_fired.emit(current)
 
 
 func _skeleton() -> Skeleton3D:

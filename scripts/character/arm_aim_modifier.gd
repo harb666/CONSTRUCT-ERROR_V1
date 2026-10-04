@@ -12,6 +12,19 @@ var weight := 0.0
 ## Per-arm minimum weight while that arm holds a weapon (smoothed by animator).
 var armed_weight := {"Left": 0.0, "Right": 0.0}
 
+## Target tracking (locked enemy). When track_weight > 0 the spine twists
+## towards `track_point` (world space) and the armed arm aims straight at it;
+## hips and legs keep following the movement animation.
+var track_weight := 0.0
+var track_point := Vector3.ZERO
+var track_side := "Right"
+## Max total spine twist (degrees), shared over Spine/Spine1/Spine2.
+@export var max_spine_twist := 60.0
+@export var max_spine_pitch := 25.0
+## Max arm yaw/pitch relative to the body (degrees).
+@export var max_arm_yaw := 110.0
+@export var max_arm_pitch := 60.0
+
 ## Aim directions in character space (x = character's left, y = up, z = forward).
 ## Upper arm reaches forward-down; forearm points straight ahead, slightly inward.
 @export var upper_arm_dir := Vector3(0.12, -0.55, 0.83)
@@ -30,14 +43,26 @@ func _ready() -> void:
 	for side in ["Left", "Right"]:
 		_bones[side] = [sk.find_bone("mixamorig_%sArm" % side), sk.find_bone("mixamorig_%sForeArm" % side)]
 	_bones["chest"] = sk.find_bone("mixamorig_Spine2")
+	_bones["spine"] = [sk.find_bone("mixamorig_Spine"), sk.find_bone("mixamorig_Spine1"), sk.find_bone("mixamorig_Spine2")]
 
 
 func _process_modification_with_delta(_delta: float) -> void:
-	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001:
+	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001 and track_weight <= 0.001:
 		return
 	var sk := get_skeleton()
 	if sk == null or _bones.is_empty():
 		return
+
+	# Target direction in skeleton space (+Z = character forward).
+	var track_yaw := 0.0
+	var track_pitch := 0.0
+	if track_weight > 0.001:
+		var to_sk := sk.get_global_transform_interpolated().affine_inverse() * track_point
+		var chest_pos := sk.get_bone_global_pose(_bones.chest).origin
+		var d := to_sk - chest_pos
+		track_yaw = atan2(d.x, d.z)
+		track_pitch = atan2(d.y, Vector2(d.x, d.z).length())
+		_twist_spine(sk, track_yaw * track_weight, track_pitch * track_weight)
 	# Character frame: skeleton space faces +Z. Follow part of the chest's
 	# yaw sway so the arms ride with the torso instead of looking bolted on.
 	var chest := sk.get_bone_global_pose(_bones.chest).basis
@@ -50,13 +75,34 @@ func _process_modification_with_delta(_delta: float) -> void:
 	for side in ["Left", "Right"]:
 		var mirror := 1.0 if side == "Left" else -1.0
 		var ids: Array = _bones[side]
-		var up_dir := frame * Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
-		var fore_dir := frame * Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
+		var arm_frame := frame
+		if side == track_side and track_weight > 0.001:
+			var yaw := clampf(track_yaw, -deg_to_rad(max_arm_yaw), deg_to_rad(max_arm_yaw))
+			var pitch := clampf(track_pitch, -deg_to_rad(max_arm_pitch), deg_to_rad(max_arm_pitch))
+			var aim := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -pitch)
+			arm_frame = Basis(frame.get_rotation_quaternion().slerp(aim.get_rotation_quaternion(), track_weight))
+		var up_dir := arm_frame * Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
+		var fore_dir := arm_frame * Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
 		var w := maxf(weight, armed_weight[side])
+		if side == track_side:
+			w = maxf(w, track_weight)
 		if w <= 0.001:
 			continue
 		_aim_bone(sk, ids[0], up_dir, w * (1.0 - keep_upper_swing))
 		_aim_bone(sk, ids[1], fore_dir, w)
+
+
+## Turn the upper body towards the target: the twist is shared over the three
+## spine bones (hips/legs untouched) and clamped to a natural range.
+func _twist_spine(sk: Skeleton3D, yaw: float, pitch: float) -> void:
+	var y := clampf(yaw, -deg_to_rad(max_spine_twist), deg_to_rad(max_spine_twist)) / 3.0
+	var p := clampf(pitch, -deg_to_rad(max_spine_pitch), deg_to_rad(max_spine_pitch)) / 3.0
+	for b: int in _bones.spine:
+		var gp := sk.get_bone_global_pose(b)
+		# Pitch around the character's sideways axis, after the yaw twist.
+		var side_axis := Basis(Vector3.UP, y) * Vector3.RIGHT
+		gp.basis = Basis(side_axis, -p) * Basis(Vector3.UP, y) * gp.basis
+		sk.set_bone_global_pose(b, gp)
 
 
 ## Rotate a bone (globally) so its +Y axis points along `dir`, by `amount`.

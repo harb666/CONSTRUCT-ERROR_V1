@@ -13,12 +13,8 @@ var dodge_pressed := false
 ## Held states.
 var jump_held := false
 var sprint_held := false
-## Weapon trigger.
-var fire_pressed := false
-var fire_held := false
-## Aim ray (world space): from the player's camera through the crosshair.
-var aim_origin := Vector3.ZERO
-var aim_dir := Vector3.FORWARD
+## Selected target (Targetable.target_id, 0 = none). Weapons auto-fire at it.
+var target_id := 0
 
 
 func to_dict() -> Dictionary:
@@ -29,10 +25,7 @@ func to_dict() -> Dictionary:
 		"dp": dodge_pressed,
 		"jh": jump_held,
 		"sh": sprint_held,
-		"fp": fire_pressed,
-		"fh": fire_held,
-		"ao": aim_origin,
-		"ad": aim_dir,
+		"t": target_id,
 	}
 
 
@@ -44,8 +37,5 @@ static func from_dict(d: Dictionary) -> PlayerCommand:
 	c.dodge_pressed = d.get("dp", false)
 	c.jump_held = d.get("jh", false)
 	c.sprint_held = d.get("sh", false)
-	c.fire_pressed = d.get("fp", false)
-	c.fire_held = d.get("fh", false)
-	c.aim_origin = d.get("ao", Vector3.ZERO)
-	c.aim_dir = d.get("ad", Vector3.FORWARD)
+	c.target_id = d.get("t", 0)
 	return c

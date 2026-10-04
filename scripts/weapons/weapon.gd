@@ -44,19 +44,16 @@ func can_fire() -> bool:
 	return false
 
 
-## Fire towards the aim ray (camera through crosshair). Returns true if fired.
-func fire(_shooter: Node3D, _aim_origin: Vector3, _aim_dir: Vector3) -> bool:
+## Fire at a world-space point (the locked target's aim point). Each weapon
+## decides its own rate (via can_fire), projectile and behaviour.
+## Returns true if a shot was fired.
+func fire_at(_shooter: Node3D, _target_point: Vector3) -> bool:
 	return false
 
 
-## Point the aim ray hits (ignoring the shooter), for converging shots
-## from an offset muzzle onto the crosshair.
-func resolve_aim_point(shooter: Node3D, aim_origin: Vector3, aim_dir: Vector3, max_range := 150.0) -> Vector3:
-	var q := PhysicsRayQueryParameters3D.create(aim_origin, aim_origin + aim_dir * max_range)
-	if shooter is CollisionObject3D:
-		q.exclude = [(shooter as CollisionObject3D).get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	return hit.position if hit else aim_origin + aim_dir * max_range
+## Direction the weapon's barrel points (weapons fire along +X by convention).
+func get_barrel_direction() -> Vector3:
+	return global_basis.x.normalized()
 
 
 func on_equipped(_owner_player: Node) -> void:

@@ -5,6 +5,12 @@ extends Control
 ## Buttons and the stick drive regular input actions; look is sent via signal.
 
 signal look_dragged(radians: Vector2)
+## A quick touch with almost no movement (used for tap-to-target).
+signal tapped(position: Vector2)
+
+## A touch counts as a tap if released within this time and distance.
+@export var tap_max_time := 0.35
+@export var tap_max_move := 22.0
 
 @export var stick_radius := 80.0
 ## Radians of camera rotation per logical pixel dragged.
@@ -16,8 +22,6 @@ const BUTTONS := [
 	{"action": "jump", "label": "JUMP", "radius": 70.0, "offset": Vector2(-120, -120)},
 	{"action": "dodge", "label": "DODGE", "radius": 54.0, "offset": Vector2(-280, -90)},
 	{"action": "sprint", "label": "SPRINT", "radius": 48.0, "offset": Vector2(-110, -290), "toggle": true},
-	# Hold to fire; dragging the same finger also aims the camera.
-	{"action": "fire", "label": "FIRE", "radius": 62.0, "offset": Vector2(-270, -250), "look": true},
 ]
 
 var _move_finger := -1
@@ -28,8 +32,10 @@ var _look_last := Vector2.ZERO
 var _button_fingers: Array[int] = []
 var _sprint_toggled := false
 var _button_last: Array[Vector2] = []
-## Actions whose buttons are currently hidden (e.g. FIRE while unarmed).
-var _hidden := {"fire": true}
+## Actions whose buttons are currently hidden.
+var _hidden := {}
+## finger index -> [start position, start time (s), distance moved]
+var _tap_track := {}
 var _font: Font
 
 
@@ -68,6 +74,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_touch_down(index: int, pos: Vector2) -> void:
+	_tap_track[index] = [pos, Time.get_ticks_msec() / 1000.0, 0.0]
 	for i in BUTTONS.size():
 		if _hidden.has(BUTTONS[i].action):
 			continue
@@ -89,6 +96,8 @@ func _on_touch_down(index: int, pos: Vector2) -> void:
 
 
 func _on_touch_drag(index: int, pos: Vector2) -> void:
+	if _tap_track.has(index):
+		_tap_track[index][2] = maxf(_tap_track[index][2], pos.distance_to(_tap_track[index][0]))
 	if index == _move_finger:
 		var offset := pos - _stick_origin
 		if offset.length() > stick_radius:
@@ -111,6 +120,16 @@ func _on_touch_drag(index: int, pos: Vector2) -> void:
 
 
 func _on_touch_up(index: int) -> void:
+	# Quick, still touches that weren't on a button are taps.
+	if _tap_track.has(index):
+		var t: Array = _tap_track[index]
+		_tap_track.erase(index)
+		var on_button := false
+		for i in BUTTONS.size():
+			if _button_fingers[i] == index:
+				on_button = true
+		if not on_button and t[2] <= tap_max_move and Time.get_ticks_msec() / 1000.0 - t[1] <= tap_max_time:
+			tapped.emit(t[0])
 	if index == _move_finger:
 		_move_finger = -1
 		_apply_stick(Vector2.ZERO)

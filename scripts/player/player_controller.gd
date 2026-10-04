@@ -67,6 +67,8 @@ var _dodge_cooldown_timer := 0.0
 var _dodge_dir := Vector3.FORWARD
 var _was_on_floor := true
 var _aim_face_timer := 0.0
+var _idle_face_timer := 0.0
+var _idle_face_yaw := 0.0
 var _fall_speed := 0.0
 
 
@@ -168,6 +170,10 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 		if face_dir != Vector3.ZERO:
 			var target_yaw := atan2(-face_dir.x, -face_dir.z)
 			rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-turn_rate * delta))
+		elif _idle_face_timer > 0.0:
+			# Standing still with a locked target: turn to face it.
+			rotation.y = lerp_angle(rotation.y, _idle_face_yaw, 1.0 - exp(-turn_rate * 0.6 * delta))
+	_idle_face_timer = maxf(_idle_face_timer - delta, 0.0)
 
 	var now_on_floor := is_on_floor()
 	if now_on_floor and not _was_on_floor:
@@ -181,6 +187,12 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 ## Face the aim direction (camera yaw) for `seconds`, e.g. while shooting.
 func face_aim_for(seconds: float) -> void:
 	_aim_face_timer = maxf(_aim_face_timer, seconds)
+
+
+## While standing still (no move input), turn towards `yaw`.
+func face_yaw_when_idle(yaw: float) -> void:
+	_idle_face_yaw = yaw
+	_idle_face_timer = 0.1
 
 
 func is_facing_yaw(yaw: float, tolerance: float) -> bool:

@@ -9,12 +9,12 @@ extends PlayerInput
 @export var mouse_sensitivity := 0.004
 
 var camera_rig: CameraRig
+var target_selector: TargetSelector
 
 # Edges are detected per physics tick from held state, so a press is never
 # lost or doubled regardless of how render frames and physics ticks line up.
 var _prev_jump := false
 var _prev_dodge := false
-var _prev_fire := false
 
 
 func get_command() -> PlayerCommand:
@@ -27,13 +27,7 @@ func get_command() -> PlayerCommand:
 	c.dodge_pressed = dodge_held and not _prev_dodge
 	_prev_jump = c.jump_held
 	_prev_dodge = dodge_held
-	c.fire_held = Input.is_action_pressed("fire")
-	c.fire_pressed = c.fire_held and not _prev_fire
-	_prev_fire = c.fire_held
-	if camera_rig:
-		var cam := camera_rig.camera
-		c.aim_origin = cam.global_position
-		c.aim_dir = -cam.global_basis.z
+	c.target_id = target_selector.selected_id() if target_selector else 0
 	c.sprint_held = Input.is_action_pressed("sprint")
 	return c
 
@@ -52,8 +46,20 @@ func add_touch_look(radians: Vector2) -> void:
 		camera_rig.add_look(radians)
 
 
+var _click_start := Vector2.ZERO
+var _click_moved := 0.0
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	# Desktop testing: hold left/right mouse button and drag to look.
+	# Desktop testing: hold left/right mouse button and drag to look;
+	# a left click without dragging is a tap (target select).
 	if event is InputEventMouseMotion and event.button_mask & (MOUSE_BUTTON_MASK_LEFT | MOUSE_BUTTON_MASK_RIGHT):
+		_click_moved += event.relative.length()
 		if camera_rig:
 			camera_rig.add_look(event.relative * mouse_sensitivity)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_click_start = event.position
+			_click_moved = 0.0
+		elif _click_moved < 8.0 and target_selector:
+			target_selector.handle_tap(event.position)

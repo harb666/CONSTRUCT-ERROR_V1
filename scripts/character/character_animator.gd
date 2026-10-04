@@ -30,6 +30,8 @@ extends Node3D
 @export_group("Arm aim")
 ## Arms come up as the Running clip blends in (between walk_to and run_from).
 @export var aim_blend_rate := 10.0
+## How fast the upper body turns onto / off a locked target (weight per second).
+@export var track_blend_speed := 5.0
 
 @export_group("Turning")
 ## Body yaw rate (rad/s) needed to trigger turn clips.
@@ -250,6 +252,13 @@ func _process(delta: float) -> void:
 	if current_state == "Locomotion" and on_floor:
 		aim_target = smoothstep(walk_to, run_from, speed)
 	_arm_aim.weight = lerpf(_arm_aim.weight, aim_target, 1.0 - exp(-aim_blend_rate * delta))
+	# Upper body tracks the locked target (legs keep following movement).
+	var lock := controller.get_node_or_null("TargetLock") as TargetLock
+	var tracking := lock != null and lock.has_target() and armed_side != "" and not is_dead
+	if tracking:
+		_arm_aim.track_point = lock.get_aim_point()
+		_arm_aim.track_side = armed_side
+	_arm_aim.track_weight = move_toward(_arm_aim.track_weight, 1.0 if tracking else 0.0, delta * track_blend_speed)
 	for side in ["Left", "Right"]:
 		var armed_target := 1.0 if side == armed_side and not is_dead else 0.0
 		_arm_aim.armed_weight[side] = lerpf(_arm_aim.armed_weight[side], armed_target, 1.0 - exp(-aim_blend_rate * delta))

@@ -7,7 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/weapon_spawn_pad.tscn" id="5"]
 [ext_resource type="Resource" path="res://resources/weapons/black_hole_generator.tres" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/props/target_dummy.tscn" id="7"]
-[ext_resource type="Script" path="res://scripts/ui/crosshair.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -70,7 +70,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 6)
 
 [node name="UI" type="CanvasLayer" parent="."]
 
-[node name="Crosshair" type="Control" parent="UI"]
+[node name="TargetMarker" type="Control" parent="UI"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

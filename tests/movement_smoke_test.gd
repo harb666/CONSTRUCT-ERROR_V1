@@ -20,6 +20,21 @@ func _check(cond: bool, msg: String) -> void:
 		_failures += 1
 
 
+## Simulated finger tap at a UI position (converted to window pixels).
+func _tap(tc: TouchControls, ui_pos: Vector2) -> void:
+	var xf := root.get_final_transform()
+	var ev := InputEventScreenTouch.new()
+	ev.index = 3
+	ev.pressed = true
+	ev.position = xf * ui_pos
+	Input.parse_input_event(ev)
+	await _ticks(3)
+	ev = ev.duplicate()
+	ev.pressed = false
+	Input.parse_input_event(ev)
+	await _ticks(1)
+
+
 func _run() -> void:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
@@ -201,53 +216,92 @@ func _run() -> void:
 	_check(air_ticks < 6, "stays grounded sprinting across (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z > pad.global_position.z + 1.5, "sprints off the far side")
 
-	# Firing: aim straight at Dummy2 and shoot the Black Hole Generator.
-	var dummy: TargetDummy = main.get_node("Targets/Dummy2")
-	p.global_position = Vector3(dummy.global_position.x, 0.05, dummy.global_position.z + 9.0)
-	p.velocity = Vector3.ZERO
-	p.rotation.y = PI * 0.5  # facing sideways: firing must turn the body to the aim
-	p.reset_physics_interpolation()
+	# Tap-to-target auto fire.
 	var rig: CameraRig = main.get_node("CameraRig")
-	rig.aim_blend = 1.0
-	rig.pitch = 0.0
-	# Put the crosshair on the dummy (camera is over the shoulder).
-	var aim_at := dummy.global_position + Vector3(0, 1.2, 0)
-	for k in 3:
-		await process_frame
-		var cam_pos := rig.camera.global_position
-		rig.yaw = atan2(-(aim_at.x - cam_pos.x), -(aim_at.z - cam_pos.z))
-	await _ticks(20)
-	_check(gun.can_fire(), "gun is charged")
-	var fired_projectile: Array = []
-	gun.fired.connect(func(pr: BlackHoleProjectile) -> void: fired_projectile.append(pr))
-	Input.action_press("fire")
-	for i in 20:
+	var tc2: TouchControls = main.get_node("UI/TouchControls")
+	var lock: TargetLock = p.get_node("TargetLock")
+	var selector: TargetSelector = p.get_node("Input/TargetSelector")
+	var d1: TargetDummy = main.get_node("Targets/Dummy1")
+	var d2: TargetDummy = main.get_node("Targets/Dummy2")
+	p.global_position = Vector3(1.0, 0.05, 2.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	rig.yaw = 0.0
+	rig.pitch = deg_to_rad(-8)
+	await _ticks(30)
+	var shots: Array = []
+	holder.weapon_fired.connect(func(_w) -> void: shots.append(1))
+
+	# Tap a little off the dummy's mesh: must still select it (forgiving).
+	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()) + Vector2(35, 20))
+	await _ticks(2)
+	_check(lock.current == d2.get_node("Targetable"), "tap near enemy locks it")
+	for i in 90:
 		await _ticks(1)
-		if fired_projectile.size() > 0:
+		if shots.size() > 0:
 			break
-	Input.action_release("fire")
-	_check(fired_projectile.size() == 1, "FIRE launches a black hole")
-	_check(p.is_facing_yaw(rig.yaw, 0.35), "player turned to face the aim when firing")
-	_check(gun.core == null, "core left the chamber")
-	if fired_projectile.size() == 1:
-		var pr: BlackHoleProjectile = fired_projectile[0]
-		_check(pr.core != null and pr.is_ancestor_of(pr.core), "the same black hole is the projectile")
-		var anim_pr: AnimationPlayer = pr.core.find_child("AnimationPlayer", true, false)
-		_check(anim_pr.is_playing(), "projectile keeps its spin animation")
-	var hits_before := dummy.hits
+	_check(shots.size() > 0, "auto-fires at the locked enemy")
+	var h0 := d2.hits
 	for i in 60:
 		await _ticks(1)
-		if dummy.hits > hits_before:
+		if d2.hits > h0:
 			break
-	_check(dummy.hits > hits_before, "black hole hits the target dummy")
+	_check(d2.hits > h0, "shot hits the locked enemy")
+
+	# Independent movement while locked: strafe right, legs follow movement.
+	var shots_before := shots.size()
+	Input.action_press("move_right")
+	await _ticks(90)
+	_check(Vector2(p.velocity.x, p.velocity.z).length() > 5.0, "strafes at full speed while locked")
+	_check(p.is_facing_yaw(-PI * 0.5, 0.3), "legs/body face the movement direction while locked")
+	_check(shots.size() > shots_before, "keeps firing while strafing")
+	var gun2 := holder.current
+	var to_t := (lock.get_aim_point() - gun2.global_position).normalized()
+	_check(gun2.get_barrel_direction().angle_to(to_t) < deg_to_rad(30), "upper body/weapon tracks the target while moving (%.0f deg)" % rad_to_deg(gun2.get_barrel_direction().angle_to(to_t)))
+	Input.action_release("move_right")
 	await _ticks(30)
-	_check(fired_projectile.size() == 1 and not is_instance_valid(fired_projectile[0]), "projectile collapses after impact")
+
+	# Tap the same enemy again: unlock and stop firing.
+	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
+	await _ticks(3)
+	_check(not lock.has_target(), "tapping the same enemy unlocks")
+	var shots_after_unlock := shots.size()
+	await _ticks(90)
+	_check(shots.size() == shots_after_unlock, "stops firing when unlocked")
+
+	# Tap empty floor: nothing selected.
+	await _tap(tc2, Vector2(tc2.size.x * 0.5, tc2.size.y * 0.9))
+	await _ticks(3)
+	_check(not lock.has_target(), "tapping empty space selects nothing")
+
+	# Lock one enemy, then tap another: switches immediately.
+	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
+	await _ticks(3)
+	await _tap(tc2, rig.camera.unproject_position(d1.get_node("Targetable").get_aim_point()))
+	await _ticks(3)
+	_check(lock.current == d1.get_node("Targetable"), "tapping a different enemy switches lock")
+
+	# Enemy dies: lock clears and firing stops.
+	for i in 900:
+		await _ticks(1)
+		if not lock.has_target():
+			break
+	_check(d1.health <= 0 and not lock.has_target(), "lock clears when the enemy dies")
+	_check(selector.selected == null, "selection clears when the enemy dies")
+	var shots_dead := shots.size()
 	await _ticks(60)
-	_check(gun.core != null and gun.can_fire(), "a new black hole forms in the chamber")
-	Input.action_press("fire")
-	await _ticks(15)
-	Input.action_release("fire")
-	_check(fired_projectile.size() == 2, "can fire again after recharging")
+	_check(shots.size() == shots_dead, "stops firing after the kill")
+	await _ticks(260)
+	_check(d1.health == d1.max_health and d1.visible, "dummy respawns")
+
+	# Out of range: lock clears.
+	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
+	await _ticks(3)
+	_check(lock.has_target(), "re-lock before range test")
+	p.global_position = Vector3(2.0, 0.05, 35.0)
+	p.reset_physics_interpolation()
+	await _ticks(3)
+	_check(not lock.has_target(), "lock clears when the enemy is out of range")
 
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)

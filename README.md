@@ -57,10 +57,15 @@ The HUD shows the branch/commit of the running build.
 - `WeaponHolder` (on the player) – equips onto an existing bone via `BoneAttachment3D`; keeps the socket on the forearm axis and the weapon upright each frame. While armed, that arm is held raised by the existing arm-aim layer.
 - Black Hole Generator: `scenes/weapons/black_hole_generator.tscn` (gun GLB, optimized 28 MB → 10 MB) spawns `scenes/weapons/black_hole_core.tscn` (separate, unmodified animated black-hole GLB, normalized to 1 m) at the gun's `Black_Hole_Projectile_Spawn` marker. `detach_core()` is there for firing later.
 
-## Firing (Black Hole Generator)
-- `PlayerCommand` carries `fire_pressed/fire_held` and the aim ray (`aim_origin/aim_dir`, camera through crosshair) so shots are network-replicable.
-- `WeaponHolder` reads each tick's command: on trigger the player turns to the aim (`face_aim_for`) and the weapon fires once roughly facing it. Hold FIRE to keep firing as fast as the weapon recharges.
-- `BlackHoleGenerator.fire()` releases the chamber core as a `BlackHoleProjectile` (same node, animation keeps playing; disk turned to face back along the flight path). It flies straight, stops on the first hit (calls `on_projectile_hit` if the collider has it), collapses and frees. A new core grows in the chamber after `recharge_delay`.
+## Tap-to-target auto fire
+Four separate, reusable pieces (any weapon/enemy can use them):
+- `Targetable` (`scripts/targeting/targetable.gd`) – put on anything lockable, at its aim point. Forgiving tap area (`select_radius`, `select_half_height`), `kill()/revive()`, stable `target_id` for networking.
+- `TargetSelector` (local player only) – turns a tap into a target: screen-space hit area around each enemy (at least `min_tap_radius` px), closest to the tap wins. Tap = lock, same again = unlock, other = switch.
+- `TargetLock` (on every player) – holds the target sent in `PlayerCommand.target_id`; clears on death / invalid / beyond `max_range` (40 m) and emits `target_lost`.
+- `WeaponHolder` auto-fire – while locked, fires whenever the weapon's barrel is within `fire_cone_degrees` of the target and `weapon.can_fire()`; each weapon sets its own rate/projectile via `fire_at()`.
+- Upper body: `ArmAimModifier` twists the spine (±60°) and aims the armed arm at the target; hips/legs keep following movement. Standing still, the player turns to face the target.
+- UI: lock-on ring (`scripts/ui/target_marker.gd`). The old FIRE button and crosshair are gone.
+- Test dummies are enemies: 5 hits to destroy, respawn after 4 s.
+- `BlackHoleGenerator.fire_at()` releases the chamber core as a `BlackHoleProjectile` (same node, animation keeps playing; disk turned to face back along the flight path). It flies straight, stops on the first hit (calls `on_projectile_hit` if the collider has it), collapses and frees. A new core grows in the chamber after `recharge_delay`.
 - `BlackHoleProjectile.impacted` is the hook for gravity / damage / supernova later.
-- Armed: FIRE touch button appears (drag on it to aim too), crosshair shows, camera eases to an over-the-shoulder offset.
-- `scenes/props/target_dummy.tscn` – flashes and wobbles when hit.
+- Armed: camera eases to an over-the-shoulder offset.

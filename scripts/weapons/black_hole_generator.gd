@@ -75,17 +75,15 @@ func can_fire() -> bool:
 	return core != null and _grow >= 1.0 and projectile_scene != null
 
 
-func fire(shooter: Node3D, aim_origin: Vector3, aim_dir: Vector3) -> bool:
+func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if not can_fire():
 		return false
 	var start := core.global_position
-	var target := resolve_aim_point(shooter, aim_origin, aim_dir)
-	var dir := (target - start).normalized()
-	var barrel := global_basis.x.normalized()
-	# Never shoot backwards/sideways out of the gun if the aim point is behind
-	# or right next to the muzzle; fall back to the camera direction.
-	if dir.dot(barrel) < 0.3 or start.distance_to(target) < 1.5:
-		dir = aim_dir.normalized()
+	var dir := (target_point - start).normalized()
+	var barrel := get_barrel_direction()
+	# Never shoot backwards/sideways out of the gun.
+	if dir.dot(barrel) < 0.3:
+		dir = barrel
 	var world: Node = get_tree().current_scene
 	if world == null:
 		world = get_tree().root

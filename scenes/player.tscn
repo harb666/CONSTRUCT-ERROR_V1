@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/characters/grinch_visual.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/weapons/weapon_holder.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/targeting/target_lock.gd" id="4"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
 radius = 0.4
@@ -22,3 +23,6 @@ shape = SubResource("shape")
 
 [node name="WeaponHolder" type="Node" parent="."]
 script = ExtResource("3")
+
+[node name="TargetLock" type="Node" parent="."]
+script = ExtResource("4")

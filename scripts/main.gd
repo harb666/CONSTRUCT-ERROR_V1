@@ -43,11 +43,24 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		var local_input := input as LocalPlayerInput
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
+		# Tap-to-target: selector (what is selected) -> command target_id ->
+		# player's TargetLock (validates) -> WeaponHolder auto-fires.
+		var selector := TargetSelector.new()
+		selector.name = "TargetSelector"
+		selector.camera = rig.camera
+		selector.origin_node = player
+		local_input.add_child(selector)
+		local_input.target_selector = selector
+		touch_controls.tapped.connect(selector.handle_tap)
+		var lock := player.get_node("TargetLock") as TargetLock
+		selector.max_range = lock.max_range
+		lock.target_lost.connect(func(_reason: String) -> void: selector.clear())
+		var marker := $UI/TargetMarker
+		marker.lock = lock
+		marker.camera = rig.camera
 		debug_hud.player = player
 		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
 		if holder:
 			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
-				touch_controls.set_action_enabled("fire", true)
-				rig.aiming = true
-				$UI/Crosshair.visible = true)
+				rig.aiming = true)
 	return player
