@@ -78,6 +78,9 @@ func _ready() -> void:
 	_interior = find_child("Finished_Containment_Interior", true, false) as Node3D
 	if _interior:
 		_interior_rest = _interior.transform
+		# The interior's web of thin rods/wires hides the black hole in the
+		# chamber; the outer frame and magnets (separate mesh) stay.
+		_interior.visible = false
 	_barrel_static = BarrelStatic.new()
 	_barrel_static.name = "BarrelStatic"
 	var muzzle := find_marker(MUZZLE_MARKER)
