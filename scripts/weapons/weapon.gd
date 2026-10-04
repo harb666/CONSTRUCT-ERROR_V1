@@ -34,6 +34,9 @@ func get_visual_center() -> Vector3:
 	var box := AABB()
 	var first := true
 	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		# Only the imported model; runtime effect quads/ribbons would skew it.
+		if not (mi.mesh is ArrayMesh):
+			continue
 		var a: AABB = (global_transform.affine_inverse() * mi.global_transform) * mi.mesh.get_aabb()
 		box = a if first else box.merge(a)
 		first = false

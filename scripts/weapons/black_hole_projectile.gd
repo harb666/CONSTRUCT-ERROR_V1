@@ -318,6 +318,9 @@ func _play_burst() -> void:
 	if _burst_played:
 		return
 	_burst_played = true
+	# Lightning erupts the instant the energy burst is heard.
+	if _vfx:
+		_vfx.erupt()
 	Sfx.play_at(get_parent(), Sfx.BH_BURST, global_position, burst_volume_db, burst_near, burst_far)
 
 

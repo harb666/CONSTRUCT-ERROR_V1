@@ -15,6 +15,8 @@ const TEX := {
 	"scorch": preload("res://assets/vfx/scorch_02.png"),
 	"streak": preload("res://assets/vfx/trace_01.png"),
 	"halo": preload("res://assets/vfx/light_02.png"),
+	"smoke": preload("res://assets/vfx/smoke_puff.png"),
+	"dot": preload("res://assets/vfx/soft_dot.png"),
 }
 
 const PURPLE := Color(0.72, 0.22, 1.0)
@@ -82,6 +84,26 @@ static func face_camera(node: Node3D, size: float, roll := 0.0) -> void:
 static func set_alpha(mi: MeshInstance3D, alpha: float) -> void:
 	var m := mi.material_override as StandardMaterial3D
 	m.albedo_color.a = clampf(alpha, 0.0, 1.0)
+
+
+## Alpha-blended (not additive) unshaded material, so effects can be dark
+## (black dust, smoky mist). Uses vertex colour for particle colour ramps.
+static func mix_material(tex: String, billboard := BaseMaterial3D.BILLBOARD_PARTICLES) -> StandardMaterial3D:
+	var key := "mix|%s|%d" % [tex, billboard]
+	if _cache.has(key):
+		return _cache[key]
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.disable_receive_shadows = true
+	m.albedo_texture = TEX[tex]
+	m.billboard_mode = billboard
+	m.billboard_keep_scale = true
+	m.vertex_color_use_as_albedo = true
+	_cache[key] = m
+	return m
 
 
 ## Short-lived particle burst/stream using a camera-facing textured quad.

@@ -157,6 +157,15 @@ func _run() -> void:
 	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
 	var holder: WeaponHolder = p.get_node("WeaponHolder")
 	_check(spawner.display != null, "weapon floats above the pad")
+	var gun_box := AABB()
+	var gun_first := true
+	for mi: MeshInstance3D in spawner.display.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh:
+			var ab: AABB = mi.global_transform * mi.mesh.get_aabb()
+			gun_box = ab if gun_first else gun_box.merge(ab)
+			gun_first = false
+	var off := gun_box.get_center() - pad.global_position
+	_check(Vector2(off.x, off.z).length() < 0.05, "gun is centred over the pad (%.2f m off)" % Vector2(off.x, off.z).length())
 	var y_a := spawner.display.global_position.y
 	var rot_a := spawner._pivot.rotation.y
 	await _ticks(20)
@@ -390,6 +399,8 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 		if pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL:
 			break
 	_check(pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL, "black hole sticks to the floor as a gravity well")
+	_check(pr._vfx._motes.emitting and pr._vfx._dust.emitting and pr._vfx._mist.emitting, "purple motes, black dust and mist tumble around it")
+	_check(pr._vfx._lightning.eruption == 0.0, "no lightning eruption yet")
 	var stuck_at := pr.global_position
 	var sizes: Array = []
 	var shrunk := false
@@ -447,6 +458,7 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 			supernova_t = t_now
 			charge_at_supernova = pr.charge_sound_remaining() > 0.0
 		if burst_lead < 0.0 and pr._burst_played:
+			_check(pr._vfx._lightning.eruption > 0.0 and pr._vfx._lightning.erupt_bolts_alive() > 0, "blue-violet lightning erupts as the burst sound starts")
 			burst_lead = pr._time_to_supernova() - pr._state_t
 		if pr.state != BlackHoleProjectile.State.SUPERNOVA and not pr._hum.playing:
 			hum_until_supernova = false

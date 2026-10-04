@@ -94,11 +94,14 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 - Tunables on the projectile: gravity_well_duration, gravity_radius, gravity_strength, player_gravity_strength, capture_radius, orbit_strength, shrink_rate, pulse_amount, pulse_speed, supernova_radius, supernova_damage, supernova_launch_force, maximum_affected_objects, maximum_captured_objects, max_active_wells.
 - Arena: dummies are now heavy upright RigidBody3D enemies; `Props/` has light crates, barrels and a heavy block (`PhysicsProp`).
 
+## Black hole particles
+While travelling (and while stuck) `BlackHoleFlightVfx` adds purple glow motes and black dust orbiting the disc (local space) and a dark purple mist (`assets/vfx/smoke_puff.png`, alpha-blended via `Vfx.mix_material`) shed into the world so it trails and tumbles behind.
+
 ## Black hole audio
 All sounds are `DynamicSound`s (`scripts/audio/dynamic_sound.gd`, created via `Sfx` in `scripts/audio/sfx.gd`): panned in 3D, full volume within `near` metres of the local player (group `sfx_listener`), fading smoothly (squared) to silence at `far`. Godot's own attenuation is disabled so the curve is identical on web and desktop. Files in `assets/audio/black_hole/`:
 - `fire.ogg` — the gun, on launch with the muzzle flash, from the muzzle (`fire_volume_db/near/far` on `BlackHoleGenerator`).
 - `energy_loop.ogg` — hum attached to the black hole from the barrel until the supernova (fades on a fizzle).
 - `charge.ogg` — rising charge while the black hole is stuck, timed to end `charge_end_gap` (0.05 s) before the supernova: it is longer than the well, so it starts part-way through.
-- `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova.
+- `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova; at the same instant thick blue-violet lightning erupts from the black hole (`BlackHoleLightning.erupt()`, `max_erupt`/`erupt_interval`/`erupt_reach`).
 - `explode.ogg` — at the supernova; the loudest sound and audible furthest away.
 Volumes/ranges are exports on `BlackHoleProjectile` (Audio group). After firing, `BarrelStatic` (scripts/vfx/barrel_static.gd) crackles arcs across the empty chamber and out of the muzzle with a plasma glow and sparks (starts `cooldown_static_delay` = 1 s after the shot, follows `COOLDOWN_ENVELOPE`).
