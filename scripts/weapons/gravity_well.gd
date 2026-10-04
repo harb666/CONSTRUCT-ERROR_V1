@@ -214,6 +214,8 @@ func _capture(b: RigidBody3D) -> void:
 		"angle": randf() * TAU, "radius": randf_range(0.12, 0.3), "phase": randf() * TAU})
 	b.collision_layer = 0
 	b.collision_mask = 0
+	if b.has_method("on_swallowed"):
+		b.on_swallowed()  # touching the core kills enemies outright
 	b.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 	b.freeze = true
 	b.linear_velocity = Vector3.ZERO

@@ -645,6 +645,30 @@ func _robot_tests(main: Node) -> void:
 	# Corpse stops costing anything once its clip ends and it has settled.
 	await _ticks(Engine.physics_ticks_per_second * 5)
 	_check(not r2.is_physics_processing() and r2.freeze, "settled corpse stops processing")
-	for n in [r, r2, r3, r4, r5]:
+	# Reaching the black hole's core kills it at once (no lock stays on it);
+	# its death/breakup plays out when the supernova throws it out.
+	var r6 := _spawn_robot(main, spot + Vector3(-6, 0, 6))
+	await _ticks(5)
+	var gun: BlackHoleGenerator = load("res://scenes/weapons/black_hole_generator.tscn").instantiate()
+	var bh: BlackHoleProjectile = gun.projectile_scene.instantiate()
+	main.add_child(bh)
+	bh.global_position = r6.global_position + Vector3(2.5, 1.6, 0)
+	var bh_core: BlackHoleCore = gun.core_scene.instantiate()
+	bh_core.scale = Vector3.ONE * 0.28
+	bh.launch(bh_core, Vector3.DOWN, null)
+	bh._travelled = 2.0
+	var swallowed_ok := false
+	var thrown_out_dead := false
+	for i in Engine.physics_ticks_per_second * 8:
+		await _ticks(1)
+		if is_instance_valid(bh) and bh.well and bh.well._is_captured(r6):
+			swallowed_ok = swallowed_ok or (not r6.alive and not r6.get_node("Targetable").is_valid_target())
+		if swallowed_ok and not r6.swallowed and r6.last_death_anim != &"":
+			thrown_out_dead = true
+	_check(swallowed_ok, "enemy touching the black hole's core dies (no longer targetable)")
+	_check(thrown_out_dead, "its death and breakup play out when the supernova throws it out (%s)" % BreakApart.Level.keys()[r6.last_destruction])
+	gun.free()
+
+	for n in [r, r2, r3, r4, r5, r6]:
 		if is_instance_valid(n):
 			n.queue_free()
