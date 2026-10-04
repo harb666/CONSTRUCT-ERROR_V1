@@ -210,6 +210,8 @@ func _launch() -> void:
 	shot.finished.connect(shot.queue_free)
 	shot.play()
 	projectile.launch(c, dir, shooter)
+	# Blue muzzle sparks that get caught in the black hole's gravity.
+	GravitySparks.spawn(world, muzzle.global_transform if muzzle else Transform3D(global_basis, start), projectile, dir)
 	_static_t = -1.0
 	_cooldown_t = 0.0
 	_recharge = recharge_delay

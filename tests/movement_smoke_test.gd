@@ -369,6 +369,7 @@ func _run() -> void:
 	await _gravity_well_tests(main, p, holder)
 	await _cooldown_audio_tests(main)
 	await _robot_tests(main)
+	await _flight_gravity_tests(main)
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -408,7 +409,15 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 		if pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL:
 			break
 	_check(pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL, "black hole sticks to the floor as a gravity well")
-	_check(pr._vfx._motes.emitting and pr._vfx._dust.emitting and pr._vfx._mist.emitting, "purple motes, black dust and mist tumble around it")
+	var trail: VortexTrail = pr._vfx.trail
+	_check(trail != null and trail.particle_count() > 0, "purple motes, black dust and mist stream off it (%d)" % (trail.particle_count() if trail else 0))
+	var orbit_ok := trail != null and trail.particle_count() > 0
+	if orbit_ok:
+		var s0: Array = trail.sample(0, 0)
+		await _ticks(6)
+		var s1: Array = trail.sample(0, 0) if trail.particle_count() > 0 else s0
+		orbit_ok = (s1[0] as Vector3).distance_to(s0[0]) < 0.001 and absf(float(s1[2]) - float(s0[2])) > 0.05
+	_check(orbit_ok, "wake particles orbit the flight axis (fixed spot on the axis, angle advancing)")
 	_check(pr._vfx._lightning.eruption == 0.0, "no lightning eruption yet")
 	var stuck_at := pr.global_position
 	var sizes: Array = []
@@ -678,3 +687,63 @@ func _robot_tests(main: Node) -> void:
 	for n in [r, r2, r3, r4, r5, r6]:
 		if is_instance_valid(n):
 			n.queue_free()
+
+
+func _flight_gravity_tests(main: Node) -> void:
+	# A black hole flying across open floor past a crate and into a robot.
+	var base := Vector3(-30, 0, 30)
+	var gun: BlackHoleGenerator = load("res://scenes/weapons/black_hole_generator.tscn").instantiate()
+	main.add_child(gun)
+	gun.global_position = base + Vector3(0, 1.4, 0)
+	gun.global_basis = Basis(Vector3.UP, PI * 0.5)  # barrel (+X) along -Z
+	var crate: RigidBody3D = load("res://scenes/props/physics_prop.tscn").instantiate()
+	main.add_child(crate)
+	crate.global_position = base + Vector3(2.6, 0.3, -20)
+	var robot := _spawn_robot(main, base + Vector3(0.6, 0, -9))
+	var robot_z := base.z - 9.0
+	await _ticks(10)
+	var p0 := crate.global_position
+	var shots: Array = []
+	gun.fired.connect(func(pr: BlackHoleProjectile) -> void: shots.append(pr))
+	gun.fire_at(null, base + Vector3(0, 1.4, -30))
+	for i in 15:
+		await _ticks(1)
+		if not shots.is_empty():
+			break
+	var pr: BlackHoleProjectile = shots[0] if not shots.is_empty() else null
+	_check(pr != null and pr.well != null and pr.well.moving, "flying black hole carries its gravity field")
+	var sparks: Array = (main.get_children() + main.get_tree().root.get_children()).filter(func(n: Node) -> bool: return n is GravitySparks)
+	_check(not sparks.is_empty(), "muzzle flash throws out glowing blue particles")
+	var angle0 := -99.0
+	var swirled := 0.0
+	var passed_robot := false
+	var robot_dead := false
+	var player: PlayerController = main.players[1]
+	var player_v_max := 0.0
+	for i in 90:
+		await _ticks(1)
+		if is_instance_valid(crate):
+			var rel := crate.global_position - (base + Vector3(0, 1.4, 0))
+			var a := atan2(rel.y, rel.x)
+			if angle0 > -90.0:
+				swirled += absf(wrapf(a - angle0, -PI, PI))
+			angle0 = a
+		if is_instance_valid(pr) and pr.state == BlackHoleProjectile.State.TRAVELLING and pr.global_position.z < robot_z - 0.5:
+			passed_robot = true
+		robot_dead = robot_dead or not robot.alive
+		player_v_max = maxf(player_v_max, player.external_velocity.length())
+	_check(crate.global_position.distance_to(p0) > 1.0, "props near its path are dragged in (%.1f m)" % crate.global_position.distance_to(p0))
+	_check(swirled > 0.6, "and swirl around its flight axis (%.1f rad)" % swirled)
+	_check(robot_dead and passed_robot, "an enemy in its path is torn apart and it flies on through")
+	var gs: GravitySparks = sparks[0] if not sparks.is_empty() and is_instance_valid(sparks[0]) else null
+	for i in 120:
+		if gs == null or not is_instance_valid(gs) or gs.consumed > 10:
+			break
+		await _ticks(1)
+	_check(gs != null and is_instance_valid(gs) and gs.consumed > 10, "blue muzzle particles swirl after it and get swallowed (%d)" % (gs.consumed if gs and is_instance_valid(gs) else -1))
+	for n in [gun, crate, robot]:
+		if is_instance_valid(n):
+			n.queue_free()
+	if is_instance_valid(pr):
+		pr.queue_free()
+	await _ticks(5)

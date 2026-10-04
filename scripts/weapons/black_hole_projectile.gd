@@ -32,10 +32,12 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 @export_group("Gravity well")
 @export var gravity_well_duration := 5.0
 @export var gravity_radius := 9.0
-@export var gravity_strength := 26.0
+@export var gravity_strength := 60.0
 @export var player_gravity_strength := 20.0
 @export var capture_radius := 1.0
-@export var orbit_strength := 12.0
+## Field radius while flying (it pulls things into its wake as it goes).
+@export var flight_gravity_radius := 7.0
+@export var orbit_strength := 26.0
 @export var shrink_rate := 1.6
 ## Size pulse while stuck (fraction of size) and its base speed; both grow
 ## with instability, and the pulse is deliberately irregular.
@@ -106,6 +108,7 @@ var _surface_normal := Vector3.UP
 var _pulse_seed := randf() * 100.0
 var _star: MeshInstance3D
 var _hum: DynamicSound
+var _pass_through: Array[RID] = []
 var _charge_snd: DynamicSound
 var _charge_start_t := -1.0  # stuck time at which the charge sound starts
 var _burst_played := false
@@ -137,6 +140,8 @@ func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
 		_vfx.exclude = [_shooter_rid]
 	_vfx.size = _start_size
 	add_child(_vfx)
+	if gravity_wells_enabled:
+		_make_well()
 	_hum = Sfx.emitter(self, Sfx.BH_LOOP, loop_volume_db, loop_near, loop_far)
 	_hum.play()
 	state = State.TRAVELLING
@@ -180,9 +185,19 @@ func _travel(delta: float) -> void:
 		_expand_t = 0.0
 		ImpactBurst.spawn(get_parent(), global_position, flight_size * 0.55)
 	_set_size(_expansion_size(delta))
+	if well and not well.active and _expand_t >= 0.0:
+		well.active = true
 	var from := global_position
 	var motion := direction * speed * delta
 	var hit := _sweep(from, motion)
+	# It flies on through enemies that die (from the hit or already torn
+	# apart by its gravity); a survivor stops it as usual.
+	var guard := 0
+	while not hit.is_empty() and _is_enemy(hit.collider) and guard < 6:
+		guard += 1
+		if not _hit_enemy_dies(hit.collider):
+			break
+		hit = _sweep(from, motion)
 	if not hit.is_empty():
 		global_position = hit.position
 		_stick(hit)
@@ -208,6 +223,22 @@ func _ease_out_back(k: float) -> float:
 	return 1.0 + (c + 1.0) * t * t * t + c * t * t
 
 
+static func _is_enemy(o: Variant) -> bool:
+	return is_instance_valid(o) and o is Node and (o as Node).is_in_group(&"enemies")
+
+
+## Direct hit on an enemy in flight; true if it died (then it is ignored
+## from now on and the black hole carries on through).
+func _hit_enemy_dies(e: Object) -> bool:
+	if e.has_method("apply_damage"):
+		e.apply_damage(DamageInfo.make(impact_damage, DamageInfo.Type.ENERGY, global_position, direction, impact_force, 0.0, self))
+	var dead: bool = "alive" in e and not e.alive
+	if dead:
+		_pass_through.append((e as CollisionObject3D).get_rid())
+		impacted.emit(global_position, e)
+	return dead
+
+
 ## Sphere sweep with the current collision radius (one query per tick).
 func _sweep(from: Vector3, motion: Vector3) -> Dictionary:
 	var space := get_world_3d().direct_space_state
@@ -216,8 +247,11 @@ func _sweep(from: Vector3, motion: Vector3) -> Dictionary:
 	q.shape = _sphere
 	q.transform = Transform3D(Basis.IDENTITY, from)
 	q.motion = motion
+	q.collision_mask = 1  # world, props, enemies (not debris pieces)
+	var ex: Array[RID] = _pass_through.duplicate()
 	if _shooter_rid.is_valid():
-		q.exclude = [_shooter_rid]
+		ex.append(_shooter_rid)
+	q.exclude = ex
 	var frac := space.cast_motion(q)
 	if frac.is_empty() or frac[1] >= 1.0:
 		return {}
@@ -236,7 +270,8 @@ func _stick(hit: Dictionary) -> void:
 	_surface_normal = hit.normal if hit.normal.length_squared() > 0.1 else -direction
 	ImpactBurst.spawn(get_parent(), global_position, maxf(_size, 0.6) * 0.8)
 	if collider and collider.has_method("apply_damage"):
-		collider.apply_damage(DamageInfo.make(impact_damage, DamageInfo.Type.ENERGY, global_position, direction, impact_force, 0.0, self))
+		if not _is_enemy(collider):  # enemies were already hit in flight
+			collider.apply_damage(DamageInfo.make(impact_damage, DamageInfo.Type.ENERGY, global_position, direction, impact_force, 0.0, self))
 	elif collider and collider.has_method("on_projectile_hit"):
 		collider.on_projectile_hit(self)
 	impacted.emit(global_position, collider)
@@ -247,20 +282,14 @@ func _stick(hit: Dictionary) -> void:
 	# Finish expanding if it hit before fully surging out.
 	if _expand_t < 0.0:
 		_expand_t = 0.0
-	well = GravityWell.new()
+	if well == null:
+		_make_well()
+	# The flying field becomes the stationary well.
+	well.moving = false
+	well.active = true
+	well.exclude = []  # the stuck well pulls everyone, shooter included
 	well.surface_normal = _surface_normal
 	well.gravity_radius = gravity_radius
-	well.gravity_strength = gravity_strength
-	well.player_gravity_strength = player_gravity_strength
-	well.capture_radius = capture_radius
-	well.orbit_strength = orbit_strength
-	well.shrink_rate = shrink_rate
-	well.max_affected_objects = maximum_affected_objects
-	well.max_captured_objects = maximum_captured_objects
-	well.supernova_radius = supernova_radius
-	well.supernova_damage = supernova_damage
-	well.supernova_launch_force = supernova_launch_force
-	add_child(well)
 	_enter(State.STUCK_GRAVITY_WELL)
 	_schedule_charge_sound()
 	_active_wells.append(self)
@@ -295,6 +324,29 @@ func _stuck(delta: float) -> void:
 ## Seconds from sticking to the supernova (when the well runs its course).
 func _time_to_supernova() -> float:
 	return gravity_well_duration + collapse_time + compression_hold
+
+
+## The black hole's gravity field: created on launch (moving with it, pulling
+## things into its wake), it becomes the stationary well where it sticks.
+func _make_well() -> void:
+	well = GravityWell.new()
+	well.moving = true
+	well.active = false  # armed once clear of the gun
+	well.set_axis(direction)
+	if _shooter_rid.is_valid():
+		well.exclude = [_shooter_rid]
+	well.gravity_radius = flight_gravity_radius
+	well.gravity_strength = gravity_strength
+	well.player_gravity_strength = player_gravity_strength
+	well.capture_radius = capture_radius
+	well.orbit_strength = orbit_strength
+	well.shrink_rate = shrink_rate
+	well.max_affected_objects = maximum_affected_objects
+	well.max_captured_objects = maximum_captured_objects
+	well.supernova_radius = supernova_radius
+	well.supernova_damage = supernova_damage
+	well.supernova_launch_force = supernova_launch_force
+	add_child(well)
 
 
 ## The charge sound must finish just before the explosion: if it is longer
@@ -377,6 +429,8 @@ func _enter(s: State) -> void:
 				_star.global_position = global_position
 			else:
 				Sfx.fade_out(_hum, fizzle_time)
+				if well:
+					well.active = false
 				if _vfx:
 					_vfx.fade_out(fizzle_time)
 		State.SUPERNOVA:

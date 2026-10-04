@@ -17,6 +17,8 @@ extends Node3D
 ## Inward acceleration (m/s²) for a reference-mass body, scaled by closeness.
 @export var gravity_strength := 26.0
 @export var orbit_strength := 12.0
+## Pull along the flight axis into the core, relative to the pull onto it.
+@export var axial_pull := 0.8
 @export var capture_radius := 1.0
 ## Visual shrink starts inside this fraction of the radius; >1 = sharper.
 @export var shrink_start := 0.45
@@ -27,7 +29,7 @@ extends Node3D
 @export_group("Enemies")
 ## Enemies (group "enemies") are pulled this much harder than props, and
 ## their weight resists the pull at most this much.
-@export var enemy_pull_multiplier := 2.6
+@export var enemy_pull_multiplier := 1.6
 @export var enemy_max_resist := 1.3
 ## Enemies are torn apart this close to the core (their pieces then spiral
 ## in, shrink past the event horizon and are swallowed).
@@ -44,12 +46,12 @@ extends Node3D
 @export_group("Limits")
 @export var max_affected_objects := 12
 @export var max_captured_objects := 6
-@export var max_inward_speed := 10.0
-@export var max_orbit_speed := 9.0
-@export var max_speed := 14.0
+@export var max_inward_speed := 16.0
+@export var max_orbit_speed := 14.0
+@export var max_speed := 24.0
 ## Mass that counts as "light"; heavier bodies resist by sqrt(mass/ref).
 @export var reference_mass := 8.0
-@export var max_mass_resist := 4.0
+@export var max_mass_resist := 2.5
 @export var query_interval := 0.15
 ## Physics layer that movable things (props, enemies, players) are also on,
 ## so queries skip static level geometry entirely.
@@ -80,11 +82,21 @@ var _query_t := 0.0
 var _spin := {}                # instance id -> accumulated visual spin
 var _sphere := SphereShape3D.new()
 var _axis := Vector3.UP
+## Flight direction of the black hole: things swirl around this axis.
+var axis_dir := Vector3.UP
+## True while the black hole is still flying (players are left alone, the
+## field is re-scanned more often to keep up).
+var moving := false
+
+
+func set_axis(dir: Vector3) -> void:
+	axis_dir = dir.normalized() if dir.length_squared() > 0.01 else Vector3.UP
+	_axis = axis_dir
 
 
 func _ready() -> void:
 	# Swirl axis: the surface normal (things orbit across the surface).
-	_axis = surface_normal.normalized() if surface_normal.length_squared() > 0.1 else Vector3.UP
+	set_axis(axis_dir)
 
 
 func _physics_process(delta: float) -> void:
@@ -95,7 +107,7 @@ func _physics_process(delta: float) -> void:
 	if active:
 		_query_t -= delta
 		if _query_t <= 0.0:
-			_query_t = query_interval
+			_query_t = query_interval * (0.35 if moving else 1.0)
 			_refresh()
 		for b in _bodies:
 			if not is_instance_valid(b) or _is_captured(b):
@@ -123,7 +135,7 @@ func _refresh() -> void:
 		var b: Object = r.collider
 		if b is RigidBody3D and (not b.freeze or _is_captured(b)):
 			found.append(b)
-		elif b is CharacterBody3D and b.has_method("apply_gravity_pull"):
+		elif b is CharacterBody3D and b.has_method("apply_gravity_pull") and not moving:
 			found.append(b)
 	var c := global_position
 	# Nearest first, enemies ahead of props (they must never be left out).
@@ -165,27 +177,32 @@ func _pull_body(b: RigidBody3D, delta: float) -> void:
 	if d < enemy_kill_radius and _is_enemy(b) and b.has_method("on_swallowed"):
 		b.on_swallowed(self)
 		return
-	var dir := to / d
 	var close := 1.0 - d / gravity_radius
 	var boost := 1.0 + intensity
 	var resist := _resist(b)
-	var tangent := _axis.cross(dir)
-	if tangent.length_squared() < 0.01:
-		tangent = Vector3.RIGHT.cross(dir)
-	tangent = tangent.normalized()
-	var a_in := gravity_strength * boost * (0.15 + close * close * 1.3) / resist
-	var a_t := orbit_strength * boost * close / resist
+	# Vortex around the black hole's flight axis: pulled in towards the
+	# axis line, spun around it, and drawn along it into the core.
+	var rel := -to  # core -> body
+	var along := rel.dot(_axis)
+	var radial := rel - _axis * along
+	var r := radial.length()
+	var to_axis := -radial / r if r > 0.001 else Vector3.ZERO
+	var tangent := _axis.cross(radial / r) if r > 0.001 else Vector3.ZERO
+	var to_core_axial := -_axis * signf(along) if absf(along) > 0.05 else Vector3.ZERO
+	var a_in := gravity_strength * boost * (0.2 + close * close * 1.4) / resist
+	var a_t := orbit_strength * boost * (0.3 + close) / resist
 	var v := b.linear_velocity
-	v += (dir * a_in + tangent * a_t) * delta
+	v += (to_axis * a_in + to_core_axial * a_in * axial_pull + tangent * a_t) * delta
 	# Lift against world gravity as it nears the core, so things rise in.
 	v += Vector3.UP * 9.8 * clampf(close * 1.5, 0.0, 1.0) * delta
-	# Clamp inward/outward and orbital speeds, then total speed.
-	var vin := clampf(v.dot(dir), -max_inward_speed, max_inward_speed)
-	var vt := v - dir * v.dot(dir)
-	vt = vt.limit_length(max_orbit_speed)
+	# Clamp speed towards/away from the axis and around it, then in total.
+	var v_rad := clampf(v.dot(to_axis), -max_inward_speed, max_inward_speed) if r > 0.001 else 0.0
+	var v_t := clampf(v.dot(tangent), -max_orbit_speed, max_orbit_speed) if r > 0.001 else 0.0
+	var v_ax := v.dot(_axis)
+	var v_rest := v - to_axis * v.dot(to_axis) - tangent * v.dot(tangent) - _axis * v_ax
 	# Bleed some orbital energy near the core so the spiral tightens.
-	vt *= 1.0 - clampf(close * 0.8 * delta, 0.0, 0.2)
-	b.linear_velocity = (dir * vin + vt).limit_length(max_speed)
+	v_t *= 1.0 - clampf(close * 0.8 * delta, 0.0, 0.2)
+	b.linear_velocity = (to_axis * v_rad + tangent * v_t + _axis * v_ax + v_rest).limit_length(max_speed)
 	b.sleeping = false
 	# Visual: shrink + spin faster as it nears the centre.
 	var id := b.get_instance_id()
@@ -317,6 +334,14 @@ func _release_one(entry: Array) -> void:
 	var dir: Vector3 = entry[1]
 	var b: RigidBody3D = e.body
 	if not is_instance_valid(b):
+		return
+	if not is_inside_tree():
+		# Removed mid-capture (e.g. the level unloading): just restore it
+		# where it is, no launch or damage.
+		b.freeze = false
+		b.collision_layer = e.layer
+		b.collision_mask = e.mask
+		restore_visual(b)
 		return
 	var c := global_position
 	# Spawn spot spread out along its direction, pulled back from any wall.
