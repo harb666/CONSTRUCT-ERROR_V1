@@ -350,6 +350,7 @@ func _run() -> void:
 	_check(not lock.has_target(), "lock clears when the enemy is out of range")
 
 	await _gravity_well_tests(main, p, holder)
+	await _cooldown_audio_tests(main)
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -453,3 +454,39 @@ func _sound_playing(root: Node, stream: AudioStream) -> bool:
 		if n.stream == stream and n.playing:
 			return true
 	return false
+
+
+func _cooldown_audio_tests(main: Node) -> void:
+	var gun: BlackHoleGenerator = load("res://scenes/weapons/black_hole_generator.tscn").instantiate()
+	main.add_child(gun)
+	gun.global_position = Vector3(0, 30, 0)
+	await _ticks(5)
+	var bs: BarrelStatic = gun.get_node("BarrelStatic")
+	_check(gun.fire_at(null, gun.global_position + Vector3(10, 30, 0)), "test gun fires")
+	var fired_at := -1.0
+	var sound_at := -1.0
+	var peak := 0.0
+	var t := 0.0
+	var step := 1.0 / Engine.physics_ticks_per_second
+	for i in Engine.physics_ticks_per_second * 11:
+		await _ticks(1)
+		t += step
+		if fired_at < 0.0 and gun.core == null:
+			fired_at = t
+		if sound_at < 0.0 and gun.is_cooling_down_audio():
+			sound_at = t
+		if sound_at < 0.0:
+			_check_once(bs.intensity < 0.01, "no barrel static before the cooldown sound")
+		peak = maxf(peak, bs.intensity)
+	_check(sound_at > 0.0 and absf(sound_at - fired_at - gun.cooldown_sound_delay) < 0.15,
+		"cooldown sound starts %.2f s after firing" % (sound_at - fired_at))
+	_check(peak > 0.9, "barrel static swells with the cooldown sound (peak %.2f)" % peak)
+	_check(not gun.is_cooling_down_audio() and bs.intensity < 0.01, "barrel static dies away when the sound ends")
+	gun.queue_free()
+
+
+var _once_failed := {}
+func _check_once(cond: bool, msg: String) -> void:
+	if not cond and not _once_failed.has(msg):
+		_once_failed[msg] = true
+		_check(false, msg)

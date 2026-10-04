@@ -100,4 +100,5 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 - `energy_loop.ogg` — looping hum attached to the black hole from the barrel until the supernova (fades on a fizzle). Louder the closer you are (`loop_unit_size`, `loop_max_distance`).
 - `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova (immediately if a well is collapsed early).
 - `explode.ogg` — at the supernova.
+- `cooldown_charge.ogg` — the gun's recharge sound, `cooldown_sound_delay` (1 s) after firing, from the muzzle. While it plays, `BarrelStatic` (scripts/vfx/barrel_static.gd) crackles electric arcs across the empty chamber and out of the muzzle with a flickering plasma glow and sparks, its intensity following the sound's loudness curve (`BlackHoleGenerator.COOLDOWN_ENVELOPE`).
 Volumes are exports on `BlackHoleProjectile` (Audio group) and `BlackHoleGenerator.fire_volume_db`.

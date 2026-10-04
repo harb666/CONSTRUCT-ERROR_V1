@@ -7,6 +7,7 @@ const BH_LOOP := preload("res://assets/audio/black_hole/energy_loop.ogg")
 const BH_FIRE := preload("res://assets/audio/black_hole/fire.ogg")
 const BH_BURST := preload("res://assets/audio/black_hole/energy_burst.ogg")
 const BH_EXPLODE := preload("res://assets/audio/black_hole/explode.ogg")
+const BH_COOLDOWN := preload("res://assets/audio/black_hole/cooldown_charge.ogg")
 
 
 ## Positional player as a child of `parent` (follows it). Not started.
