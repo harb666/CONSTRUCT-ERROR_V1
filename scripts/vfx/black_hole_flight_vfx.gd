@@ -7,13 +7,17 @@ extends Node3D
 const DISTORTION := preload("res://scripts/vfx/gravity_distortion.gdshader")
 
 var follow: Node3D
+var projectile: Node3D
 var size := 1.0
+## Bodies the electricity rays ignore (the shooter).
+var exclude: Array[RID] = []
 
 var _ring: MeshInstance3D
 var _swirls: Array[MeshInstance3D] = []
 var _crackle: MeshInstance3D
 var _distortion: MeshInstance3D
 var _infall: CPUParticles3D
+var _lightning: BlackHoleLightning
 var _t := 0.0
 var _crackle_t := 0.0
 var _crackle_size := 1.0
@@ -52,14 +56,22 @@ func _ready() -> void:
 	_infall.color_ramp = Vfx.ramp([Color(0.6, 0.2, 1.0, 0.0), Color(0.8, 0.35, 1.0, 1.0), Color(1.0, 0.85, 1.0, 0.0)], [0.0, 0.35, 1.0])
 	_infall.scale_amount_curve = Vfx.curve([Vector2(0, 1.0), Vector2(1, 0.25)])
 	add_child(_infall)
+	_lightning = BlackHoleLightning.new()
+	_lightning.exclude = exclude
+	add_child(_lightning)
 	set_size(size)
 
 
 func set_size(s: float) -> void:
 	size = maxf(s, 0.001)
 	if _infall:
-		_infall.emission_sphere_radius = size * 1.1
-		_infall.scale = Vector3.ONE
+		_infall.emission_sphere_radius = size * 0.75
+		(_infall.mesh as QuadMesh).size = Vector2.ONE * clampf(size * 0.05, 0.06, 0.2)
+		_infall.radial_accel_min = -14.0 * maxf(size, 1.0)
+		_infall.radial_accel_max = -10.0 * maxf(size, 1.0)
+		_infall.amount = 28 if size < 2.0 else 44
+	if _lightning:
+		_lightning.radius = size
 
 
 func _process(delta: float) -> void:
@@ -67,7 +79,7 @@ func _process(delta: float) -> void:
 	if follow and is_instance_valid(follow):
 		global_position = follow.get_global_transform_interpolated().origin
 	if _distortion:
-		Vfx.face_camera(_distortion, size * 2.6)
+		Vfx.face_camera(_distortion, size * 2.0)
 	Vfx.face_camera(_ring, size * 1.45, _t * 0.5)
 	Vfx.face_camera(_swirls[0], size * 1.9, _t * 2.4)
 	Vfx.face_camera(_swirls[1], size * 1.6, -_t * 1.7 + 1.0)
@@ -86,6 +98,8 @@ func _process(delta: float) -> void:
 ## Fade everything out over `seconds`, then free.
 func fade_out(seconds: float) -> void:
 	_infall.emitting = false
+	if _lightning:
+		_lightning.stop()
 	var tw := create_tween()
 	tw.tween_method(_set_all_alpha, 1.0, 0.0, seconds)
 	tw.tween_callback(queue_free)

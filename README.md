@@ -75,4 +75,6 @@ Four separate, reusable pieces (any weapon/enemy can use them):
 - `MuzzleFlash` – crossed flame quads along the barrel, star pop, brief purple light.
 - `ChamberArcs` – flickering lightning strips between the contained core and the containment ring (only while charged). The chamber also has a small, subtle distortion disc (`chamber_lens_size`/`chamber_lens_strength` on the gun) that fades out before the chamber frame.
 - `BlackHoleFlightVfx` – gravity distortion (`gravity_distortion.gdshader`, screen-texture lens/twist), event-horizon ring, counter-rotating swirls, matter spiralling in, crackles. `Vfx.distortion_enabled` turns the distortion off if a device struggles.
-- `ImpactBurst` – flash, scorch star, expanding shock ring, sparks, light pop.
+- `ImpactBurst` – flash, scorch star, expanding shock ring, sparks, light pop (also used as the expansion pulse).
+- `BlackHoleLightning` – pooled procedural lightning (14 small + 4 large bolt meshes, jagged forking camera-facing ribbons) lashing outward; each strike casts one ray (biased down/sideways) and lands on real surfaces/enemies when in reach (more likely the nearer they are), with pooled flashes, sparks and one shared light.
+- Fired projectile: stays chamber-sized until `clear_distance` (1.4 m), then surges (ease-out with overshoot + pulse) to `flight_size` 3 m. Collision is a sphere sweep with `collision_radius` = 22% of the diameter; `influence_radius` (1.2x diameter) is there for gravity later.

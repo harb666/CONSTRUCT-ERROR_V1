@@ -231,6 +231,8 @@ func _run() -> void:
 	await _ticks(30)
 	var shots: Array = []
 	holder.weapon_fired.connect(func(_w) -> void: shots.append(1))
+	var projs: Array = []
+	(holder.current as BlackHoleGenerator).fired.connect(func(pr: BlackHoleProjectile) -> void: projs.append(pr))
 
 	# Tap a little off the dummy's mesh: must still select it (forgiving).
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()) + Vector2(35, 20))
@@ -241,6 +243,22 @@ func _run() -> void:
 		if shots.size() > 0:
 			break
 	_check(shots.size() > 0, "auto-fires at the locked enemy")
+	if projs.size() > 0:
+		var pr: BlackHoleProjectile = projs[0]
+		_check(pr._size < 0.4, "fired black hole is still chamber-sized leaving the gun (%.2f m)" % pr._size)
+		await _ticks(12)
+		_check(is_instance_valid(pr) and pr._size > 2.5, "then expands to ~3 m (%.2f m)" % (pr._size if is_instance_valid(pr) else -1.0))
+		if is_instance_valid(pr):
+			_check(pr.collision_radius > 0.5, "collision radius scales with it (%.2f m)" % pr.collision_radius)
+			var bolts := 0
+			for i in 20:
+				await _ticks(1)
+				if not is_instance_valid(pr):
+					break
+				for n in pr.find_children("*", "MeshInstance3D", true, false):
+					if n.mesh is ImmediateMesh and n.visible:
+						bolts += 1
+			_check(bolts > 0, "electric bolts lash out while in flight")
 	var h0 := d2.hits
 	for i in 60:
 		await _ticks(1)
