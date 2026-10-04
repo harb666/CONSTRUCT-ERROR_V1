@@ -80,7 +80,7 @@ Four separate, reusable pieces (any weapon/enemy can use them):
 - Fired projectile: stays chamber-sized until `clear_distance` (1.4 m), then surges (ease-out with overshoot + pulse) to `flight_size` 3 m. Collision is a sphere sweep with `collision_radius` = 22% of the diameter; `influence_radius` (1.2x diameter) is there for gravity later.
 
 ## Recoil (Black Hole Generator)
-Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy, chamber lens surges) → launch → `Weapon.recoiled` → `WeaponHolder` kicks the `CharacterAnimator` recoil spring (fast kick, rebound, settle) and emits `weapon_recoil` → local `CameraRig.kick()` (push via spring arm + brief shake via h/v offsets + FOV pop; yaw/pitch untouched).
+Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy, chamber lens surges) → launch → `Weapon.recoiled` → `WeaponHolder` kicks the `CharacterAnimator` recoil spring (fast kick, rebound, settle) and emits `weapon_recoil` (the camera no longer reacts; `CameraRig.kick()` still exists if wanted later).
 - `ArmAimModifier` applies the spring additively: firing arm's elbow driven back + forearm/muzzle climb; chest (Spine2 only) leans back and twists. Hips/legs and movement untouched.
 - `WeaponHolder._align_weapon` slides the weapon back along its barrel and pitches the muzzle up with the same spring.
 - Gun mechanics: `Front_Muzzle_Deep_Bore` slams back and rebounds; `Finished_Containment_Interior` spins 120° per shot.

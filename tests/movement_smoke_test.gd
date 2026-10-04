@@ -256,7 +256,7 @@ func _run() -> void:
 		kick_peak = maxf(kick_peak, anim2.recoil)
 		cam_kicked = cam_kicked or rig2.camera.fov > rig2._base_fov + 1.0
 	_check(launched and kick_peak > 0.6, "heavy recoil kick on launch (peak %.2f)" % kick_peak)
-	_check(cam_kicked, "camera impulse on launch")
+	_check(not cam_kicked, "no camera shake on launch")
 	await _ticks(60)
 	_check(absf(anim2.recoil) < 0.1 and absf(rig2.camera.fov - rig2._base_fov) < 0.01, "recoil and camera recover")
 	var n_before := projs.size()
