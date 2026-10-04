@@ -24,5 +24,22 @@ The HUD shows the branch/commit of the running build.
 - `scripts/player/player_controller.gd` – movement; reads only its `PlayerInput`, no globals. `simulate(cmd, dt)` is the single tick step.
 - `scripts/camera/camera_rig.gd` – per-local-player orbit camera; owns view yaw used for camera-relative movement.
 - `scripts/ui/touch_controls.gd` – multi-touch stick / look / buttons.
+- `scripts/character/character_animator.gd` – builds the AnimationTree state machine and drives it from the controller (visual only, no root motion).
+- `scripts/character/hips_corrector.gd` – runtime-only Hips pose fix-up that keeps clips with baked travel/turning in place.
+- `assets/characters/grinch/grinch.glb` – source character (28-joint Mixamo rig; never modified). Textures are extracted next to it and imported at 1024 px.
 - `scripts/main.gd` – `spawn_player(id, is_local)`; the future network layer plugs in here.
 - `tests/movement_smoke_test.gd` – `godot --headless --path . -s tests/movement_smoke_test.gd`
+
+## Character animation mapping
+| State | Clip | When |
+|---|---|---|
+| Locomotion | Idle 9 → Walking → Running → RunFast | 1D blend on horizontal speed, playback rate scaled with speed |
+| Jump / AirJump | Regular Jump (take-off → air segment) | jump / double jump |
+| Fall | Fall2 (loop) | descending |
+| LongFall | Fall1 (loop, lifted to capsule centre) | falling > 1.1 s |
+| Land | Regular Jump (landing segment) | hard landing while not running |
+| Dodge | slide right (slide segment, in place) | dodge in any direction |
+| TurnLeft / TurnRight | Idle Turn Left / Right (in place, yaw from gameplay) | turning on the spot |
+| SharpTurnRight | Run Sharp Turn Right (plant segment) | fast right turn while running |
+| Dead | Dead | `CharacterAnimator.play_death()` (no death gameplay yet) |
+| Climb | Climb Attempt and Fall 5 | defined, not triggered yet |

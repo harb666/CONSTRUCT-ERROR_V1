@@ -5,7 +5,8 @@ extends CharacterBody3D
 
 signal jumped(is_air_jump: bool)
 signal dodged(direction: Vector3)
-signal landed
+## impact_speed: downward speed (m/s) just before touching the ground.
+signal landed(impact_speed: float)
 
 @export var player_id := 1
 
@@ -44,8 +45,6 @@ signal landed
 ## Higher = snappier facing. Exponential smoothing rate.
 @export var turn_rate := 16.0
 
-@onready var roll_pivot: Node3D = $Visual/RollPivot
-
 var input: PlayerInput
 var spawn_transform: Transform3D
 
@@ -63,6 +62,7 @@ var _dodge_timer := 0.0
 var _dodge_cooldown_timer := 0.0
 var _dodge_dir := Vector3.FORWARD
 var _was_on_floor := true
+var _fall_speed := 0.0
 
 
 func _ready() -> void:
@@ -148,6 +148,8 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 			g *= jump_release_gravity_multiplier
 		velocity.y = maxf(velocity.y - g * delta, -max_fall_speed)
 
+	if not on_floor:
+		_fall_speed = maxf(-velocity.y, 0.0)
 	move_and_slide()
 
 	# --- facing ---
@@ -156,15 +158,9 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 		var target_yaw := atan2(-face_dir.x, -face_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, 1.0 - exp(-turn_rate * delta))
 
-	# --- visual roll ---
-	if is_dodging:
-		roll_pivot.rotation.x = -TAU * (1.0 - _dodge_timer / dodge_duration)
-	else:
-		roll_pivot.rotation.x = 0.0
-
 	var now_on_floor := is_on_floor()
 	if now_on_floor and not _was_on_floor:
-		landed.emit()
+		landed.emit(_fall_speed)
 	_was_on_floor = now_on_floor
 
 	if global_position.y < -30.0:
@@ -192,9 +188,7 @@ func _do_jump(jump_velocity: float, is_air_jump: bool) -> void:
 	velocity.y = jump_velocity
 	_jump_buffer_timer = 0.0
 	_coyote_timer = 0.0
-	if is_dodging:
-		is_dodging = false
-		roll_pivot.rotation.x = 0.0
+	is_dodging = false
 	jumped.emit(is_air_jump)
 
 

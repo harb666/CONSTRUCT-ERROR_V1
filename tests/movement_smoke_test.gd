@@ -25,7 +25,9 @@ func _run() -> void:
 	root.add_child(main)
 	await _ticks(30)
 	var p: PlayerController = main.players[1]
+	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
 	_check(p.is_on_floor(), "player starts grounded")
+	_check(anim.current_state == "Locomotion", "anim idle in Locomotion")
 
 	# Walk forward (camera-relative: camera starts behind, so forward = -Z).
 	var z0 := p.global_position.z
@@ -39,6 +41,7 @@ func _run() -> void:
 	await _ticks(20)
 	var sprint := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(absf(sprint - p.sprint_speed) < 0.2, "reaches sprint speed (%.2f)" % sprint)
+	_check(anim.current_state == "Locomotion", "anim sprint stays Locomotion")
 	Input.action_release("sprint")
 	Input.action_release("move_forward")
 	await _ticks(20)
@@ -49,6 +52,8 @@ func _run() -> void:
 	Input.action_press("jump")
 	await _ticks(2)
 	_check(not p.is_on_floor() and p.velocity.y > 0.0, "jump leaves ground")
+	await process_frame
+	_check(anim.current_state == "Jump", "anim Jump on jump (%s)" % anim.current_state)
 	var peak := y0
 	for i in 20:
 		await _ticks(1)
@@ -60,6 +65,8 @@ func _run() -> void:
 	Input.action_release("jump")
 	await _ticks(1)
 	_check(p.velocity.y > 5.0, "double jump fires in air (vy %.2f)" % p.velocity.y)
+	await process_frame
+	_check(anim.current_state == "AirJump", "anim AirJump on double jump (%s)" % anim.current_state)
 	var peak2 := peak
 	for i in 18:
 		await _ticks(1)
@@ -71,8 +78,16 @@ func _run() -> void:
 	await _ticks(1)
 	Input.action_release("jump")
 	_check(p.velocity.y <= 0.0 or p.is_on_floor(), "no third jump")
-	await _ticks(90)
+	var saw_fall := false
+	var saw_land := false
+	for i in 90:
+		await _ticks(1)
+		saw_fall = saw_fall or anim.current_state == "Fall"
+		saw_land = saw_land or anim.current_state == "Land"
 	_check(p.is_on_floor(), "lands again")
+	_check(saw_fall, "anim Fall while descending")
+	_check(saw_land, "anim Land on hard landing")
+	_check(anim.current_state == "Locomotion", "anim back to Locomotion (%s)" % anim.current_state)
 
 	# Dodge to the right.
 	var x0 := p.global_position.x
@@ -80,6 +95,8 @@ func _run() -> void:
 	Input.action_press("dodge")
 	await _ticks(2)
 	_check(p.is_dodging, "dodge starts")
+	await process_frame
+	_check(anim.current_state == "Dodge", "anim Dodge (%s)" % anim.current_state)
 	Input.action_release("dodge")
 	Input.action_release("move_right")
 	await _ticks(20)

@@ -4,8 +4,8 @@ extends Node3D
 ## the view yaw/pitch that movement is made relative to.
 
 @export var target: Node3D
-@export var height := 1.5
-@export var distance := 4.6
+@export var height := 1.35
+@export var distance := 3.9
 @export var pitch_min_deg := -70.0
 @export var pitch_max_deg := 45.0
 @export var start_pitch_deg := -14.0

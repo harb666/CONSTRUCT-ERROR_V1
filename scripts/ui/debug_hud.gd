@@ -7,9 +7,8 @@ var _build := ""
 
 func _ready() -> void:
 	# Written by CI so you can confirm on the phone which build is running.
-	var f := FileAccess.open("res://build_info.txt", FileAccess.READ)
-	if f:
-		_build = f.get_as_text().strip_edges()
+	if FileAccess.file_exists("res://build_info.txt"):
+		_build = FileAccess.get_file_as_string("res://build_info.txt").strip_edges()
 
 
 func _process(_delta: float) -> void:
@@ -18,6 +17,9 @@ func _process(_delta: float) -> void:
 		var hv := Vector2(player.velocity.x, player.velocity.z).length()
 		var state := "DODGE" if player.is_dodging else ("GROUND" if player.is_on_floor() else "AIR")
 		t += "   speed %.1f   %s%s" % [hv, state, "  SPRINT" if player.is_sprinting else ""]
+		var anim := player.get_node_or_null("Visual/GrinchVisual") as CharacterAnimator
+		if anim:
+			t += "   anim " + anim.current_state
 	if _build:
 		t += "\nbuild " + _build
 	text = t
