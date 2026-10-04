@@ -149,6 +149,10 @@ func _run() -> void:
 	_check(absf(spawner.display.global_position.y - y_a) > 0.001, "display bobs")
 	var shown_core: BlackHoleCore = (spawner.display as BlackHoleGenerator).core
 	_check(shown_core != null and shown_core.global_position.distance_to(spawner.display.find_marker("Black_Hole_Projectile_Spawn").global_position) < 0.001, "black hole sits in the display gun's chamber")
+	var tumble_a := shown_core.global_basis
+	await _ticks(10)
+	_check(not shown_core.global_basis.is_equal_approx(tumble_a), "black hole tumbles in the chamber")
+	_check(shown_core.global_position.distance_to(spawner.display.find_marker("Black_Hole_Projectile_Spawn").global_position) < 0.001, "black hole stays centred while tumbling")
 	var core_anim: AnimationPlayer = shown_core.find_child("AnimationPlayer", true, false)
 	_check(core_anim.is_playing() and core_anim.current_animation == "Accretion_Disk_Rotation", "black hole animation plays")
 	_check(holder.current == null, "player starts unarmed")
@@ -173,7 +177,7 @@ func _run() -> void:
 	var gun := holder.current as BlackHoleGenerator
 	await _ticks(5)
 	var chamber := gun.find_marker("Black_Hole_Projectile_Spawn")
-	_check(gun.core != null and gun.core.get_parent() == chamber and gun.core.global_position.distance_to(chamber.global_position) < 0.001, "black hole stays in the equipped gun's chamber")
+	_check(gun.core != null and chamber.is_ancestor_of(gun.core) and gun.core.global_position.distance_to(chamber.global_position) < 0.001, "black hole stays in the equipped gun's chamber")
 	var fore := gun.global_basis.x.normalized()
 	_check(fore.dot(-p.global_basis.z) > 0.7, "equipped gun points forward (%.2f)" % fore.dot(-p.global_basis.z))
 	_check(gun.global_basis.y.normalized().dot(Vector3.UP) > 0.7, "equipped gun is upright")
