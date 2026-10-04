@@ -8,10 +8,15 @@ extends Node3D
 const SOCKET_MARKER := "Arm_Socket_Attachment"
 const MUZZLE_MARKER := "Muzzle_Exit"
 
+## Emitted the instant a shot leaves the muzzle (drives recoil/camera kick).
+signal recoiled(strength: float)
+
 var definition: WeaponDefinition
 var is_equipped := false
 ## Keep firing while the trigger is held (as fast as can_fire() allows).
 @export var auto_fire := true
+## Recoil kick strength (1 = heavy weapon).
+@export var recoil_strength := 1.0
 
 
 func find_marker(marker_name: String) -> Node3D:

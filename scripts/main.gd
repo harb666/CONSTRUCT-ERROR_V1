@@ -63,4 +63,5 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		if holder:
 			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
 				rig.aiming = true)
+			holder.weapon_recoil.connect(rig.kick)
 	return player

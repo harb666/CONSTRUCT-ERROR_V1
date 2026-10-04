@@ -18,6 +18,12 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 ## accretion disk is seen from changing angles. Applied to a pivot, not to
 ## the core's own animation.
 @export var tumble_speed := Vector3(0.55, 0.37, 0.23)
+## Charge-up before launch: the core swells and the chamber crackles.
+@export var charge_time := 0.18
+## Mechanical parts animated on recoil (existing separate meshes in the GLB).
+@export var bore_kick := 0.14        # muzzle bore slams back (m)
+@export var interior_spin_deg := 120.0
+
 ## Seconds after firing before a new core starts forming.
 @export var recharge_delay := 0.6
 ## Seconds for the new core to grow to full size.
@@ -34,12 +40,27 @@ var _lens: MeshInstance3D
 var _t := 0.0
 var _recharge := 0.0      # >0 while waiting for a new core
 var _grow := 1.0          # 0..1 growth of the current core
+var _charge := -1.0       # >=0 while charging a shot (seconds elapsed)
+var _charge_target := Vector3.ZERO
+var _charge_shooter: Node3D
+var _mech_t := 99.0
+var _bore: Node3D
+var _bore_rest := Transform3D.IDENTITY
+var _interior: Node3D
+var _interior_rest := Transform3D.IDENTITY
+var _spin_from := 0.0
 
 
 func _ready() -> void:
 	_spawn_core()
 	_grow = 1.0
 	_apply_core_scale()
+	_bore = find_child("Front_Muzzle_Deep_Bore", true, false) as Node3D
+	if _bore:
+		_bore_rest = _bore.transform
+	_interior = find_child("Finished_Containment_Interior", true, false) as Node3D
+	if _interior:
+		_interior_rest = _interior.transform
 
 
 func _spawn_core() -> void:
@@ -78,13 +99,26 @@ func _spawn_core() -> void:
 func _apply_core_scale() -> void:
 	if core:
 		var g := ease(clampf(_grow, 0.0, 1.0), 0.4)
-		core.scale = Vector3.ONE * maxf(core_size * g, 0.001)
+		var charge := _charge_amount()
+		# Charging: swell and shudder.
+		var pulse := 1.0 + charge * (0.28 + 0.08 * sin(_t * 70.0))
+		core.scale = Vector3.ONE * maxf(core_size * g * pulse, 0.001)
+
+
+func _charge_amount() -> float:
+	return clampf(_charge / charge_time, 0.0, 1.0) if _charge >= 0.0 else 0.0
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	if _tumble:
-		_tumble.rotation = tumble_speed * _t
+		_tumble.rotation += tumble_speed * delta * (1.0 + _charge_amount() * 6.0)
+	if _charge >= 0.0:
+		_charge += delta
+		_apply_core_scale()
+		if _charge >= charge_time:
+			_launch()
+	_animate_mechanics(delta)
 	if core == null and _recharge > 0.0:
 		_recharge -= delta
 		if _recharge <= 0.0:
@@ -92,22 +126,45 @@ func _process(delta: float) -> void:
 	if core and _grow < 1.0:
 		_grow = minf(_grow + delta / recharge_grow, 1.0)
 		_apply_core_scale()
+	var charge := _charge_amount()
 	if _arcs:
 		_arcs.intensity = _grow if core else 0.0
+		_arcs.frenzy = charge
 	if _lens:
-		# Grows with the core; gone while the chamber is empty.
+		# Grows with the core; gone while the chamber is empty; surges on charge.
 		var k := ease(clampf(_grow, 0.0, 1.0), 0.4) if core else 0.0
 		_lens.visible = k > 0.01
-		_lens.scale = Vector3.ONE * maxf(chamber_lens_size * k, 0.001)
+		_lens.scale = Vector3.ONE * maxf(chamber_lens_size * k * (1.0 + charge * 0.4), 0.001)
+		(_lens.material_override as ShaderMaterial).set_shader_parameter("strength", chamber_lens_strength * (1.0 + charge * 1.5))
 
 
 func can_fire() -> bool:
-	return core != null and _grow >= 1.0 and projectile_scene != null
+	return core != null and _grow >= 1.0 and _charge < 0.0 and projectile_scene != null
 
 
+## Start a shot: charge briefly, then launch at the (latest) target point.
 func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if not can_fire():
 		return false
+	_charge = 0.0
+	_charge_target = target_point
+	_charge_shooter = shooter
+	return true
+
+
+## Keep the charging shot aimed at a moving target.
+func update_aim(target_point: Vector3) -> void:
+	if _charge >= 0.0:
+		_charge_target = target_point
+
+
+func _launch() -> void:
+	_charge = -1.0
+	if core == null:
+		return
+	var shooter := _charge_shooter
+	var target_point := _charge_target
+	_apply_core_scale()
 	var start := core.global_position
 	var dir := (target_point - start).normalized()
 	var barrel := get_barrel_direction()
@@ -126,8 +183,28 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 		MuzzleFlash.spawn(muzzle)
 	projectile.launch(c, dir, shooter)
 	_recharge = recharge_delay
+	_mech_t = 0.0
 	fired.emit(projectile)
-	return true
+	recoiled.emit(recoil_strength)
+
+
+## Muzzle bore slams back and rebounds; containment interior spins a notch.
+func _animate_mechanics(delta: float) -> void:
+	_mech_t += delta
+	if _bore:
+		var k := 0.0
+		if _mech_t < 0.035:
+			k = _mech_t / 0.035
+		elif _mech_t < 0.6:
+			var t := _mech_t - 0.035
+			k = exp(-t * 9.0) * cos(t * 26.0)
+		_bore.transform = _bore_rest.translated_local(Vector3(-bore_kick * k, 0, 0))
+	if _interior and _mech_t < 0.6:
+		var k := ease(clampf(_mech_t / 0.5, 0.0, 1.0), 0.3)
+		var angle := _spin_from + deg_to_rad(interior_spin_deg) * k
+		_interior.transform = _interior_rest * Transform3D(Basis(Vector3.RIGHT, angle), Vector3.ZERO)
+		if k >= 1.0:
+			_spin_from = fmod(angle, TAU)
 
 
 ## Release the core (keeps its world pose; caller re-parents it).

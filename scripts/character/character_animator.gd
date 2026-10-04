@@ -33,6 +33,12 @@ extends Node3D
 ## How fast the upper body turns onto / off a locked target (weight per second).
 @export var track_blend_speed := 5.0
 
+@export_group("Recoil")
+## Spring that drives the procedural recoil (fast kick, rebound, settle).
+@export var recoil_stiffness := 260.0
+@export var recoil_damping := 15.0
+@export var recoil_kick_velocity := 28.0
+
 @export_group("Turning")
 ## Body yaw rate (rad/s) needed to trigger turn clips.
 @export var idle_turn_rate := 3.0
@@ -81,6 +87,9 @@ var _state_time := 0.0
 var _arm_aim: ArmAimModifier
 ## Arm holding a weapon ("Left"/"Right"/""): kept raised in every state.
 var armed_side := ""
+## Current recoil spring value (~1 at peak, slightly negative on rebound).
+var recoil := 0.0
+var _recoil_v := 0.0
 
 
 func _ready() -> void:
@@ -201,6 +210,11 @@ func _on_landed(impact_speed: float) -> void:
 	_pending_land = impact_speed >= min_land_impact
 
 
+## Kick the procedural recoil (strength 1 = full heavy-weapon kick).
+func add_recoil(strength: float) -> void:
+	_recoil_v += recoil_kick_velocity * strength
+
+
 func set_armed_side(side: String) -> void:
 	armed_side = side
 
@@ -259,6 +273,18 @@ func _process(delta: float) -> void:
 		_arm_aim.track_point = lock.get_aim_point()
 		_arm_aim.track_side = armed_side
 	_arm_aim.track_weight = move_toward(_arm_aim.track_weight, 1.0 if tracking else 0.0, delta * track_blend_speed)
+	# Recoil spring (sub-stepped for stability at low frame rates).
+	var steps := 4
+	var h := delta / steps
+	for i in steps:
+		_recoil_v += (-recoil_stiffness * recoil - recoil_damping * _recoil_v) * h
+		recoil += _recoil_v * h
+	if absf(recoil) < 0.0005 and absf(_recoil_v) < 0.005:
+		recoil = 0.0
+		_recoil_v = 0.0
+	_arm_aim.recoil = recoil
+	if armed_side != "":
+		_arm_aim.track_side = armed_side
 	for side in ["Left", "Right"]:
 		var armed_target := 1.0 if side == armed_side and not is_dead else 0.0
 		_arm_aim.armed_weight[side] = lerpf(_arm_aim.armed_weight[side], armed_target, 1.0 - exp(-aim_blend_rate * delta))

@@ -12,6 +12,15 @@ var weight := 0.0
 ## Per-arm minimum weight while that arm holds a weapon (smoothed by animator).
 var armed_weight := {"Left": 0.0, "Right": 0.0}
 
+## Weapon recoil (spring value from the CharacterAnimator: ~1 at peak kick,
+## slightly negative on the rebound). Applied to the armed arm (elbow driven
+## back, muzzle climbs) and, smaller, to the chest (lean back + twist).
+var recoil := 0.0
+@export var recoil_upper_arm_deg := 28.0
+@export var recoil_forearm_deg := 16.0
+@export var recoil_chest_lean_deg := 7.0
+@export var recoil_chest_twist_deg := 5.0
+
 ## Target tracking (locked enemy). When track_weight > 0 the spine twists
 ## towards `track_point` (world space) and the armed arm aims straight at it;
 ## hips and legs keep following the movement animation.
@@ -47,7 +56,7 @@ func _ready() -> void:
 
 
 func _process_modification_with_delta(_delta: float) -> void:
-	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001 and track_weight <= 0.001:
+	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001 and track_weight <= 0.001 and absf(recoil) < 0.001:
 		return
 	var sk := get_skeleton()
 	if sk == null or _bones.is_empty():
@@ -63,6 +72,8 @@ func _process_modification_with_delta(_delta: float) -> void:
 		track_yaw = atan2(d.x, d.z)
 		track_pitch = atan2(d.y, Vector2(d.x, d.z).length())
 		_twist_spine(sk, track_yaw * track_weight, track_pitch * track_weight)
+	if absf(recoil) > 0.001:
+		_chest_recoil(sk)
 	# Character frame: skeleton space faces +Z. Follow part of the chest's
 	# yaw sway so the arms ride with the torso instead of looking bolted on.
 	var chest := sk.get_bone_global_pose(_bones.chest).basis
@@ -81,8 +92,14 @@ func _process_modification_with_delta(_delta: float) -> void:
 			var pitch := clampf(track_pitch, -deg_to_rad(max_arm_pitch), deg_to_rad(max_arm_pitch))
 			var aim := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -pitch)
 			arm_frame = Basis(frame.get_rotation_quaternion().slerp(aim.get_rotation_quaternion(), track_weight))
-		var up_dir := arm_frame * Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
-		var fore_dir := arm_frame * Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
+		var up_local := Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
+		var fore_local := Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
+		if side == track_side and absf(recoil) > 0.001:
+			# Kick: elbow driven back, forearm/muzzle climbs (in the arm's frame).
+			up_local = Basis(Vector3.RIGHT, deg_to_rad(recoil_upper_arm_deg) * recoil) * up_local
+			fore_local = Basis(Vector3.RIGHT, -deg_to_rad(recoil_forearm_deg) * recoil) * fore_local
+		var up_dir := arm_frame * up_local
+		var fore_dir := arm_frame * fore_local
 		var w := maxf(weight, armed_weight[side])
 		if side == track_side:
 			w = maxf(w, track_weight)
@@ -103,6 +120,17 @@ func _twist_spine(sk: Skeleton3D, yaw: float, pitch: float) -> void:
 		var side_axis := Basis(Vector3.UP, y) * Vector3.RIGHT
 		gp.basis = Basis(side_axis, -p) * Basis(Vector3.UP, y) * gp.basis
 		sk.set_bone_global_pose(b, gp)
+
+
+## Secondary recoil through the upper body: the chest leans back and twists
+## towards the firing side (Spine2 only, so hips/legs are untouched).
+func _chest_recoil(sk: Skeleton3D) -> void:
+	var b: int = _bones.chest
+	var gp := sk.get_bone_global_pose(b)
+	var twist_sign := 1.0 if track_side == "Right" else -1.0
+	var r := Basis(Vector3.UP, deg_to_rad(recoil_chest_twist_deg) * recoil * twist_sign) * Basis(Vector3.RIGHT, -deg_to_rad(recoil_chest_lean_deg) * recoil)
+	gp.basis = r * gp.basis
+	sk.set_bone_global_pose(b, gp)
 
 
 ## Rotate a bone (globally) so its +Y axis points along `dir`, by `amount`.

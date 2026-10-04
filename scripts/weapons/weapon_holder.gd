@@ -6,6 +6,13 @@ extends Node
 
 signal weapon_equipped(definition: WeaponDefinition)
 signal weapon_fired(weapon: Weapon)
+## The instant a shot leaves the muzzle (local player hooks the camera kick).
+signal weapon_recoil(strength: float)
+
+## Extra slide of the weapon back along its barrel and muzzle climb at peak
+## recoil (on top of the arm's own recoil).
+@export var recoil_slide := 0.12
+@export var recoil_pitch_deg := 7.0
 
 ## Fire only when the barrel is within this angle of the target (degrees),
 ## so shots always leave the gun the way it points.
@@ -36,6 +43,8 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 		return
 	var player := get_parent() as PlayerController
 	var point := lock.get_aim_point()
+	if current.has_method("update_aim"):
+		current.update_aim(point)
 	var to := point - current.global_position
 	to.y = 0.0
 	if cmd.move.length() < 0.1 and to.length() > 0.01:
@@ -87,6 +96,7 @@ func equip(definition: WeaponDefinition) -> Weapon:
 	current_definition = definition
 	_align_weapon()
 	weapon.on_equipped(get_parent())
+	weapon.recoiled.connect(_on_weapon_recoil)
 	var animator := get_node_or_null(visual_path) as CharacterAnimator
 	if animator:
 		animator.set_armed_side(definition.mount_side)
@@ -98,6 +108,18 @@ func equip(definition: WeaponDefinition) -> Weapon:
 ## the forearm, its position rides the bone, and it is rolled around the
 ## forearm so the weapon's top stays facing up (forearm twist from the
 ## animations would otherwise tilt it).
+func _on_weapon_recoil(strength: float) -> void:
+	var animator := get_node_or_null(visual_path) as CharacterAnimator
+	if animator:
+		animator.add_recoil(strength)
+	weapon_recoil.emit(strength)
+
+
+func _recoil_value() -> float:
+	var animator := get_node_or_null(visual_path) as CharacterAnimator
+	return animator.recoil if animator else 0.0
+
+
 func _align_weapon() -> void:
 	if current == null or _attachment == null or not is_instance_valid(current):
 		return
@@ -110,8 +132,13 @@ func _align_weapon() -> void:
 	if up.length_squared() < 1e-4:
 		up = bone.basis.z - axis * axis.dot(bone.basis.z)
 	up = up.normalized().rotated(axis, deg_to_rad(def.mount_roll_degrees))
-	var basis := Basis(axis, up, axis.cross(up)).scaled(Vector3.ONE * def.mount_scale)
-	var socket_world := bone.origin + axis * def.mount_offset
+	var basis := Basis(axis, up, axis.cross(up))
+	var r := _recoil_value()
+	if r != 0.0:
+		# Muzzle climbs around the weapon's side axis; whole cannon slides back.
+		basis = Basis(basis.z, deg_to_rad(recoil_pitch_deg) * r) * basis
+	basis = basis.scaled(Vector3.ONE * def.mount_scale)
+	var socket_world := bone.origin + axis * (def.mount_offset - recoil_slide * maxf(r, -0.3))
 	current.global_transform = Transform3D(basis, socket_world) * _socket.affine_inverse()
 
 

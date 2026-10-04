@@ -243,8 +243,29 @@ func _run() -> void:
 		if shots.size() > 0:
 			break
 	_check(shots.size() > 0, "auto-fires at the locked enemy")
-	if projs.size() > 0:
-		var pr: BlackHoleProjectile = projs[0]
+	# Recoil: sharp kick right at launch, then recovery; movement unaffected.
+	var anim2: CharacterAnimator = p.get_node("Visual/GrinchVisual")
+	var rig2: CameraRig = main.get_node("CameraRig")
+	var kick_peak := 0.0
+	var cam_kicked := false
+	var launched := false
+	for i in 40:
+		await process_frame
+		if projs.size() > 0:
+			launched = true
+		kick_peak = maxf(kick_peak, anim2.recoil)
+		cam_kicked = cam_kicked or rig2.camera.fov > rig2._base_fov + 1.0
+	_check(launched and kick_peak > 0.6, "heavy recoil kick on launch (peak %.2f)" % kick_peak)
+	_check(cam_kicked, "camera impulse on launch")
+	await _ticks(60)
+	_check(absf(anim2.recoil) < 0.1 and absf(rig2.camera.fov - rig2._base_fov) < 0.01, "recoil and camera recover")
+	var n_before := projs.size()
+	for i in 240:
+		await _ticks(1)
+		if projs.size() > n_before:
+			break
+	if projs.size() > n_before:
+		var pr: BlackHoleProjectile = projs[n_before]
 		_check(pr._size < 0.4, "fired black hole is still chamber-sized leaving the gun (%.2f m)" % pr._size)
 		await _ticks(12)
 		_check(is_instance_valid(pr) and pr._size > 2.5, "then expands to ~3 m (%.2f m)" % (pr._size if is_instance_valid(pr) else -1.0))

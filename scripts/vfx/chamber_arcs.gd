@@ -12,6 +12,8 @@ extends Node3D
 
 ## 0..1: arcs are only shown while the chamber holds a charged core.
 var intensity := 1.0
+## 0..1 during charge-up: arcs re-roll much faster and always show.
+var frenzy := 0.0
 
 var _arcs: Array[MeshInstance3D] = []
 var _ends: Array[Vector3] = []
@@ -32,8 +34,8 @@ func _ready() -> void:
 func _reroll(i: int) -> void:
 	var a := randf() * TAU
 	_ends[i] = Vector3(randf_range(-ring_half_length, ring_half_length), cos(a) * ring_radius, sin(a) * ring_radius)
-	_timers[i] = randf_range(reroll_time.x, reroll_time.y)
-	_arcs[i].visible = randf() < 0.85
+	_timers[i] = randf_range(reroll_time.x, reroll_time.y) * (1.0 - frenzy * 0.7)
+	_arcs[i].visible = randf() < 0.85 + frenzy
 	Vfx.set_alpha(_arcs[i], randf_range(0.5, 1.0) * intensity)
 
 
