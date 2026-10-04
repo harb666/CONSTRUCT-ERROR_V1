@@ -24,6 +24,15 @@ extends Node3D
 @export var min_visual_scale := 0.05
 @export var max_spin_speed := 14.0  # rad/s visual spin near the core
 
+@export_group("Enemies")
+## Enemies (group "enemies") are pulled this much harder than props, and
+## their weight resists the pull at most this much.
+@export var enemy_pull_multiplier := 2.6
+@export var enemy_max_resist := 1.3
+## Enemies are always captured (and shrunk away) once inside the event
+## horizon, even when the prop capture limit is reached.
+@export var max_captured_enemies := 12
+
 @export_group("Player")
 @export var player_gravity_strength := 20.0
 ## Max pull speed added to a player (sprint 11.5 m/s can still escape).
@@ -110,7 +119,8 @@ func _refresh() -> void:
 		elif b is CharacterBody3D and b.has_method("apply_gravity_pull"):
 			found.append(b)
 	var c := global_position
-	found.sort_custom(func(a, b): return _center_of(a).distance_squared_to(c) < _center_of(b).distance_squared_to(c))
+	# Nearest first, enemies ahead of props (they must never be left out).
+	found.sort_custom(func(a, b): return _center_of(a).distance_squared_to(c) - (100.0 if _is_enemy(a) else 0.0) < _center_of(b).distance_squared_to(c) - (100.0 if _is_enemy(b) else 0.0))
 	var keep := found.slice(0, max_affected_objects)
 	# Anything that dropped out of the field gets its look back.
 	for b in _bodies:
@@ -124,7 +134,14 @@ static func _center_of(b: Node3D) -> Vector3:
 
 
 func _resist(b: RigidBody3D) -> float:
-	return clampf(sqrt(b.mass / reference_mass), 1.0, max_mass_resist)
+	var r := clampf(sqrt(b.mass / reference_mass), 1.0, max_mass_resist)
+	if _is_enemy(b):
+		r = minf(r, enemy_max_resist) / enemy_pull_multiplier
+	return r
+
+
+static func _is_enemy(b: Object) -> bool:
+	return b is Node and (b as Node).is_in_group(&"enemies")
 
 
 func _pull_body(b: RigidBody3D, delta: float) -> void:
@@ -158,8 +175,13 @@ func _pull_body(b: RigidBody3D, delta: float) -> void:
 	var id := b.get_instance_id()
 	_spin[id] = float(_spin.get(id, 0.0)) + max_spin_speed * close * close * delta
 	_set_visual(b, _shrink_for(d), _spin[id])
-	if d < capture_radius and _captured.size() < max_captured_objects:
-		_capture(b)
+	if b.has_method("on_gravity_pull"):
+		b.on_gravity_pull()  # e.g. enemies stop walking while caught
+	if d < capture_radius:
+		var enemy := _is_enemy(b)
+		var props := _captured.filter(func(e: Dictionary) -> bool: return not _is_enemy(e.body)).size()
+		if (enemy and _captured.size() - props < max_captured_enemies) or (not enemy and props < max_captured_objects):
+			_capture(b)
 
 
 func _shrink_for(d: float) -> float:

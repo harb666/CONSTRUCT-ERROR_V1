@@ -64,6 +64,7 @@ var _yaw := 0.0
 var _phase := 0.0
 var _dead_t := 0.0
 var _settled := false
+var _pulled_frame := -100
 
 
 func _ready() -> void:
@@ -75,6 +76,7 @@ func _ready() -> void:
 	physics_material_override = PhysicsMaterial.new()
 	physics_material_override.friction = 0.0
 	collision_layer |= GravityWell.MOVABLE_LAYER
+	add_to_group(&"enemies")
 	_layers = collision_layer
 	_mask = collision_mask
 	set_meta("gravity_center_y", 0.9)
@@ -136,7 +138,16 @@ func _physics_process(delta: float) -> void:
 		_corpse(delta)
 
 
+## Called by gravity wells every tick they pull on it.
+func on_gravity_pull() -> void:
+	_pulled_frame = Engine.get_physics_frames()
+
+
 func _patrol(delta: float) -> void:
+	# Held, or being dragged into a black hole: helpless, no walking.
+	if freeze or Engine.get_physics_frames() - _pulled_frame < 6:
+		_anim.speed_scale = 0.4
+		return
 	if freeze:
 		return  # held by something (e.g. captured in a gravity well)
 	var axis := Vector3(patrol_axis.x, 0, patrol_axis.z).normalized()
