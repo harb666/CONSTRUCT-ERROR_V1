@@ -6,8 +6,8 @@ extends SceneTree
 
 const DIR := "res://assets/props/weapon_spawn_pad/"
 const INNER_R := 0.88   # tucks just under the pad's rim
-const OUTER_R := 2.0
-const TOP_H := 0.3      # pad height
+const OUTER_R := 1.3
+const TOP_H := 0.15     # visible pad height (pad is sunk 0.15 m into the floor)
 const SEGMENTS := 48
 ## Atlas patch (UV) of plain dark metal with no emissive content.
 const UV_MIN := Vector2(0.547, 0.656)

@@ -152,7 +152,7 @@ func _run() -> void:
 		if not p.is_on_floor():
 			air_ticks += 1
 	Input.action_release("move_forward")
-	_check(top_y > 0.25, "walks up onto the pad (%.2f m)" % top_y)
+	_check(top_y > 0.12, "walks up onto the pad (%.2f m)" % top_y)
 	_check(air_ticks < 6, "stays grounded crossing the pad (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z < pad.global_position.z - 1.5, "walks across and off the far side")
 
