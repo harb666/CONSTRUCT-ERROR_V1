@@ -9,6 +9,8 @@ extends SkeletonModifier3D
 
 ## 0..1, driven by the CharacterAnimator (smoothed there).
 var weight := 0.0
+## Per-arm minimum weight while that arm holds a weapon (smoothed by animator).
+var armed_weight := {"Left": 0.0, "Right": 0.0}
 
 ## Aim directions in character space (x = character's left, y = up, z = forward).
 ## Upper arm reaches forward-down; forearm points straight ahead, slightly inward.
@@ -31,7 +33,7 @@ func _ready() -> void:
 
 
 func _process_modification_with_delta(_delta: float) -> void:
-	if weight <= 0.001:
+	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001:
 		return
 	var sk := get_skeleton()
 	if sk == null or _bones.is_empty():
@@ -50,8 +52,11 @@ func _process_modification_with_delta(_delta: float) -> void:
 		var ids: Array = _bones[side]
 		var up_dir := frame * Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
 		var fore_dir := frame * Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
-		_aim_bone(sk, ids[0], up_dir, weight * (1.0 - keep_upper_swing))
-		_aim_bone(sk, ids[1], fore_dir, weight)
+		var w := maxf(weight, armed_weight[side])
+		if w <= 0.001:
+			continue
+		_aim_bone(sk, ids[0], up_dir, w * (1.0 - keep_upper_swing))
+		_aim_bone(sk, ids[1], fore_dir, w)
 
 
 ## Rotate a bone (globally) so its +Y axis points along `dir`, by `amount`.

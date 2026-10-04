@@ -1,8 +1,9 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="PackedScene" path="res://assets/props/weapon_spawn_pad/weapon_spawn_pad.glb" id="1"]
 [ext_resource type="ArrayMesh" path="res://assets/props/weapon_spawn_pad/pad_ramp_mesh.res" id="2"]
 [ext_resource type="Shape3D" path="res://assets/props/weapon_spawn_pad/pad_ramp_shape.res" id="3"]
+[ext_resource type="Script" path="res://scripts/weapons/weapon_spawner.gd" id="4"]
 
 [sub_resource type="CylinderShape3D" id="top"]
 height = 0.15
@@ -82,3 +83,7 @@ mesh = SubResource("ring_quad")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
 cast_shadow = 0
 mesh = SubResource("halo_quad")
+
+[node name="WeaponSpawner" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+script = ExtResource("4")

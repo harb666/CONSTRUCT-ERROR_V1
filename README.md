@@ -49,3 +49,10 @@ The HUD shows the branch/commit of the running build.
 - `scenes/props/weapon_spawn_pad.tscn` – **drop-in prefab**: purple weapon spawn pad + matching walk-on ramp + collision + additive purple glow sprites (flat ring glow + camera-facing halo; procedural gradients, no lights). Instance it anywhere (it sits on y = 0 of wherever you place it).
   - `assets/props/weapon_spawn_pad/weapon_spawn_pad.glb` – optimized pad model (8.5 MB).
   - `pad_ramp_mesh.res`, `pad_ramp_shape.res`, `pad_ramp_material.tres` – pad sunk 0.15 m into the floor; ramp lip (tucked under the pad rim → r 1.07 m, 0.15 m rise), textured with the atlas patch that best matches the pad's outer wall colour; auto-LODs disabled on the pad. Regenerate with `godot --headless --path . -s tools/build_pad_ramp.gd`.
+
+## Weapons (pickup/spawn system)
+- `WeaponDefinition` (`scripts/weapons/weapon_definition.gd`, instances in `resources/weapons/`) – data for one weapon: scene, mount bone/side/offset, pickup display height. New weapons = new definition + weapon scene; no new pickup code.
+- `Weapon` (`scripts/weapons/weapon.gd`) – base for weapon scenes; finds standard markers (`Arm_Socket_Attachment`, `Muzzle_Exit`).
+- `WeaponSpawner` (child of the spawn pad prefab) – set its `weapon` to any definition: floats, spins and bobs the weapon and hands it to the first player with a `WeaponHolder` entering the zone (`respawn_time` optional).
+- `WeaponHolder` (on the player) – equips onto an existing bone via `BoneAttachment3D`; keeps the socket on the forearm axis and the weapon upright each frame. While armed, that arm is held raised by the existing arm-aim layer.
+- Black Hole Generator: `scenes/weapons/black_hole_generator.tscn` (gun GLB, optimized 28 MB → 10 MB) spawns `scenes/weapons/black_hole_core.tscn` (separate, unmodified animated black-hole GLB, normalized to 1 m) at the gun's `Black_Hole_Projectile_Spawn` marker. `detach_core()` is there for firing later.

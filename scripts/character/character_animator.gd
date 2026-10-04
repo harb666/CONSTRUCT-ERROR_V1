@@ -77,6 +77,8 @@ var _pending_jump := ""
 var _pending_land := false
 var _state_time := 0.0
 var _arm_aim: ArmAimModifier
+## Arm holding a weapon ("Left"/"Right"/""): kept raised in every state.
+var armed_side := ""
 
 
 func _ready() -> void:
@@ -197,6 +199,10 @@ func _on_landed(impact_speed: float) -> void:
 	_pending_land = impact_speed >= min_land_impact
 
 
+func set_armed_side(side: String) -> void:
+	armed_side = side
+
+
 func play_death() -> void:
 	is_dead = true
 
@@ -244,6 +250,9 @@ func _process(delta: float) -> void:
 	if current_state == "Locomotion" and on_floor:
 		aim_target = smoothstep(walk_to, run_from, speed)
 	_arm_aim.weight = lerpf(_arm_aim.weight, aim_target, 1.0 - exp(-aim_blend_rate * delta))
+	for side in ["Left", "Right"]:
+		var armed_target := 1.0 if side == armed_side and not is_dead else 0.0
+		_arm_aim.armed_weight[side] = lerpf(_arm_aim.armed_weight[side], armed_target, 1.0 - exp(-aim_blend_rate * delta))
 
 
 func _choose_state(on_floor: bool, speed: float, vy: float) -> String:

@@ -20,6 +20,9 @@ func _process(_delta: float) -> void:
 		var anim := player.get_node_or_null("Visual/GrinchVisual") as CharacterAnimator
 		if anim:
 			t += "   anim " + anim.current_state
+		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
+		if holder and holder.current_definition:
+			t += "   weapon " + holder.current_definition.display_name
 	if _build:
 		t += "\nbuild " + _build
 	text = t

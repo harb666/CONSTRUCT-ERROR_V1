@@ -139,6 +139,19 @@ func _run() -> void:
 
 	# Weapon spawn pad: walk straight across it without jumping.
 	var pad: Node3D = main.get_node("WeaponSpawnPad")
+	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	var holder: WeaponHolder = p.get_node("WeaponHolder")
+	_check(spawner.display != null, "weapon floats above the pad")
+	var y_a := spawner.display.global_position.y
+	var rot_a := spawner._pivot.rotation.y
+	await _ticks(20)
+	_check(absf(spawner._pivot.rotation.y - rot_a) > 0.05, "display spins")
+	_check(absf(spawner.display.global_position.y - y_a) > 0.001, "display bobs")
+	var shown_core: BlackHoleCore = (spawner.display as BlackHoleGenerator).core
+	_check(shown_core != null and shown_core.global_position.distance_to(spawner.display.find_marker("Black_Hole_Projectile_Spawn").global_position) < 0.001, "black hole sits in the display gun's chamber")
+	var core_anim: AnimationPlayer = shown_core.find_child("AnimationPlayer", true, false)
+	_check(core_anim.is_playing() and core_anim.current_animation == "Accretion_Disk_Rotation", "black hole animation plays")
+	_check(holder.current == null, "player starts unarmed")
 	p.global_position = pad.global_position + Vector3(0, 0.05, 4.0)
 	p.velocity = Vector3.ZERO
 	p.reset_physics_interpolation()
@@ -155,6 +168,15 @@ func _run() -> void:
 	_check(top_y > 0.12, "walks up onto the pad (%.2f m)" % top_y)
 	_check(air_ticks < 6, "stays grounded crossing the pad (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z < pad.global_position.z - 1.5, "walks across and off the far side")
+	_check(spawner.display == null, "pickup removes the floating display")
+	_check(holder.current is BlackHoleGenerator, "Black Hole Generator equipped")
+	var gun := holder.current as BlackHoleGenerator
+	await _ticks(5)
+	var chamber := gun.find_marker("Black_Hole_Projectile_Spawn")
+	_check(gun.core != null and gun.core.get_parent() == chamber and gun.core.global_position.distance_to(chamber.global_position) < 0.001, "black hole stays in the equipped gun's chamber")
+	var fore := gun.global_basis.x.normalized()
+	_check(fore.dot(-p.global_basis.z) > 0.7, "equipped gun points forward (%.2f)" % fore.dot(-p.global_basis.z))
+	_check(gun.global_basis.y.normalized().dot(Vector3.UP) > 0.7, "equipped gun is upright")
 	# Same at sprint speed, coming from the other side.
 	p.global_position = pad.global_position + Vector3(0, 0.05, -5.0)
 	p.velocity = Vector3.ZERO

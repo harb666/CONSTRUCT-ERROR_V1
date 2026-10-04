@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/black_hole_generator.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"black_hole_generator"
+display_name = "Black Hole Generator"
+weapon_scene = ExtResource("2")
