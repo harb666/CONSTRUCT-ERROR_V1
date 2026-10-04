@@ -95,10 +95,10 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 - Arena: dummies are now heavy upright RigidBody3D enemies; `Props/` has light crates, barrels and a heavy block (`PhysicsProp`).
 
 ## Black hole audio
-`scripts/audio/sfx.gd` (`Sfx`) plays positional `AudioStreamPlayer3D` sounds (inverse-distance falloff from the camera). Files in `assets/audio/black_hole/`:
-- `fire.ogg` — the gun, on launch (with the muzzle flash), attached to the muzzle.
-- `energy_loop.ogg` — looping hum attached to the black hole from the barrel until the supernova (fades on a fizzle). Louder the closer you are (`loop_unit_size`, `loop_max_distance`).
-- `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova (immediately if a well is collapsed early).
-- `explode.ogg` — at the supernova.
-- `cooldown_charge.ogg` — the gun's recharge sound, `cooldown_sound_delay` (1 s) after firing, from the muzzle. While it plays, `BarrelStatic` (scripts/vfx/barrel_static.gd) crackles electric arcs across the empty chamber and out of the muzzle with a flickering plasma glow and sparks, its intensity following the sound's loudness curve (`BlackHoleGenerator.COOLDOWN_ENVELOPE`).
-Volumes are exports on `BlackHoleProjectile` (Audio group) and `BlackHoleGenerator.fire_volume_db`.
+All sounds are `DynamicSound`s (`scripts/audio/dynamic_sound.gd`, created via `Sfx` in `scripts/audio/sfx.gd`): panned in 3D, full volume within `near` metres of the local player (group `sfx_listener`), fading smoothly (squared) to silence at `far`. Godot's own attenuation is disabled so the curve is identical on web and desktop. Files in `assets/audio/black_hole/`:
+- `fire.ogg` — the gun, on launch with the muzzle flash, from the muzzle (`fire_volume_db/near/far` on `BlackHoleGenerator`).
+- `energy_loop.ogg` — hum attached to the black hole from the barrel until the supernova (fades on a fizzle).
+- `charge.ogg` — rising charge while the black hole is stuck, timed to end `charge_end_gap` (0.05 s) before the supernova: it is longer than the well, so it starts part-way through.
+- `energy_burst.ogg` — starts `burst_lead_time` (1.3 s) before the supernova.
+- `explode.ogg` — at the supernova; the loudest sound and audible furthest away.
+Volumes/ranges are exports on `BlackHoleProjectile` (Audio group). After firing, `BarrelStatic` (scripts/vfx/barrel_static.gd) crackles arcs across the empty chamber and out of the muzzle with a plasma glow and sparks (starts `cooldown_static_delay` = 1 s after the shot, follows `COOLDOWN_ENVELOPE`).

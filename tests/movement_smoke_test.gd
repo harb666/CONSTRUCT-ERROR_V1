@@ -376,7 +376,13 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	pr.launch(core, Vector3.DOWN, p)
 	pr._travelled = 2.0
 	_check(pr._hum != null and pr._hum.stream == Sfx.BH_LOOP and pr._hum.playing, "energy hum plays as soon as it leaves the barrel")
-	_check(pr._hum.attenuation_model != AudioStreamPlayer3D.ATTENUATION_DISABLED, "energy hum is positional (louder when close)")
+	var h: DynamicSound = pr._hum
+	_check(h.distance_gain(1.0) == 1.0 and h.distance_gain(15.0) < 0.6 and h.distance_gain(15.0) > 0.05 and h.distance_gain(h.far + 1.0) == 0.0,
+		"sounds are loud close up, quieter further away, silent far off")
+	await _ticks(2)
+	var far_gain := h.gain
+	_check(far_gain < 0.9, "energy hum is quieter with the player %.0f m away (%.2f)" % [p.global_position.distance_to(pr.global_position), far_gain])
+	_check(pr.explode_volume_db > maxf(maxf(pr.loop_volume_db, pr.charge_volume_db), maxf(pr.burst_volume_db, gun.fire_volume_db)), "explosion is the loudest sound")
 	var crate_d0 := crate.global_position.distance_to(spot)
 	var heavy_d0 := heavy.global_position.distance_to(spot)
 	for i in 30:
@@ -424,10 +430,22 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	var burst_cfg := pr.burst_lead_time
 	var hum_until_supernova := true
 	var explode_played := false
+	var t_now := 0.0
+	var charge_last := -1.0
+	var supernova_t := -1.0
+	var charge_during_stuck := false
+	var charge_at_supernova := false
 	for i in 400:
 		await _ticks(1)
 		if not is_instance_valid(pr):
 			break
+		t_now += 1.0 / Engine.physics_ticks_per_second
+		if pr.charge_sound_remaining() > 0.0:
+			charge_last = t_now
+			charge_during_stuck = charge_during_stuck or pr.state == BlackHoleProjectile.State.STUCK_GRAVITY_WELL
+		if supernova_t < 0.0 and pr.state == BlackHoleProjectile.State.SUPERNOVA:
+			supernova_t = t_now
+			charge_at_supernova = pr.charge_sound_remaining() > 0.0
 		if burst_lead < 0.0 and pr._burst_played:
 			burst_lead = pr._time_to_supernova() - pr._state_t
 		if pr.state != BlackHoleProjectile.State.SUPERNOVA and not pr._hum.playing:
@@ -441,6 +459,9 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	_check(hum_until_supernova, "energy hum keeps playing until the explosion")
 	_check(absf(burst_lead - burst_cfg) < 0.1, "energy burst starts %.2f s before the explosion" % burst_lead)
 	_check(explode_played, "explosion sound plays at the supernova")
+	_check(charge_during_stuck, "black hole charge sound plays while it's stuck")
+	_check(not charge_at_supernova and supernova_t - charge_last < 0.25,
+		"charge sound ends just before the explosion (%.2f s before)" % (supernova_t - charge_last))
 	await _ticks(30)
 	_check(not crate.freeze and crate.collision_layer != 0, "captured objects are released with collision restored")
 	var vis2: Array = crate.get_meta("gw_visuals", [])
@@ -473,15 +494,17 @@ func _cooldown_audio_tests(main: Node) -> void:
 		t += step
 		if fired_at < 0.0 and gun.core == null:
 			fired_at = t
-		if sound_at < 0.0 and gun.is_cooling_down_audio():
+		if sound_at < 0.0 and gun.is_barrel_static_active():
 			sound_at = t
 		if sound_at < 0.0:
-			_check_once(bs.intensity < 0.01, "no barrel static before the cooldown sound")
+			_check_once(bs.intensity < 0.01, "no barrel static straight after firing")
 		peak = maxf(peak, bs.intensity)
-	_check(sound_at > 0.0 and absf(sound_at - fired_at - gun.cooldown_sound_delay) < 0.15,
-		"cooldown sound starts %.2f s after firing" % (sound_at - fired_at))
-	_check(peak > 0.9, "barrel static swells with the cooldown sound (peak %.2f)" % peak)
-	_check(not gun.is_cooling_down_audio() and bs.intensity < 0.01, "barrel static dies away when the sound ends")
+	_check(sound_at > 0.0 and absf(sound_at - fired_at - gun.cooldown_static_delay) < 0.15,
+		"barrel static starts %.2f s after firing" % (sound_at - fired_at))
+	_check(peak > 0.9, "barrel static swells (peak %.2f)" % peak)
+	_check(not gun.is_barrel_static_active() and bs.intensity < 0.01, "barrel static dies away")
+	_check(gun.find_children("*", "AudioStreamPlayer3D", true, false).filter(func(n: Node) -> bool: return (n as AudioStreamPlayer3D).stream == Sfx.BH_CHARGE).is_empty(),
+		"gun no longer plays the charge sound itself")
 	gun.queue_free()
 
 

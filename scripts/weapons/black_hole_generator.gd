@@ -28,15 +28,16 @@ const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 @export var recharge_delay := 12.0
 ## Seconds for the new core to grow to full size.
 @export var recharge_grow := 3.0
-## Gun firing sound volume.
-@export var fire_volume_db := 0.0
-## Cooldown charging sound starts this long after firing; the barrel's static
-## electricity follows its loudness while it plays.
-@export var cooldown_sound_delay := 1.0
-@export var cooldown_volume_db := 4.0
+## Gun firing sound: volume and distance range (full volume within near m,
+## silent beyond far m of the local player).
+@export var fire_volume_db := -2.0
+@export var fire_near := 5.0
+@export var fire_far := 45.0
+## Barrel static/plasma starts this long after firing.
+@export var cooldown_static_delay := 1.0
 
-## Loudness of cooldown_charge.ogg sampled every 0.25 s (0..1), so the barrel
-## static swells and dies away in sync with the sound.
+## Intensity curve of the barrel static, sampled every 0.25 s (0..1): builds,
+## crackles, then dies away.
 const COOLDOWN_ENVELOPE: PackedFloat32Array = [0.11, 0.33, 0.33, 0.37, 0.44, 0.44, 0.52, 0.67,
 	0.67, 0.78, 0.85, 0.85, 0.93, 0.81, 0.85, 0.81, 0.78, 0.81, 0.85, 0.93, 0.93, 0.96, 0.96,
 	0.96, 1.0, 0.93, 0.96, 0.93, 0.81, 0.70, 0.59, 0.37, 0.15, 0.0]
@@ -63,9 +64,8 @@ var _interior: Node3D
 var _interior_rest := Transform3D.IDENTITY
 var _spin_from := 0.0
 var _barrel_static: BarrelStatic
-var _cooldown_player: AudioStreamPlayer3D
 var _cooldown_t := -1.0   # seconds since firing while the cooldown runs; <0 idle
-var _cooldown_playing_t := -1.0  # seconds into the cooldown sound; <0 idle
+var _static_t := -1.0     # seconds into the barrel static; <0 idle
 
 
 func _ready() -> void:
@@ -206,11 +206,11 @@ func _launch() -> void:
 	if muzzle:
 		MuzzleFlash.spawn(muzzle)
 	# Rides along with the gun so it stays with the player while they move.
-	var shot := Sfx.emitter(muzzle if muzzle else self, Sfx.BH_FIRE, fire_volume_db, 4.0, 60.0)
+	var shot := Sfx.emitter(muzzle if muzzle else self, Sfx.BH_FIRE, fire_volume_db, fire_near, fire_far)
 	shot.finished.connect(shot.queue_free)
 	shot.play()
 	projectile.launch(c, dir, shooter)
-	_stop_cooldown_sound()
+	_static_t = -1.0
 	_cooldown_t = 0.0
 	_recharge = recharge_delay
 	_mech_t = 0.0
@@ -218,29 +218,25 @@ func _launch() -> void:
 	recoiled.emit(recoil_strength)
 
 
-## Cooldown: the charging sound starts shortly after the shot, and the
-## barrel crackles with static in step with its loudness.
+## Cooldown: shortly after the shot the barrel crackles with static that
+## builds and dies away (follows COOLDOWN_ENVELOPE).
 func _update_cooldown(delta: float) -> void:
 	if _cooldown_t >= 0.0:
 		_cooldown_t += delta
-		if _cooldown_t >= cooldown_sound_delay:
+		if _cooldown_t >= cooldown_static_delay:
 			_cooldown_t = -1.0
-			_cooldown_playing_t = 0.0
-			var muzzle := find_marker(MUZZLE_MARKER)
-			_cooldown_player = Sfx.emitter(muzzle if muzzle else self, Sfx.BH_COOLDOWN, cooldown_volume_db, 4.0, 60.0)
-			_cooldown_player.finished.connect(_stop_cooldown_sound)
-			_cooldown_player.play()
+			_static_t = 0.0
 	var k := 0.0
-	if _cooldown_playing_t >= 0.0:
-		_cooldown_playing_t += delta
-		k = cooldown_envelope(_cooldown_playing_t)
-		if _cooldown_playing_t > COOLDOWN_ENVELOPE.size() * COOLDOWN_ENVELOPE_STEP:
-			_cooldown_playing_t = -1.0
+	if _static_t >= 0.0:
+		_static_t += delta
+		k = cooldown_envelope(_static_t)
+		if _static_t > COOLDOWN_ENVELOPE.size() * COOLDOWN_ENVELOPE_STEP:
+			_static_t = -1.0
 	if _barrel_static:
 		_barrel_static.intensity = k
 
 
-## Loudness (0..1) of the cooldown sound `t` seconds in.
+## Static intensity (0..1) `t` seconds in.
 static func cooldown_envelope(t: float) -> float:
 	var f := t / COOLDOWN_ENVELOPE_STEP
 	var i := int(f)
@@ -249,15 +245,8 @@ static func cooldown_envelope(t: float) -> float:
 	return lerpf(COOLDOWN_ENVELOPE[i], COOLDOWN_ENVELOPE[i + 1], f - i)
 
 
-func is_cooling_down_audio() -> bool:
-	return _cooldown_player != null and is_instance_valid(_cooldown_player) and _cooldown_player.playing
-
-
-func _stop_cooldown_sound() -> void:
-	_cooldown_playing_t = -1.0
-	if _cooldown_player and is_instance_valid(_cooldown_player):
-		_cooldown_player.queue_free()
-	_cooldown_player = null
+func is_barrel_static_active() -> bool:
+	return _static_t >= 0.0
 
 
 ## Muzzle bore slams back and rebounds; containment interior spins a notch.

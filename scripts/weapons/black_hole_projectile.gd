@@ -55,15 +55,26 @@ enum State { FIRED, TRAVELLING, STUCK_GRAVITY_WELL, COLLAPSING, SUPERNOVA, FINIS
 @export var fizzle_time := 0.35
 
 @export_group("Audio")
+## Each sound is full volume within its "near" distance (m) of the player
+## and fades to silence at its "far" distance. The explosion is the loudest.
 ## Energy hum that follows the black hole from the barrel to the explosion.
-@export var loop_volume_db := 0.0
-## Distance (m) at which the hum is at full volume; it falls off beyond.
-@export var loop_unit_size := 3.0
-@export var loop_max_distance := 45.0
+@export var loop_volume_db := -6.0
+@export var loop_near := 3.0
+@export var loop_far := 30.0
+## Rising charge while it's stuck; timed to end just before the explosion.
+@export var charge_volume_db := -2.0
+@export var charge_near := 4.0
+@export var charge_far := 40.0
+## Gap (s) between the charge sound ending and the explosion.
+@export var charge_end_gap := 0.05
 ## Energy burst starts this many seconds before the supernova.
 @export var burst_lead_time := 1.3
-@export var burst_volume_db := 2.0
-@export var explode_volume_db := 4.0
+@export var burst_volume_db := -3.0
+@export var burst_near := 5.0
+@export var burst_far := 50.0
+@export var explode_volume_db := 3.0
+@export var explode_near := 10.0
+@export var explode_far := 90.0
 
 static var _active_wells: Array = []
 ## Test/debug switch: when false, impacts fizzle out instead of forming wells.
@@ -89,7 +100,9 @@ var _fizzle := false
 var _surface_normal := Vector3.UP
 var _pulse_seed := randf() * 100.0
 var _star: MeshInstance3D
-var _hum: AudioStreamPlayer3D
+var _hum: DynamicSound
+var _charge_snd: DynamicSound
+var _charge_start_t := -1.0  # stuck time at which the charge sound starts
 var _burst_played := false
 
 ## Current solid radius (m) and the wider influence radius.
@@ -119,7 +132,7 @@ func launch(c: BlackHoleCore, dir: Vector3, shooter: Node3D) -> void:
 		_vfx.exclude = [_shooter_rid]
 	_vfx.size = _start_size
 	add_child(_vfx)
-	_hum = Sfx.emitter(self, Sfx.BH_LOOP, loop_volume_db, loop_unit_size, loop_max_distance)
+	_hum = Sfx.emitter(self, Sfx.BH_LOOP, loop_volume_db, loop_near, loop_far)
 	_hum.play()
 	state = State.TRAVELLING
 
@@ -242,6 +255,7 @@ func _stick(hit: Dictionary) -> void:
 	well.supernova_launch_force = supernova_launch_force
 	add_child(well)
 	_enter(State.STUCK_GRAVITY_WELL)
+	_schedule_charge_sound()
 	_active_wells.append(self)
 	while _active_wells.size() > max_active_wells:
 		var oldest: BlackHoleProjectile = _active_wells.pop_front()
@@ -262,6 +276,9 @@ func _stuck(delta: float) -> void:
 	_set_anim_speed(1.0 + k * 2.5)
 	if _vfx:
 		_vfx.set_instability(k)
+	if _charge_start_t >= 0.0 and _state_t >= _charge_start_t:
+		_charge_start_t = -1.0
+		_start_charge_sound(0.0)
 	if _state_t >= _time_to_supernova() - burst_lead_time:
 		_play_burst()
 	if _state_t >= gravity_well_duration:
@@ -273,11 +290,35 @@ func _time_to_supernova() -> float:
 	return gravity_well_duration + collapse_time + compression_hold
 
 
+## The charge sound must finish just before the explosion: if it is longer
+## than the time left, start it part-way through; otherwise delay it.
+func _schedule_charge_sound() -> void:
+	var length := Sfx.BH_CHARGE.get_length()
+	var lead := _time_to_supernova() - charge_end_gap
+	if lead >= length:
+		_charge_start_t = lead - length
+	else:
+		_start_charge_sound(length - lead)
+
+
+func _start_charge_sound(from: float) -> void:
+	_charge_snd = Sfx.emitter(self, Sfx.BH_CHARGE, charge_volume_db, charge_near, charge_far)
+	_charge_snd.finished.connect(_charge_snd.queue_free)
+	_charge_snd.play(from)
+
+
+## Seconds until the charge sound ends (for tests); -1 when not playing.
+func charge_sound_remaining() -> float:
+	if _charge_snd == null or not is_instance_valid(_charge_snd) or not _charge_snd.playing:
+		return -1.0
+	return Sfx.BH_CHARGE.get_length() - _charge_snd.get_playback_position()
+
+
 func _play_burst() -> void:
 	if _burst_played:
 		return
 	_burst_played = true
-	Sfx.play_at(get_parent(), Sfx.BH_BURST, global_position, burst_volume_db, 4.0, 60.0)
+	Sfx.play_at(get_parent(), Sfx.BH_BURST, global_position, burst_volume_db, burst_near, burst_far)
 
 
 # --- COLLAPSING ---
@@ -313,8 +354,12 @@ func _enter(s: State) -> void:
 			if well:
 				well.intensity = 1.0
 			if not _fizzle:
-				# Cut short (e.g. too many wells): still warn before blowing.
+				# Cut short (e.g. too many wells): still warn before blowing,
+				# and clear the charge sound out of the explosion's way.
 				_play_burst()
+				_charge_start_t = -1.0
+				if _charge_snd and is_instance_valid(_charge_snd) and charge_sound_remaining() > collapse_time + compression_hold:
+					Sfx.fade_out(_charge_snd, collapse_time, true)
 				_star = Vfx.quad("star", Vfx.HOT, Vector2.ONE)
 				_star.top_level = true
 				_star.visible = false
@@ -343,7 +388,9 @@ func _supernova() -> void:
 	SupernovaBlast.spawn(get_parent(), at, supernova_radius, _surface_normal)
 	if _hum:
 		_hum.stop()
-	Sfx.play_at(get_parent(), Sfx.BH_EXPLODE, at, explode_volume_db, 6.0, 90.0)
+	if _charge_snd and is_instance_valid(_charge_snd):
+		_charge_snd.stop()
+	Sfx.play_at(get_parent(), Sfx.BH_EXPLODE, at, explode_volume_db, explode_near, explode_far)
 	if well:
 		well.supernova()
 	get_tree().call_group("camera_rigs", "supernova_feedback", at, supernova_radius)

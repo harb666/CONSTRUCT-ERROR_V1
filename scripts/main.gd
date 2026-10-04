@@ -37,6 +37,7 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 	players[player_id] = player
 
 	if is_local:
+		player.add_to_group(Sfx.LISTENER_GROUP)  # sounds get louder as it gets closer
 		var rig: CameraRig = CAMERA_RIG_SCENE.instantiate()
 		rig.target = player
 		add_child(rig)
