@@ -26,6 +26,29 @@ const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
 @export var turn_speed := 4.0
 @export var walk_accel := 6.0
 
+@export_group("Combat")
+## Engages players: pursues, strafes, faces/aims and fires its hand cannons.
+@export var combat_enabled := true
+@export var detect_range := 28.0
+## Gives up beyond this distance.
+@export var lose_range := 40.0
+## Distance band it tries to fight from (advances / backs off outside it).
+@export var preferred_range := Vector2(7.0, 14.0)
+@export var combat_speed := 2.6
+@export var run_anim_speed := 3.4
+## Seconds between strafe direction decisions.
+@export var strafe_time := Vector2(1.0, 2.4)
+@export var fire_range := 26.0
+## Shots per burst (alternating cannons), time between shots, pause between
+## bursts, and the delay before the first burst after spotting a player.
+@export var burst_count := Vector2i(3, 4)
+@export var burst_interval := 0.12
+@export var burst_cooldown := Vector2(1.3, 2.3)
+@export var reaction_time := Vector2(0.5, 1.0)
+@export var aim_spread_deg := 2.0
+@export var bolt_speed := 30.0
+@export var bolt_damage := 1.0
+
 @export_group("Death")
 ## Death clips (must exist in the model). Picked by the killing hit:
 ## electrical hits -> electrocuted; otherwise by the hit's direction.
@@ -70,6 +93,25 @@ var _dead_t := 0.0
 var _settled := false
 var _pulled_frame := -100
 
+## Global switch (tests turn robot AI off for deterministic checks).
+static var ai_enabled := true
+## Cannon muzzles (the green tips) in each hand bone's space.
+const MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(0.017, 0.146, 0.009)}
+## Current combat target (a player) or null.
+var target: Node3D
+var shots_fired := 0
+var _aim: RobotArmAim
+var _think_t := 0.0
+var _los := false
+var _strafe_dir := 1.0
+var _strafe_t := 0.0
+var _burst_left := 0
+var _shot_t := 0.0
+var _cool_t := 0.0
+var _next_cannon := 0
+var _sep := Vector3.ZERO
+var _move_anim := &"Walking"
+
 
 func _ready() -> void:
 	mass = 120.0
@@ -109,6 +151,11 @@ func _build_model() -> void:
 			_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_anim.play(&"Walking")
 	_anim.seek(_phase * _anim.current_animation_length, true)
+	_move_anim = &"Walking"
+	_aim = RobotArmAim.new()
+	_aim.name = "ArmAim"
+	_skeleton.add_child(_aim)
+	_aim.setup(_skeleton, MUZZLES)
 	if _breaker:
 		_breaker.queue_free()
 	_breaker = BreakApart.new()
@@ -290,9 +337,164 @@ func get_skeleton() -> Skeleton3D:
 
 func _physics_process(delta: float) -> void:
 	if alive:
-		_patrol(delta)
+		_behave(delta)
 	else:
 		_corpse(delta)
+
+
+func _behave(delta: float) -> void:
+	# Held, or being dragged into a black hole: helpless.
+	if freeze or Engine.get_physics_frames() - _pulled_frame < 6:
+		_anim.speed_scale = 0.4
+		if _aim:
+			_aim.target_weight = 0.0
+		return
+	_think_t -= delta
+	if _think_t <= 0.0:
+		_think_t = 0.25 + randf() * 0.05
+		_think()
+	if target:
+		_combat(delta)
+	else:
+		if _aim:
+			_aim.target_weight = 0.0
+		_patrol(delta)
+
+
+## Periodic (cheap) decisions: target, line of sight, spacing from others.
+func _think() -> void:
+	var best: Node3D = null
+	if ai_enabled and combat_enabled:
+		var best_d := INF
+		for p in get_tree().get_nodes_in_group(&"players"):
+			var n := p as Node3D
+			if n == null or not n.is_inside_tree():
+				continue
+			var d := n.global_position.distance_to(global_position)
+			var limit := lose_range if n == target else detect_range
+			if d < limit and d < best_d:
+				best_d = d
+				best = n
+	if best and best != target:
+		_cool_t = randf_range(reaction_time.x, reaction_time.y)
+		_burst_left = 0
+	target = best
+	if target == null:
+		return
+	# Line of sight (other robots don't block: bolts pass through them).
+	var from := global_position + Vector3.UP * 1.5
+	var q := PhysicsRayQueryParameters3D.create(from, _aim_point())
+	q.collision_mask = 1
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	_los = hit.is_empty() or hit.collider == target or (hit.collider is Node and (hit.collider as Node).is_in_group(&"enemies"))
+	# Keep a little space from other robots.
+	_sep = Vector3.ZERO
+	for e in get_tree().get_nodes_in_group(&"enemies"):
+		if e == self or not (e as RobotEnemy).alive:
+			continue
+		var off: Vector3 = global_position - (e as Node3D).global_position
+		off.y = 0.0
+		var d := off.length()
+		if d > 0.01 and d < 1.8:
+			_sep += off / d * (1.8 - d)
+
+
+func _aim_point() -> Vector3:
+	return target.global_position + Vector3.UP * 1.1 if target else global_position
+
+
+func _combat(delta: float) -> void:
+	var to := target.global_position - global_position
+	to.y = 0.0
+	var d := to.length()
+	var dir_to := to / d if d > 0.01 else -_visual.global_basis.z
+	# Strafe, switching sides now and then.
+	_strafe_t -= delta
+	if _strafe_t <= 0.0:
+		_strafe_t = randf_range(strafe_time.x, strafe_time.y)
+		if randf() < 0.6:
+			_strafe_dir = -_strafe_dir
+	var side := Vector3.UP.cross(dir_to) * _strafe_dir
+	var want := side * 0.8
+	if d > preferred_range.y or not _los:
+		want += dir_to * 1.1
+	elif d < preferred_range.x:
+		want -= dir_to * 0.9
+	want += _sep * 1.5
+	# Don't walk into walls: flip the strafe when blocked.
+	if want.length_squared() > 0.01:
+		var q := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.9, global_position + Vector3.UP * 0.9 + want.normalized() * 1.3)
+		q.collision_mask = 1
+		q.exclude = [get_rid()]
+		var hit := get_world_3d().direct_space_state.intersect_ray(q)
+		if not hit.is_empty() and hit.collider != target and not (hit.collider is Node and (hit.collider as Node).is_in_group(&"enemies")):
+			_strafe_dir = -_strafe_dir
+			_strafe_t = randf_range(strafe_time.x, strafe_time.y)
+			want = Vector3.UP.cross(dir_to) * _strafe_dir * 0.8 + _sep * 1.5
+	want = want.normalized() * combat_speed if want.length_squared() > 0.01 else Vector3.ZERO
+	var v := linear_velocity
+	var hv := Vector3(v.x, 0, v.z)
+	if (hv - want).length() < 4.0:
+		hv += (want - hv).limit_length(walk_accel * 1.8 * delta)
+		linear_velocity = Vector3(hv.x, v.y, hv.z)
+	# Always face the player.
+	_yaw = lerp_angle(_yaw, atan2(dir_to.x, dir_to.z), clampf(turn_speed * 1.6 * delta, 0.0, 1.0))
+	_visual.rotation.y = _yaw
+	_set_move_anim(hv.length())
+	# Aim both cannons at the player.
+	_aim.target_point = _aim_point()
+	_aim.target_weight = 1.0
+	_update_fire(delta, d)
+
+
+func _set_move_anim(speed: float) -> void:
+	var run := speed > 1.9
+	var a := &"Running" if run else &"Walking"
+	if a != _move_anim:
+		_move_anim = a
+		_anim.play(a, 0.2)
+	_anim.speed_scale = clampf(speed / (run_anim_speed if run else walk_anim_speed), 0.5, 1.6)
+
+
+func _update_fire(delta: float, dist: float) -> void:
+	if not _los or dist > fire_range:
+		_burst_left = 0
+		return
+	if _burst_left > 0:
+		_shot_t -= delta
+		if _shot_t <= 0.0:
+			_fire_one()
+			_burst_left -= 1
+			_shot_t = burst_interval
+			if _burst_left == 0:
+				_cool_t = randf_range(burst_cooldown.x, burst_cooldown.y)
+		return
+	_cool_t -= delta
+	if _cool_t <= 0.0 and _aim.weight > 0.6:
+		_burst_left = randi_range(burst_count.x, burst_count.y)
+		_shot_t = 0.0
+
+
+## One plasma bolt from the next cannon (alternating left/right).
+func _fire_one() -> void:
+	var i := _next_cannon
+	_next_cannon = 1 - _next_cannon
+	var muzzle := _aim.muzzle_position(i)
+	var aim := _aim_point()
+	# Slight lead on a moving target, plus a little spread.
+	if target is CharacterBody3D:
+		var tv := (target as CharacterBody3D).velocity
+		aim += Vector3(tv.x, 0, tv.z) * (muzzle.distance_to(aim) / bolt_speed) * 0.5
+	var dir := (aim - muzzle).normalized()
+	var spread := deg_to_rad(aim_spread_deg)
+	dir = dir.rotated(Vector3.UP, randf_range(-spread, spread))
+	var right := dir.cross(Vector3.UP)
+	if right.length_squared() > 0.001:
+		dir = dir.rotated(right.normalized(), randf_range(-spread, spread) * 0.6)
+	PlasmaBolt.fire(get_tree(), muzzle, dir, self, bolt_speed, bolt_damage)
+	PlasmaFx.muzzle_flash(get_tree(), muzzle, dir)
+	shots_fired += 1
 
 
 ## Called by gravity wells every tick they pull on it.
@@ -307,6 +509,9 @@ func _patrol(delta: float) -> void:
 		return
 	if freeze:
 		return  # held by something (e.g. captured in a gravity well)
+	if _move_anim != &"Walking":
+		_move_anim = &"Walking"
+		_anim.play(&"Walking", 0.25)
 	var axis := Vector3(patrol_axis.x, 0, patrol_axis.z).normalized()
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
@@ -365,6 +570,12 @@ func die(info: DamageInfo) -> void:
 	# Back to the separate sections (same skeleton, same pose) so it can
 	# break apart.
 	_use_section_meshes()
+	target = null
+	_burst_left = 0
+	if _aim:
+		_aim.target_weight = 0.0
+		_aim.weight = 0.0
+		_aim.active = false
 	alive = false
 	health = 0.0
 	if _targetable:

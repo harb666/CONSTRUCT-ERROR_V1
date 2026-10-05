@@ -40,6 +40,7 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 	player.input = input
 	players_root.add_child(player)
 	players[player_id] = player
+	player.add_to_group(&"players")  # enemies look for these
 
 	if is_local:
 		player.add_to_group(Sfx.LISTENER_GROUP)  # sounds get louder as it gets closer
@@ -49,6 +50,7 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		var local_input := input as LocalPlayerInput
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
+		_add_hit_flash(player)
 		# Tap-to-target: selector (what is selected) -> command target_id ->
 		# player's TargetLock (validates) -> WeaponHolder auto-fires.
 		var selector := TargetSelector.new()
@@ -70,3 +72,30 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
 				rig.aiming = true)
 	return player
+
+
+## Brief green flash at the screen edges when the local player is hit.
+func _add_hit_flash(player: PlayerController) -> void:
+	var rect := TextureRect.new()
+	rect.name = "HitFlash"
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	var g := GradientTexture2D.new()
+	g.fill = GradientTexture2D.FILL_RADIAL
+	g.fill_from = Vector2(0.5, 0.5)
+	g.fill_to = Vector2(1.05, 0.5)
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.3, 1.0, 0.25, 0.0))
+	grad.set_color(1, Color(0.3, 1.0, 0.25, 0.75))
+	grad.add_point(0.6, Color(0.3, 1.0, 0.25, 0.0))
+	g.gradient = grad
+	rect.texture = g
+	rect.modulate.a = 0.0
+	$UI.add_child(rect)
+	$UI.move_child(rect, 0)
+	player.damaged.connect(func(_info: DamageInfo) -> void:
+		rect.modulate.a = 0.8
+		var tw := rect.create_tween()
+		tw.tween_property(rect, "modulate:a", 0.0, 0.3))

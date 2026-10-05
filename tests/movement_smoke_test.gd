@@ -36,6 +36,9 @@ func _tap(tc: TouchControls, ui_pos: Vector2) -> void:
 
 
 func _run() -> void:
+	# Robots stand still for the deterministic checks; the combat test
+	# turns their AI on.
+	RobotEnemy.ai_enabled = false
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(30)
@@ -371,6 +374,7 @@ func _run() -> void:
 	await _robot_tests(main)
 	await _flight_gravity_tests(main)
 	await _supernova_finish_tests(main)
+	await _robot_combat_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -783,3 +787,48 @@ func _supernova_finish_tests(main: Node) -> void:
 	var bp: BlackHoleProjectile = load("res://scenes/weapons/black_hole_projectile.tscn").instantiate()
 	_check(bp.supernova_radius + bp.supernova_finish_margin > bp.supernova_radius, "burst set just beyond the supernova's damage radius")
 	bp.free()
+
+
+func _robot_combat_tests(main: Node) -> void:
+	RobotEnemy.ai_enabled = true
+	var p: PlayerController = main.players[1]
+	var base := Vector3(-14, 0, 33)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var r := _spawn_robot(main, base + Vector3(0, 0, -12))
+	var hits_before := p.damage_taken
+	var flashes := 0
+	var impacts := 0
+	var bolts_max := 0
+	var start := r.global_position
+	var moved := 0.0
+	var facing_err := 0.0
+	var samples := 0
+	for i in Engine.physics_ticks_per_second * 6:
+		await _ticks(1)
+		bolts_max = maxi(bolts_max, PlasmaBolt.active_count())
+		moved = maxf(moved, r.global_position.distance_to(start))
+		if r.target and i > 60:
+			var to := p.global_position - r.global_position
+			var fwd := r._visual.global_basis.z  # the model faces +Z
+			facing_err = maxf(facing_err, rad_to_deg(Vector2(fwd.x, fwd.z).angle_to(Vector2(to.x, to.z))))
+			samples += 1
+	_check(r.target == p, "robot detects and engages the player")
+	_check(moved > 1.5, "it moves/strafes while fighting (%.1f m)" % moved)
+	_check(samples > 0 and facing_err < 35.0, "keeps facing the player (worst %.0f deg)" % facing_err)
+	_check(r.shots_fired >= 6, "fires bursts from its cannons (%d shots in 6 s)" % r.shots_fired)
+	_check(r.shots_fired < 40, "bursts, not constant spam (%d shots in 6 s)" % r.shots_fired)
+	_check(bolts_max > 0, "green plasma bolts fly (%d at once)" % bolts_max)
+	_check(p.damage_taken > hits_before, "plasma hits the player (%.0f hits)" % (p.damage_taken - hits_before))
+	var m0 := r._aim.muzzle_position(0)
+	var m1 := r._aim.muzzle_position(1)
+	_check(m0.distance_to(m1) > 0.1 and m0.y > 0.8 and m0.y < 1.6 and m1.y > 0.8 and m1.y < 1.6,
+		"bolts leave from both (aimed) cannon muzzles (heights %.2f / %.2f m)" % [m0.y, m1.y])
+	# Hands off when it dies.
+	r.apply_damage(DamageInfo.make(99, DamageInfo.Type.BULLET, r.global_position, Vector3.FORWARD, 1.0))
+	var shots_dead := r.shots_fired
+	await _ticks(60)
+	_check(r.shots_fired == shots_dead and r.target == null, "dead robots stop fighting")
+	RobotEnemy.ai_enabled = false
+	r.queue_free()

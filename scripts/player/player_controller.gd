@@ -72,6 +72,17 @@ var _idle_face_timer := 0.0
 ## Velocity from outside forces (gravity wells, blasts), added on top of the
 ## player's own movement so input, jumping and escaping always still work.
 ## Zero normally; decays when nothing keeps pushing.
+## Hits taken (no health system yet: hits only give feedback).
+signal damaged(info: DamageInfo)
+var damage_taken := 0.0
+
+
+## Called by enemy weapons (DamageInfo.apply).
+func apply_damage(info: DamageInfo) -> void:
+	damage_taken += info.damage_amount
+	damaged.emit(info)
+
+
 var external_velocity := Vector3.ZERO
 @export var external_decay := 5.0
 var _idle_face_yaw := 0.0

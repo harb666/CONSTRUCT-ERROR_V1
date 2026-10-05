@@ -1,0 +1,160 @@
+class_name PlasmaBolt
+extends Node3D
+## Fast green plasma projectile (robot hand cannons). Pooled; moves with one
+## ray cast per physics tick (no physics body), passes through enemies, and
+## on impact deals DamageInfo, nudges props and spawns PlasmaFx.impact.
+## Visual: a hot glowing core plus a camera-facing trail ribbon.
+
+const POOL_SIZE := 64
+const GREEN := Color(0.15, 1.0, 0.1)
+const HOT := Color(0.6, 1.0, 0.45)
+
+static var _pool: Array[PlasmaBolt] = []
+static var _next := 0
+
+var speed := 30.0
+var damage := 1.0
+var max_range := 45.0
+var velocity := Vector3.ZERO
+var shooter: Node
+var active := false
+
+var _core: MeshInstance3D
+var _glow: MeshInstance3D
+var _trail: MeshInstance3D
+var _travelled := 0.0
+var _exclude: Array[RID] = []
+var _tail := Vector3.ZERO
+
+
+## Fire a bolt from `from` along `dir`.
+static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_speed := 30.0, dmg := 1.0) -> PlasmaBolt:
+	var b := _take(tree)
+	if b == null:
+		return null
+	b._launch(from, dir.normalized(), by, bolt_speed, dmg)
+	return b
+
+
+static func _take(tree: SceneTree) -> PlasmaBolt:
+	var host: Node = tree.current_scene if tree.current_scene else tree.root
+	_pool = _pool.filter(func(p: PlasmaBolt) -> bool: return is_instance_valid(p) and p.is_inside_tree())
+	for p in _pool:
+		if not p.active:
+			return p
+	if _pool.size() < POOL_SIZE:
+		var b := PlasmaBolt.new()
+		host.add_child(b)
+		_pool.append(b)
+		return b
+	# All busy: recycle the oldest in flight.
+	_next = (_next + 1) % _pool.size()
+	return _pool[_next]
+
+
+static func active_count() -> int:
+	var n := 0
+	for p in _pool:
+		if is_instance_valid(p) and p.active:
+			n += 1
+	return n
+
+
+func _ready() -> void:
+	top_level = true
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_trail = Vfx.quad("glow", GREEN, Vector2.ONE)
+	_trail.top_level = true
+	add_child(_trail)
+	_glow = Vfx.quad("glow", GREEN, Vector2.ONE)
+	_glow.top_level = true
+	add_child(_glow)
+	_core = Vfx.quad("glow", HOT, Vector2.ONE)
+	_core.top_level = true
+	add_child(_core)
+	for q in [_trail, _glow, _core]:
+		(q as MeshInstance3D).extra_cull_margin = 4.0
+	visible = false
+	set_physics_process(false)
+	set_process(false)
+
+
+func _launch(from: Vector3, dir: Vector3, by: Node, bolt_speed: float, dmg: float) -> void:
+	shooter = by
+	speed = bolt_speed
+	damage = dmg
+	velocity = dir * speed
+	global_position = from
+	_tail = from
+	_travelled = 0.0
+	_exclude.clear()
+	if by is CollisionObject3D:
+		_exclude.append((by as CollisionObject3D).get_rid())
+	active = true
+	visible = true
+	set_physics_process(true)
+	set_process(true)
+
+
+func _physics_process(delta: float) -> void:
+	var from := global_position
+	var motion := velocity * delta
+	var space := get_world_3d().direct_space_state
+	var guard := 0
+	while guard < 4:
+		guard += 1
+		var q := PhysicsRayQueryParameters3D.create(from, from + motion)
+		q.collision_mask = 1  # world, props, players, enemies (not debris)
+		q.exclude = _exclude
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			break
+		var col: Object = hit.collider
+		if col is Node and (col as Node).is_in_group(&"enemies"):
+			# Robots don't shoot each other: fly on through.
+			_exclude.append(hit.rid)
+			continue
+		_impact(hit.position, hit.normal, col)
+		return
+	global_position = from + motion
+	_travelled += motion.length()
+	if _travelled >= max_range:
+		_stop()
+
+
+func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
+	if col and col.has_method("apply_damage"):
+		col.apply_damage(DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, shooter))
+	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
+		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
+	# Scorch marks only on solid level geometry (they don't follow movers).
+	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D)
+	_stop()
+
+
+func _stop() -> void:
+	active = false
+	visible = false
+	set_physics_process(false)
+	set_process(false)
+
+
+func _process(_delta: float) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var head := global_position
+	Vfx.face_camera(_core, 0.3)
+	Vfx.face_camera(_glow, 0.85)
+	_core.global_position = head
+	_glow.global_position = head
+	# Trail: a ribbon from the head back along the flight path.
+	var dir := velocity.normalized()
+	var length := minf(_travelled + 0.05, 1.6)
+	var a := head
+	var b := head - dir * length
+	var axis := b - a
+	var y := axis / maxf(length, 0.001)
+	var x := y.cross((cam.global_position - (a + b) * 0.5).normalized()).normalized()
+	var z := x.cross(y)
+	_trail.global_transform = Transform3D(Basis(x * 0.3, y * length, z), (a + b) * 0.5)
