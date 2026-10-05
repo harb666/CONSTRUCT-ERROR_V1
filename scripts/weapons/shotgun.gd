@@ -218,16 +218,16 @@ func _fire_stream(space: PhysicsDirectSpaceState3D, exclude: Array[RID], shooter
 
 ## Apply one stream's hit (called by ShotgunStream when it arrives).
 static func land_stream(tree: SceneTree, hit: Dictionary) -> void:
-	var col: Object = hit.collider
-	if col == null or not is_instance_valid(col):
+	# The target may have been freed while the stream was in flight.
+	if not is_instance_valid(hit.get("collider")):
 		return
+	var col: Object = hit.collider
 	var at: Vector3 = hit.at
 	var dir: Vector3 = hit.dir
 	var force: float = hit.force
 	if col.has_method("apply_damage"):
-		var shooter: Object = hit.shooter
-		col.apply_damage(DamageInfo.make(hit.damage, DamageInfo.Type.ENERGY, at, dir, force, 0.0,
-			shooter as Node if is_instance_valid(shooter) else null))
+		var shooter: Node = hit.shooter if is_instance_valid(hit.get("shooter")) else null
+		col.apply_damage(DamageInfo.make(hit.damage, DamageInfo.Type.ENERGY, at, dir, force, 0.0, shooter))
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(dir * force * 0.6, at - (col as RigidBody3D).global_position)
 	PlasmaFx.impact(tree, at, hit.normal, col is StaticBody3D, hit.color, hit.hot)

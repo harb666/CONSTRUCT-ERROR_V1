@@ -43,6 +43,35 @@ func get_visual_center() -> Vector3:
 	return box.get_center()
 
 
+## Bounds of the visible model in this weapon's own space (root), cached.
+## Used to keep held weapons clear of each other and of the arms.
+func get_local_aabb() -> AABB:
+	if has_meta("local_aabb"):
+		return get_meta("local_aabb")
+	var box := AABB()
+	var first := true
+	var inv := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
+	for mi: MeshInstance3D in find_children("*", "MeshInstance3D", true, false):
+		if not (mi.mesh is ArrayMesh):
+			continue
+		var xf := inv * mi.global_transform if is_inside_tree() else _local_xf(mi)
+		var a: AABB = xf * mi.mesh.get_aabb()
+		box = a if first else box.merge(a)
+		first = false
+	set_meta("local_aabb", box)
+	return box
+
+
+func _local_xf(n: Node3D) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var cur: Node = n
+	while cur and cur != self:
+		if cur is Node3D:
+			xf = (cur as Node3D).transform * xf
+		cur = cur.get_parent()
+	return xf
+
+
 func on_displayed() -> void:
 	for gi: GeometryInstance3D in find_children("*", "GeometryInstance3D", true, false):
 		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

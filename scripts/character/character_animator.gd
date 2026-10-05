@@ -229,6 +229,13 @@ func set_armed(side: String, is_armed: bool) -> void:
 	armed_side = "Right" if armed.Right else ("Left" if armed.Left else "")
 
 
+## Bounds of the weapon held by an arm in its forearm frame (see
+## WeaponSlot.fit_box); empty = nothing to keep clear.
+func set_weapon_fit(side: String, box: AABB) -> void:
+	if _arm_aim:
+		_arm_aim.weapon_fit[side] = box
+
+
 func set_armed_side(side: String) -> void:
 	for s in ["Left", "Right"]:
 		armed[s] = s == side

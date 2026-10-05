@@ -8,6 +8,6 @@ script = ExtResource("1")
 id = &"default_cannon"
 display_name = "Plasma Cannon"
 weapon_scene = ExtResource("2")
-mount_offset = -0.05
+mount_offset = 0.04
 mount_lift = 0.05
 mount_out = 0.03

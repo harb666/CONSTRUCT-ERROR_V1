@@ -394,6 +394,8 @@ func _run() -> void:
 	await _robot_combat_tests(main)
 	await _dual_wield_tests(main)
 	await _shotgun_tests(main)
+	await _robot_death_variety_tests(main)
+	await _weapon_fit_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -619,6 +621,7 @@ func _robot_tests(main: Node) -> void:
 	_check(whole_surfaces == 2, "merged robot mesh = 2 draw surfaces (was %d section meshes)" % r2._sections.size())
 	_check(r2._whole_far != null and r2._whole.visibility_range_end > 0.0 and is_equal_approx(r2._whole_far.visibility_range_begin, r2._whole.visibility_range_end), "swaps to a simpler mesh far away")
 	_check(r2._whole.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF and r2._shadow_proxy.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY, "shadow cast by the simple mesh")
+	r2.force_death_style = "clip"
 	r2.apply_damage(DamageInfo.make(10, DamageInfo.Type.BULLET, r2.global_position + Vector3(0, 1, 2), Vector3(0, 0, -1), 1.0))
 	_check(not r2.alive and r2.last_destruction == BreakApart.Level.NONE, "low-force kill: dies whole")
 	_check(not r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return m.visible), "on death it switches to its separate sections")
@@ -1158,8 +1161,16 @@ func _shotgun_tests(main: Node) -> void:
 	_check(near.alive, "damage lands when the streams arrive, not instantly")
 	await _ticks(3)
 	_check(not near.alive, "a clean close-range blast kills a normal enemy")
-	await _ticks(30)
-	_check(ShotgunStream.active_count() == 0 and not sg._flash.is_flashing(), "streams and flash are brief")
+	await _ticks(12)
+	_check(ShotgunStream.active_count() >= 5 and not sg._flash.is_flashing(), "rail trails linger after the hit, the flash is brief")
+	var st0: ShotgunStream = null
+	for c in get_root().find_children("*", "ShotgunStream", true, false):
+		if (c as ShotgunStream).active:
+			st0 = c
+			break
+	_check(st0 != null and st0._helix.get_surface_count() == 1 and st0._helix.surface_get_array_len(0) > 20, "each trail has its own spiral")
+	await _ticks(45)
+	_check(ShotgunStream.active_count() == 0, "trails fade out within a second")
 
 	# Further away: wider spread, fewer hits, less damage per stream.
 	_check(sg.spread_at(3.0) < sg.spread_at(10.0) and sg.spread_at(10.0) < sg.spread_at(18.0), "spread grows with distance")
@@ -1236,4 +1247,137 @@ func _shotgun_tests(main: Node) -> void:
 		near.queue_free()
 	h.equip(h.default_weapon, "Left")
 	h.equip(h.default_weapon, "Right")
+	await _ticks(3)
+
+
+## Seven robot deaths: the model's four clips plus three procedural ones;
+## kills by the same weapon vary and never repeat back to back.
+func _robot_death_variety_tests(main: Node) -> void:
+	var base := Vector3(5, 0, 26)
+	for style in ["blown_back", "spin", "stagger"]:
+		var r := _spawn_robot(main, base)
+		await _ticks(10)
+		r.force_death_style = style
+		var fwd: Vector3 = r._visual.global_basis.z
+		var push := -fwd if style != "spin" else fwd.cross(Vector3.UP)
+		var start := r.global_position
+		r.apply_damage(DamageInfo.make(99, DamageInfo.Type.BULLET, r.global_position + Vector3.UP, push, 8.0))
+		var yaw0: float = r._yaw
+		var max_turn := 0.0
+		var moved := 0.0
+		var lifted := 0.0
+		for i in 120:
+			await _ticks(1)
+			if not is_instance_valid(r):
+				break
+			max_turn = maxf(max_turn, absf(wrapf(r._visual.rotation.y - yaw0, -PI, PI)))
+			moved = maxf(moved, Vector2(r.global_position.x - start.x, r.global_position.z - start.z).length())
+			lifted = maxf(lifted, r.global_position.y - start.y)
+		match style:
+			"blown_back":
+				_check(r.last_death_style == "blown_back" and moved > 1.2 and lifted > 0.15, "death: blown back off its feet (%.1f m back, %.2f m up)" % [moved, lifted])
+			"spin":
+				_check(r.last_death_style == "spin" and max_turn > deg_to_rad(120), "death: spun round by a side hit (%.0f deg)" % rad_to_deg(max_turn))
+			"stagger":
+				_check(r.last_death_style == "stagger" and moved > 0.3 and r._anim.current_animation != "Walking", "death: staggers back then topples (%.2f m, now %s)" % [moved, r._anim.current_animation])
+		var head := r.get_skeleton().find_bone("mixamorig_Head")
+		await _ticks(90)
+		var hy: float = (r.get_skeleton().global_transform * r.get_skeleton().get_bone_global_pose(head)).origin.y
+		_check(hy < 0.7, "%s ends on the floor (head %.2f m)" % [style, hy])
+		r.queue_free()
+		await _ticks(2)
+	# Natural picks from energy kills: varied, never the same twice running.
+	var seen := {}
+	var prev := ""
+	var repeats := 0
+	for k in 12:
+		var r := _spawn_robot(main, base + Vector3(3 * (k % 4), 0, 3 * (k / 4)))
+		r._breaker.reference_force = 1000.0  # keep it whole: no debris pile-up
+		await _ticks(3)
+		var fwd: Vector3 = r._visual.global_basis.z
+		var dirs := [-fwd, fwd, fwd.cross(Vector3.UP)]
+		r.apply_damage(DamageInfo.make(5, DamageInfo.Type.ENERGY, r.global_position + Vector3.UP, dirs[k % 3], [2.0, 9.0][k % 2]))
+		var key := r.last_death_style + ":" + String(r.last_death_anim)
+		seen[key] = true
+		if key == prev:
+			repeats += 1
+		prev = key
+	_check(seen.size() >= 5, "kills pick from many deaths (%d different in 12)" % seen.size())
+	_check(repeats == 0, "never the same death twice in a row")
+	await _ticks(5)
+	for r in main.get_children():
+		if r is RobotEnemy and not (r as RobotEnemy).alive:
+			r.queue_free()
+	await _ticks(2)
+
+
+## Held weapons never touch each other, the other arm or the body, and
+## never stick out behind the elbow, for every weapon combination.
+func _weapon_fit_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sk: Skeleton3D = p.find_children("*", "Skeleton3D", true, false)[0]
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	sel.clear()
+	var base := Vector3(-14, 0, 33)
+	var defs := {"cannon": h.default_weapon, "shotgun": load("res://resources/weapons/shotgun.tres"), "bhg": load("res://resources/weapons/black_hole_generator.tres")}
+	var combos := [["cannon", "cannon"], ["shotgun", "cannon"], ["shotgun", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"]]
+	var ta := _spawn_robot(main, base + Vector3(0, 0, -10))
+	var tb := _spawn_robot(main, base + Vector3(-7, 0, -7))
+	var tc := _spawn_robot(main, base + Vector3(7, 0, -7))
+	for r: RobotEnemy in [ta, tb, tc]:
+		r.max_health = 9999.0
+		r.health = 9999.0
+	var a: Targetable = ta.get_node("Targetable")
+	var b: Targetable = tb.get_node("Targetable")
+	var c: Targetable = tc.get_node("Targetable")
+	for combo in combos:
+		h.equip(defs[combo[0]], "Right")
+		h.equip(defs[combo[1]], "Left")
+		var worst := {"weapons": INF, "arm": INF, "torso": INF, "rear": -INF}
+		# [right target, left target, move]: shared, split, crossed, running.
+		for sc in [[a, a, ""], [c, b, ""], [b, c, ""], [b, c, "move_right"]]:
+			p.global_position = base
+			p.velocity = Vector3.ZERO
+			p.rotation.y = 0.0
+			p.reset_physics_interpolation()
+			sel.clear()
+			sel.forget_last_tap()
+			sel.tap_target(sc[0])
+			if sc[1] == sc[0]:
+				sel.tap_target(sc[0])
+			else:
+				sel.forget_last_tap()
+				sel.tap_target(sc[1])
+			if sc[2] != "":
+				Input.action_press(sc[2])
+			for i in 50:
+				await _ticks(1)
+				if i < 25:
+					continue
+				await sk.skeleton_updated
+				var g := sk.get_global_transform_interpolated()
+				var bp := {}
+				for n in ["LeftArm", "LeftForeArm", "LeftHand", "RightArm", "RightForeArm", "RightHand", "Hips", "Neck"]:
+					bp[n] = g * sk.get_bone_global_pose(sk.find_bone("mixamorig_" + n)).origin
+				var R := WeaponBounds.obb(h.weapon("Right"))
+				var L := WeaponBounds.obb(h.weapon("Left"))
+				worst.weapons = minf(worst.weapons, WeaponBounds.gap(R, L))
+				worst.arm = minf(worst.arm, minf(minf(WeaponBounds.capsule_gap(R, bp.LeftArm, bp.LeftForeArm, 0.06), WeaponBounds.capsule_gap(R, bp.LeftForeArm, bp.LeftHand, 0.06)),
+					minf(WeaponBounds.capsule_gap(L, bp.RightArm, bp.RightForeArm, 0.06), WeaponBounds.capsule_gap(L, bp.RightForeArm, bp.RightHand, 0.06))))
+				var ta0: Vector3 = bp.Hips + Vector3(0, 0.12, 0)
+				worst.torso = minf(worst.torso, minf(WeaponBounds.capsule_gap(R, ta0, bp.Neck, 0.13), WeaponBounds.capsule_gap(L, ta0, bp.Neck, 0.13)))
+				worst.rear = maxf(worst.rear, maxf(WeaponBounds.rear_overhang(R, bp.RightForeArm, bp.RightHand - bp.RightForeArm), WeaponBounds.rear_overhang(L, bp.LeftForeArm, bp.LeftHand - bp.LeftForeArm)))
+			if sc[2] != "":
+				Input.action_release(sc[2])
+		var name := "%s + %s" % combo
+		_check(worst.weapons > 0.0, "%s: weapons never touch (closest %.3f m)" % [name, worst.weapons])
+		_check(worst.arm > 0.0, "%s: no weapon touches the other arm (closest %.3f m)" % [name, worst.arm])
+		_check(worst.torso > 0.0, "%s: no weapon cuts into the body (closest %.3f m)" % [name, worst.torso])
+		_check(worst.rear < 0.01, "%s: nothing sticks out behind the elbows (%.3f m)" % [name, worst.rear])
+	sel.clear()
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	for r: RobotEnemy in [ta, tb, tc]:
+		r.queue_free()
 	await _ticks(3)

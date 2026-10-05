@@ -54,11 +54,22 @@ const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
 @export var bolt_damage := 1.0
 
 @export_group("Death")
-## Death clips (must exist in the model). Picked by the killing hit:
-## electrical hits -> electrocuted; otherwise by the hit's direction.
+## Death clips (must exist in the model). The killing hit picks one of seven
+## deaths: the model's four clips (electrocuted, falls backwards, falls
+## forwards, shot in the back) and three procedural ones layered on them
+## (source clips untouched): BLOWN_BACK (heavy frontal hit: launched off its
+## feet), SPIN (hit from the side: spins round as it drops) and STAGGER
+## (staggers backwards, then topples). Never the same death twice in a row.
 @export var death_anim_electric := &"Electrocuted_Fall"
 @export var death_anim_from_front := &"Shot_and_Fall_Backward"
 @export var death_anims_from_behind: Array[StringName] = [&"Shot_in_the_Back_and_Fall", &"Shot_and_Fall_Forward"]
+## Chance an energy kill uses the electrocuted death.
+@export var electric_death_chance := 0.3
+## Killing-hit force (impact + explosive) that can blow it off its feet.
+@export var blown_back_force := 6.0
+@export var blown_back_speed := Vector2(3.9, 2.8)  # back, up (m/s)
+@export var spin_degrees := 220.0
+@export var stagger_time := 0.75
 ## Seconds into the death before parts detach (strong hits break sooner).
 @export var break_delay := Vector2(0.06, 0.4)
 ## Extra delay between successive breaks (a rapid cascade, not all at once).
@@ -80,6 +91,12 @@ var hits := 0
 var alive := true
 var last_destruction := BreakApart.Level.NONE
 var last_death_anim := &""
+## "clip", "blown_back", "spin" or "stagger".
+var last_death_style := ""
+static var _prev_death := ""
+## Tests/previews: force a death style ("clip"/"blown_back"/"spin"/"stagger").
+var force_death_style := ""
+var _stagger_vel := Vector3.ZERO
 
 var _visual: Node3D
 var _model: Node3D
@@ -636,10 +653,10 @@ func die(info: DamageInfo) -> void:
 	freeze = false
 	_dead_t = 0.0
 	_settled = false
-	# Death reaction from the model's own clips.
-	last_death_anim = _pick_death_anim(info)
+	# Death reaction: one of the model's clips, or a procedural variation
+	# layered on one.
 	_anim.speed_scale = 1.0
-	_anim.play(last_death_anim, 0.12)
+	_play_death(info)
 	# How violently it dies depends on the killing hit.
 	last_destruction = _breaker.choose_level(info)
 	if last_destruction == BreakApart.Level.NONE:
@@ -649,14 +666,94 @@ func die(info: DamageInfo) -> void:
 	died.emit(info)
 
 
-func _pick_death_anim(info: DamageInfo) -> StringName:
-	if info.damage_type == DamageInfo.Type.ENERGY and _anim.has_animation(death_anim_electric):
-		return death_anim_electric
+## Candidate deaths for the killing hit as [key, style, clip, weight].
+func _death_options(info: DamageInfo) -> Array:
 	var forward := _visual.global_basis.z  # the model faces +Z
 	var push := Vector3(info.impact_direction.x, 0, info.impact_direction.z)
-	if push.length_squared() < 0.01 or push.normalized().dot(forward) < 0.0:
-		return death_anim_from_front  # pushed back -> falls backwards
-	return death_anims_from_behind[randi() % death_anims_from_behind.size()]
+	var front := push.length_squared() < 0.01 or push.normalized().dot(forward) < 0.0
+	var side := push.length_squared() > 0.01 and absf(push.normalized().dot(forward)) < 0.6
+	var force := info.total_force()
+	var opts: Array = []
+	if info.damage_type == DamageInfo.Type.SUPERNOVA:
+		return [["clip_front", "clip", death_anim_from_front, 1.0]]
+	if info.damage_type == DamageInfo.Type.ENERGY and _anim.has_animation(death_anim_electric):
+		opts.append(["electric", "clip", death_anim_electric, electric_death_chance * 3.0])
+	if front:
+		opts.append(["clip_front", "clip", death_anim_from_front, 1.0])
+		if force >= blown_back_force or info.is_explosive():
+			opts.append(["blown_back", "blown_back", death_anim_from_front, 3.0])
+		opts.append(["stagger", "stagger", &"Shot_and_Fall_Forward", 1.0 if force < blown_back_force else 0.3])
+	else:
+		for c in death_anims_from_behind:
+			opts.append(["clip_" + String(c), "clip", c, 1.0])
+	if side:
+		opts.append(["spin", "spin", &"Shot_and_Fall_Forward", 2.0])
+	if opts.size() > 1:
+		opts = opts.filter(func(o: Array) -> bool: return o[0] != _prev_death)
+	return opts.filter(func(o: Array) -> bool: return _anim.has_animation(o[2]))
+
+
+func _play_death(info: DamageInfo) -> void:
+	var opts := _death_options(info)
+	if force_death_style != "":
+		var forced: Array = [["forced", force_death_style, death_anim_from_front if force_death_style == "blown_back" else &"Shot_and_Fall_Forward", 1.0]]
+		opts = forced
+	if opts.is_empty():
+		opts = [["clip_front", "clip", death_anim_from_front, 1.0]]
+	var total := 0.0
+	for o in opts:
+		total += o[3]
+	var r := randf() * total
+	var pick: Array = opts[-1]
+	for o in opts:
+		r -= o[3]
+		if r <= 0.0:
+			pick = o
+			break
+	_prev_death = pick[0]
+	last_death_style = pick[1]
+	last_death_anim = pick[2]
+	var push := Vector3(info.impact_direction.x, 0, info.impact_direction.z)
+	push = push.normalized() if push.length_squared() > 0.01 else -_visual.global_basis.z
+	match last_death_style:
+		"blown_back":
+			# Launched off its feet: the fall clip from where it loses its
+			# footing, sped up, while the body flies back and the torso
+			# whips back.
+			_anim.play(last_death_anim, 0.06)
+			_anim.seek(0.85, true)
+			_anim.speed_scale = 1.35
+			if not freeze:
+				linear_velocity = push * blown_back_speed.x * randf_range(0.85, 1.15) + Vector3.UP * blown_back_speed.y
+				linear_damp = 1.2  # lands and skids to a stop, no long slide
+			var tw := create_tween()
+			tw.tween_property(_visual, "rotation:x", -0.45, 0.12).set_ease(Tween.EASE_OUT)
+			tw.tween_property(_visual, "rotation:x", 0.0, 0.5).set_ease(Tween.EASE_IN_OUT)
+			tw.tween_callback(func() -> void: _anim.speed_scale = 1.0)
+		"spin":
+			# Spun round by a hit from the side, then drops.
+			_anim.play(last_death_anim, 0.1)
+			var turn := signf((-_visual.global_basis.x).dot(push)) * deg_to_rad(spin_degrees) * randf_range(0.85, 1.1)
+			if turn == 0.0:
+				turn = deg_to_rad(spin_degrees)
+			if not freeze:
+				linear_velocity = push * 1.6
+			var tw := create_tween()
+			tw.tween_property(_visual, "rotation:y", _yaw + turn, 0.75).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		"stagger":
+			# Staggers a couple of steps backwards, wobbling, then topples.
+			_anim.play(&"Walking", 0.1, -0.7, true)
+			_stagger_vel = push * 1.3
+			var tw := create_tween()
+			var wob := randf_range(0.18, 0.3) * (1.0 if randf() < 0.5 else -1.0)
+			tw.tween_property(_visual, "rotation:y", _yaw + wob, stagger_time * 0.4).set_trans(Tween.TRANS_SINE)
+			tw.tween_property(_visual, "rotation:y", _yaw - wob * 0.6, stagger_time * 0.6).set_trans(Tween.TRANS_SINE)
+			get_tree().create_timer(stagger_time, false, true).timeout.connect(func() -> void:
+				if is_inside_tree() and not alive and _anim.has_animation(last_death_anim):
+					_anim.play(last_death_anim, 0.2)
+					_anim.seek(0.55, true))
+		_:
+			_anim.play(last_death_anim, 0.12)
 
 
 func _schedule_breakup(info: DamageInfo) -> void:
@@ -715,6 +812,10 @@ func _nearest_bone(p: Vector3) -> int:
 
 func _corpse(delta: float) -> void:
 	_dead_t += delta
+	if last_death_style == "stagger" and _dead_t < stagger_time and not freeze:
+		# Stagger steps: driven back like walking (friction would stop it).
+		linear_velocity = Vector3(_stagger_vel.x, linear_velocity.y, _stagger_vel.z) * (1.0 - _dead_t / stagger_time * 0.5)
+		return
 	if not _settled:
 		var slow := linear_velocity.length() < 0.3
 		if (slow and _dead_t > 0.5) or _dead_t > 6.0:
@@ -755,6 +856,7 @@ func _respawn() -> void:
 	collision_layer = _layers
 	collision_mask = _mask
 	physics_material_override.friction = 0.0
+	linear_damp = 0.0
 	global_transform = _spawn_xf
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO

@@ -21,3 +21,6 @@
 	Request:  http://request.kenney.nl
 
 	Follow on Twitter for updates: @KenneyNL (www.twitter.com/kenneynl)
+Also from the Kenney Particle Pack (CC0), via the supplied Weapon_VFX_Pack:
+muzzle_01.png, muzzle_04.png, muzzle_05.png, flame_01.png, flame_03.png,
+fire_01.png, star_09.png (downscaled to 256 px greyscale).

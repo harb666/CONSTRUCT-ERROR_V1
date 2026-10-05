@@ -1,21 +1,28 @@
 class_name ShotgunStream
 extends Node3D
-## One shotgun energy stream (pooled): a hot core streak with a double helix
-## of glowing motes spiralling around it, racing from a barrel to its impact
-## at `speed` (fast enough to feel instant, slow enough to see), then
-## lingering for a moment and fading. The path may curve slightly (a stream
+## One shotgun energy stream (pooled), drawn like a railgun trail: a solid
+## white-hot core beam with a wide orange glow, wrapped in a spiral ribbon
+## and sparkling motes. It races from its barrel to the impact at `speed`
+## (feels instant, but visible), then the whole trail lingers, the spiral
+## slowly widening and fading. The path may curve slightly (a stream
 ## assisted towards a secondary enemy leaves along its spread direction and
 ## bends onto it). On arrival it lands its hit (`Shotgun.land_stream`).
-## Visual only otherwise: no physics; one MultiMesh + two quads per stream.
+## Visual only otherwise: no physics. Per stream: one ImmediateMesh (beam),
+## one ArrayMesh (spiral, built once per shot) and one MultiMesh (motes).
 
 const POOL_SIZE := 40
-const MOTES := 26
-## Longest visible stretch behind the head (m).
-const TRAIL := 7.0
-const LINGER := 0.13
-const RADIUS := 0.09
-## Helix turns per metre.
-const TWIST := 1.6
+const MOTES := 36
+## How long the trail stays after the impact (s).
+const LINGER := 0.7
+const RADIUS := 0.085
+## Spiral turns per metre and ribbon width (m).
+const TWIST := 1.5
+const RIBBON := 0.07
+const SEGMENTS_PER_M := 14.0
+const BEAM_SEGMENTS := 10
+const CORE_WIDTH := 0.075
+const GLOW_WIDTH := 0.2
+const HELIX_SHADER := preload("res://scripts/vfx/rail_helix.gdshader")
 
 static var _pool: Array[ShotgunStream] = []
 static var _next := 0
@@ -34,10 +41,18 @@ var _color := Color.ORANGE
 var _hot := Color.WHITE
 var _n1 := Vector3.RIGHT
 var _n2 := Vector3.UP
+var _mote_u := PackedFloat32Array()
+var _mote_a := PackedFloat32Array()
 
+var _beam: ImmediateMesh
+var _beam_mi: MeshInstance3D
+var _helix: ArrayMesh
+var _helix_mi: MeshInstance3D
+var _helix_mat: ShaderMaterial
 var _mm: MultiMesh
-var _core: MeshInstance3D
 var _head: MeshInstance3D
+static var _beam_mat: StandardMaterial3D
+static var _glow_mat: StandardMaterial3D
 
 
 ## Fire a stream from `from` to `to`. `leave_dir` is the direction it leaves
@@ -80,6 +95,26 @@ func _ready() -> void:
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	if _beam_mat == null:
+		# Hot core adds light; the orange glow is alpha-blended so it stays
+		# orange (and each stream distinct) even over bright surfaces.
+		_beam_mat = Vfx.material("glow", Color.WHITE, BaseMaterial3D.BILLBOARD_DISABLED, true)
+		_glow_mat = Vfx.mix_material("dot", BaseMaterial3D.BILLBOARD_DISABLED)
+	_beam = ImmediateMesh.new()
+	_beam_mi = MeshInstance3D.new()
+	_beam_mi.mesh = _beam
+	_beam_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beam_mi.extra_cull_margin = 60.0
+	add_child(_beam_mi)
+	_helix = ArrayMesh.new()
+	_helix_mat = ShaderMaterial.new()
+	_helix_mat.shader = HELIX_SHADER
+	_helix_mi = MeshInstance3D.new()
+	_helix_mi.mesh = _helix
+	_helix_mi.material_override = _helix_mat
+	_helix_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_helix_mi.extra_cull_margin = 60.0
+	add_child(_helix_mi)
 	_mm = MultiMesh.new()
 	_mm.transform_format = MultiMesh.TRANSFORM_3D
 	_mm.use_colors = true
@@ -93,13 +128,11 @@ func _ready() -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 60.0
 	add_child(mi)
-	_core = Vfx.quad("glow", Color.WHITE, Vector2.ONE)
-	_core.top_level = true
-	_core.extra_cull_margin = 30.0
-	add_child(_core)
 	_head = Vfx.quad("star", Color.WHITE, Vector2.ONE)
 	_head.top_level = true
 	add_child(_head)
+	_mote_u.resize(MOTES)
+	_mote_a.resize(MOTES)
 	visible = false
 	set_process(false)
 
@@ -121,8 +154,15 @@ func _launch(from: Vector3, to: Vector3, leave_dir: Vector3, speed: float, color
 	var d := (to - from).normalized()
 	_n1 = d.cross(Vector3.UP if absf(d.y) < 0.95 else Vector3.RIGHT).normalized()
 	_n2 = d.cross(_n1).normalized()
-	var core := color.lerp(hot, 0.35)
-	(_core.material_override as StandardMaterial3D).albedo_color = Color(core.r, core.g, core.b, 1.0)
+	_build_helix()
+	_helix_mat.set_shader_parameter("color", Color(color.r, color.g, color.b, 0.95))
+	_helix_mat.set_shader_parameter("hot", hot)
+	_helix_mat.set_shader_parameter("head", 0.0)
+	_helix_mat.set_shader_parameter("fade", 1.0)
+	_helix_mat.set_shader_parameter("expand", 0.0)
+	for i in MOTES:
+		_mote_u[i] = (i + randf()) / MOTES
+		_mote_a[i] = randf() * TAU
 	(_head.material_override as StandardMaterial3D).albedo_color = Color(hot.r, hot.g, hot.b, 1.0)
 	active = true
 	visible = true
@@ -135,6 +175,44 @@ func _point(u: float) -> Vector3:
 	return _a * v * v + _c * 2.0 * u * v + _b * u * u
 
 
+func _tangent(u: float) -> Vector3:
+	var t := (_c - _a) * 2.0 * (1.0 - u) + (_b - _c) * 2.0 * u
+	return t.normalized() if t.length_squared() > 1e-8 else (_b - _a).normalized()
+
+
+## Spiral ribbon along the whole path (revealed by the shader as it flies).
+func _build_helix() -> void:
+	var n := clampi(int(_len * SEGMENTS_PER_M), 8, 420)
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	verts.resize((n + 1) * 2)
+	norms.resize((n + 1) * 2)
+	uvs.resize((n + 1) * 2)
+	for i in n + 1:
+		var u := float(i) / n
+		var c := _point(u)
+		var d := _tangent(u)
+		var ang := u * _len * TWIST * TAU + _phase
+		var radial := (_n1 * cos(ang) + _n2 * sin(ang))
+		# Swell in from the barrel over the first half metre.
+		var r := RADIUS * clampf(u * _len / 0.5, 0.25, 1.0)
+		var p := c + radial * r
+		verts[i * 2] = p - d * RIBBON * 0.5
+		verts[i * 2 + 1] = p + d * RIBBON * 0.5
+		norms[i * 2] = radial
+		norms[i * 2 + 1] = radial
+		uvs[i * 2] = Vector2(u, 0.0)
+		uvs[i * 2 + 1] = Vector2(u, 1.0)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = norms
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	_helix.clear_surfaces()
+	_helix.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLE_STRIP, arrays)
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	var head := minf(_t * _speed / _len, 1.0)
@@ -143,50 +221,65 @@ func _process(delta: float) -> void:
 		Shotgun.land_stream(get_tree(), _hit)
 		_hit = {}
 	var travel_time := _len / _speed
-	var fade := 1.0
-	if _t > travel_time:
-		fade = 1.0 - (_t - travel_time) / LINGER
-		if fade <= 0.0:
-			_finish()
-			return
-	var tail := maxf(head - TRAIL / _len, 0.0)
-	if _arrived:
-		# Tail catches up while it fades.
-		tail = lerpf(tail, head, 1.0 - fade)
-	var span := head - tail
-	# Spiral motes: two strands, spinning, swelling slightly towards the head.
-	var spin := _t * 40.0 + _phase
+	var linger := maxf(_t - travel_time, 0.0) / LINGER
+	if linger >= 1.0:
+		_finish()
+		return
+	var fade := 1.0 - linger
+	_helix_mat.set_shader_parameter("head", head + 0.011)
+	_helix_mat.set_shader_parameter("fade", fade * fade)
+	_helix_mat.set_shader_parameter("expand", linger * 0.12)
+	_draw_beam(head, fade, linger)
+	# Motes: sparkle along the revealed spiral, drifting outwards as it fades.
+	var spin := _t * 6.0
+	var count := 0
 	for i in MOTES:
-		var k := float(i) / float(MOTES - 1)
-		var u := tail + span * k
-		var p := _point(u)
-		var ang := u * _len * TWIST * TAU + spin + (PI if i % 2 else 0.0)
-		var r := RADIUS * (0.5 + 0.7 * k)
-		p += (_n1 * cos(ang) + _n2 * sin(ang)) * r
-		var s := 0.07 + 0.09 * k
-		_mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), p))
-		var col := _color.lerp(_hot, pow(k, 6.0))
-		col.a = (0.3 + 0.55 * k) * fade
-		_mm.set_instance_color(i, col)
-	_mm.visible_instance_count = MOTES
-	# Core streak (camera-facing ribbon, straight from tail to head).
+		var u: float = _mote_u[i]
+		if u > head:
+			continue
+		var ang: float = u * _len * TWIST * TAU + _phase + _mote_a[i] * 0.15 + spin * 0.2
+		var radial := (_n1 * cos(ang) + _n2 * sin(ang))
+		var p := _point(u) + radial * (RADIUS * (1.0 + linger * 2.2) + 0.02 * sin(_mote_a[i] + spin))
+		var s := 0.07 * (1.0 - linger * 0.5)
+		_mm.set_instance_transform(count, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), p))
+		var col := _color.lerp(_hot, 0.3 + 0.4 * (0.5 + 0.5 * sin(_mote_a[i] * 3.0 + _t * 30.0)))
+		col.a = 0.9 * fade
+		_mm.set_instance_color(count, col)
+		count += 1
+	_mm.visible_instance_count = count
+	_head.visible = not _arrived
+	if not _arrived:
+		_head.global_position = _point(head)
+		Vfx.face_camera(_head, 0.42, _t * 20.0)
+
+
+## Camera-facing beam strips (glow + core) from the barrel to the head.
+func _draw_beam(head: float, fade: float, linger: float) -> void:
+	_beam.clear_surfaces()
 	var cam := get_viewport().get_camera_3d()
-	var pa := _point(tail)
-	var pb := _point(head)
-	var axis := pb - pa
-	var length := axis.length()
-	if cam and length > 0.001:
-		var y := axis / length
-		var x := y.cross((cam.global_position - (pa + pb) * 0.5).normalized()).normalized()
-		var z := x.cross(y)
-		_core.global_transform = Transform3D(Basis(x * 0.07, y * length, z), (pa + pb) * 0.5)
-		_core.visible = true
-		Vfx.set_alpha(_core, 0.6 * fade)
-	else:
-		_core.visible = false
-	_head.global_position = pb
-	Vfx.face_camera(_head, 0.35 * (0.6 + 0.4 * fade), spin * 0.2)
-	Vfx.set_alpha(_head, fade if not _arrived else fade * 0.6)
+	if cam == null or head <= 0.0:
+		return
+	var core_a := fade * fade * fade  # the hot core goes first
+	var glow_a := fade * fade * 0.75
+	var glow_col := Color(_color.r, _color.g, _color.b, glow_a)
+	var core_col := Color(_hot.r, _hot.g, _hot.b, core_a)
+	for layer in 2:
+		var width := (GLOW_WIDTH * (1.0 + linger * 0.6)) if layer == 0 else CORE_WIDTH
+		var col := glow_col if layer == 0 else core_col
+		_beam.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _glow_mat if layer == 0 else _beam_mat)
+		for i in BEAM_SEGMENTS + 1:
+			var u := head * float(i) / BEAM_SEGMENTS
+			var p := _point(u)
+			var side := _tangent(u).cross((cam.global_position - p).normalized()).normalized()
+			# Taper in at the barrel.
+			var w := width * 0.5 * clampf(u * _len / 0.35, 0.3, 1.0)
+			_beam.surface_set_color(col)
+			_beam.surface_set_uv(Vector2(0.5, 0.0))
+			_beam.surface_add_vertex(p - side * w)
+			_beam.surface_set_color(col)
+			_beam.surface_set_uv(Vector2(0.5, 1.0))
+			_beam.surface_add_vertex(p + side * w)
+		_beam.surface_end()
 
 
 func _finish() -> void:
@@ -194,6 +287,7 @@ func _finish() -> void:
 		_arrived = true
 		Shotgun.land_stream(get_tree(), _hit)
 	_hit = {}
+	_beam.clear_surfaces()
 	active = false
 	visible = false
 	set_process(false)

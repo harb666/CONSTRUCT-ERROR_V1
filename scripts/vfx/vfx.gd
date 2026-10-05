@@ -17,6 +17,14 @@ const TEX := {
 	"halo": preload("res://assets/vfx/light_02.png"),
 	"smoke": preload("res://assets/vfx/smoke_puff.png"),
 	"dot": preload("res://assets/vfx/soft_dot.png"),
+	# Flames (Kenney particle pack, CC0, via the supplied weapon VFX pack).
+	"flame_a": preload("res://assets/vfx/muzzle_01.png"),
+	"flame_b": preload("res://assets/vfx/muzzle_04.png"),
+	"flame_c": preload("res://assets/vfx/muzzle_05.png"),
+	"lick_a": preload("res://assets/vfx/flame_01.png"),
+	"lick_b": preload("res://assets/vfx/flame_03.png"),
+	"fireball": preload("res://assets/vfx/fire_01.png"),
+	"flare": preload("res://assets/vfx/star_09.png"),
 }
 
 const PURPLE := Color(0.72, 0.22, 1.0)
