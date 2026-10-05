@@ -20,6 +20,8 @@ var _infall: CPUParticles3D
 ## Purple motes and black dust tumbling around it, and a dark purple mist
 ## it sheds as it travels (left behind in the world, tumbling as it fades).
 var trail: VortexTrail
+## Gravitational lens: how strongly the background bends around it.
+var lens_strength := 0.75
 var _lightning: BlackHoleLightning
 var _t := 0.0
 var _crackle_t := 0.0
@@ -39,6 +41,7 @@ func _ready() -> void:
 		var m := ShaderMaterial.new()
 		m.shader = DISTORTION
 		m.render_priority = -1
+		m.set_shader_parameter("strength", lens_strength)
 		_distortion.material_override = m
 		_distortion.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(_distortion)
@@ -90,7 +93,7 @@ func _process(delta: float) -> void:
 	if follow and is_instance_valid(follow):
 		global_position = follow.get_global_transform_interpolated().origin
 	if _distortion:
-		Vfx.face_camera(_distortion, size * 2.0)
+		Vfx.face_camera(_distortion, size * 2.3)
 	Vfx.face_camera(_ring, size * 1.45, _t * 0.5)
 	_swirl_a += delta * 2.4 * (1.0 + instability * 2.5)
 	_swirl_b -= delta * 1.7 * (1.0 + instability * 2.5)
@@ -116,7 +119,7 @@ var instability := 0.0
 func set_instability(k: float) -> void:
 	instability = k
 	if _distortion:
-		(_distortion.material_override as ShaderMaterial).set_shader_parameter("strength", 0.55 * (1.0 + k * 1.2))
+		(_distortion.material_override as ShaderMaterial).set_shader_parameter("strength", lens_strength * (1.0 + k * 1.2))
 		(_distortion.material_override as ShaderMaterial).set_shader_parameter("spin_speed", 1.3 * (1.0 + k * 2.0))
 	if _infall:
 		_infall.speed_scale = 1.0 + k * 2.0
@@ -146,4 +149,4 @@ func _set_all_alpha(a: float) -> void:
 	for q in [_ring, _crackle] + _swirls:
 		Vfx.set_alpha(q, a * 0.6)
 	if _distortion:
-		(_distortion.material_override as ShaderMaterial).set_shader_parameter("strength", 0.55 * a)
+		(_distortion.material_override as ShaderMaterial).set_shader_parameter("strength", lens_strength * a)

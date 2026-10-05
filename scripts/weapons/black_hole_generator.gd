@@ -50,7 +50,7 @@ var _lens: MeshInstance3D
 ## Subtle gravity distortion around the contained core: disc diameter (m)
 ## and strength, kept small so only the chamber area bends, not the gun.
 @export var chamber_lens_size := 0.38
-@export var chamber_lens_strength := 0.22
+@export var chamber_lens_strength := 0.3
 var _t := 0.0
 var _recharge := 0.0      # >0 while waiting for a new core
 var _grow := 1.0          # 0..1 growth of the current core

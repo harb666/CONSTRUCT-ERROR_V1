@@ -26,6 +26,9 @@ var axis := Vector3.FORWARD
 ## Black hole diameter (m): particles orbit about half of it out.
 var size := 1.0
 var emitting := true
+## Particles fade in only beyond this many black-hole diameters from it
+## (keeps its light-bending lens clear).
+var lens_clear := 0.75
 
 var _mm: Array[MultiMesh] = []
 var _parts: Array = []   # per kind: Array of [anchor, angle, radius, w, age, life, scale, col_k]
@@ -94,8 +97,13 @@ func _pos(p: Array) -> Vector3:
 
 func _process(delta: float) -> void:
 	var src_ok := emitting and source != null and is_instance_valid(source) and source.is_inside_tree()
+	# Where the black hole is now: particles stay hidden inside its lens so
+	# the gravitational distortion of the background stays clear.
+	var lens_at := Vector3.INF
+	if source != null and is_instance_valid(source) and source.is_inside_tree():
+		lens_at = source.get_global_transform_interpolated().origin
 	if src_ok:
-		var at := source.get_global_transform_interpolated().origin
+		var at := lens_at
 		for k in KINDS.size():
 			_acc[k] += float(KINDS[k][3]) * delta
 			while _acc[k] >= 1.0:
@@ -132,6 +140,8 @@ func _process(delta: float) -> void:
 			var p: Array = list[i]
 			var t: float = p[4] / p[5]
 			var fade := minf(t * 6.0, 1.0) * (1.0 - t)
+			if lens_at != Vector3.INF:
+				fade *= clampf((_pos(p).distance_to(lens_at) - size * lens_clear) / maxf(size * 0.5, 0.1), 0.0, 1.0)
 			var s: float = p[6] * (1.0 + (t * 0.8 if k == 2 else 0.0))
 			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), _pos(p)))
 			var col := c0.lerp(c1, p[7])
