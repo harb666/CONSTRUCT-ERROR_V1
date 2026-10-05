@@ -47,25 +47,39 @@ func _run() -> void:
 	_check(p.is_on_floor(), "player starts grounded")
 	_check(anim.current_state == "Locomotion", "anim idle in Locomotion")
 
-	# Walk forward (camera-relative: camera starts behind, so forward = -Z).
+	# Stick push picks the gait: light = walk, firmer = run, (nearly) all the
+	# way = sprint, held for as long as it stays there.
+	var gait_start := p.global_transform
 	var z0 := p.global_position.z
-	Input.action_press("move_forward")
-	await _ticks(30)
-	var walk := Vector2(p.velocity.x, p.velocity.z).length()
-	_check(absf(walk - p.walk_speed) < 0.2, "reaches walk speed in 0.5s (%.2f)" % walk)
-	_check(p.global_position.z < z0 - 1.0, "moved forward")
-
-	Input.action_press("sprint")
+	Input.action_press("move_forward", 0.45)  # 0.31 after the 0.2 dead zone
 	await _ticks(20)
+	var walk := Vector2(p.velocity.x, p.velocity.z).length()
+	_check(walk > 1.5 and walk <= p.walk_speed + 0.05 and not p.is_sprinting, "light push walks (%.2f m/s)" % walk)
+	_check(p.global_position.z < z0, "moved forward")
+	Input.action_press("move_forward", 0.8)  # 0.75
+	await _ticks(20)
+	var run := Vector2(p.velocity.x, p.velocity.z).length()
+	_check(run >= p.run_min_speed and run <= p.run_speed + 0.05 and not p.is_sprinting, "firmer push runs (%.2f m/s)" % run)
+	_check(anim._arm_aim.weight > 0.9, "arms aim forward while running (%.2f)" % anim._arm_aim.weight)
+	Input.action_press("move_forward", 1.0)
+	await _ticks(15)
 	var sprint := Vector2(p.velocity.x, p.velocity.z).length()
-	_check(absf(sprint - p.sprint_speed) < 0.2, "reaches sprint speed (%.2f)" % sprint)
+	_check(p.is_sprinting and absf(sprint - p.sprint_speed) < 0.2, "full push sprints (%.2f m/s)" % sprint)
 	_check(anim.current_state == "Locomotion", "anim sprint stays Locomotion")
-	_check(anim._arm_aim.weight > 0.9, "arms aim forward while sprinting (%.2f)" % anim._arm_aim.weight)
-	Input.action_release("sprint")
+	Input.action_press("move_forward", 0.86)  # 0.825: inside the hysteresis band
+	await _ticks(6)
+	_check(p.is_sprinting, "sprint holds while the stick stays near the edge")
+	Input.action_press("move_forward", 0.8)
+	await _ticks(12)
+	_check(not p.is_sprinting and Vector2(p.velocity.x, p.velocity.z).length() < p.run_speed + 0.1, "easing off drops back to a run")
 	Input.action_release("move_forward")
 	await _ticks(20)
 	_check(Vector2(p.velocity.x, p.velocity.z).length() < 0.1, "stops after release")
 	_check(anim._arm_aim.weight > 0.02 and anim._arm_aim.weight < 0.3, "arms ease down after stopping (%.2f)" % anim._arm_aim.weight)
+	# Back to the start (the gaits covered more ground than later tests expect).
+	p.global_transform = gait_start
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
 	Input.action_press("move_forward", 0.4)
 	await _ticks(30)
 	_check(anim._arm_aim.weight < 0.05, "arms not aiming while walking (%.2f)" % anim._arm_aim.weight)
@@ -330,11 +344,12 @@ func _run() -> void:
 			_check(bolts > 0, "electric bolts lash out while in flight")
 	_check(d2.hits > hits_at_lock, "shot hits the locked enemy")
 
-	# Independent movement while locked: strafe right, legs follow movement.
+	# Independent movement while locked: strafe right (running), legs follow
+	# movement.
 	var shots_before := shots.size()
-	Input.action_press("move_right")
+	Input.action_press("move_right", 0.8)
 	await _ticks(90)
-	_check(Vector2(p.velocity.x, p.velocity.z).length() > 5.0, "strafes at full speed while locked")
+	_check(Vector2(p.velocity.x, p.velocity.z).length() > 5.0, "strafes at running speed while locked")
 	_check(p.is_facing_yaw(-PI * 0.5, 0.3), "legs/body face the movement direction while locked")
 	_check(shots.size() > shots_before, "keeps firing while strafing")
 	var gun2 := holder.current
@@ -892,7 +907,8 @@ func _cannon_clearance(p: PlayerController) -> Vector2:
 		seg[side] = [w.find_marker(Weapon.SOCKET_MARKER).global_position, w.find_marker(Weapon.MUZZLE_MARKER).global_position]
 	var cc := _seg_dist(seg.Right[0], seg.Right[1], seg.Left[0], seg.Left[1])
 	var arm := INF
-	var g := sk.global_transform
+	# Weapons are placed from the interpolated (drawn) pose.
+	var g := sk.get_global_transform_interpolated()
 	for side in ["Right", "Left"]:
 		var other := "Left" if side == "Right" else "Right"
 		var a0 := g * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sArm" % other)).origin

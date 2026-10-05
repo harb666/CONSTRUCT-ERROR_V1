@@ -13,8 +13,20 @@ signal command_processed(cmd: PlayerCommand, delta: float)
 @export var player_id := 1
 
 @export_group("Ground")
-@export var walk_speed := 7.5
+## How far the move stick is pushed picks the gait (0..1 after the dead zone):
+## a light push walks (up to `walk_speed`), a firmer push runs (`run_min_speed`
+## .. `run_speed`) and pushing it (nearly) all the way sprints, for as long as
+## it is held there (from `sprint_zone`, until it drops below `sprint_exit`).
+## The SPRINT button / key also sprints.
+@export var walk_speed := 4.0
+@export var run_min_speed := 6.2
+@export var run_speed := 8.5
 @export var sprint_speed := 11.5
+@export var walk_zone := 0.5
+## Stick span over which walking speeds up into a run (no dead step).
+@export var walk_to_run_blend := 0.08
+@export var sprint_zone := 0.9
+@export var sprint_exit := 0.82
 @export var ground_accel := 70.0
 @export var ground_decel := 55.0
 ## Extra acceleration when pushing against current velocity (snappy direction changes).
@@ -54,6 +66,8 @@ var spawn_transform: Transform3D
 
 var is_sprinting := false
 var is_dodging := false
+## Sprint held by pushing the stick all the way (hysteresis, see sprint_exit).
+var _stick_sprint := false
 
 var _gravity := 0.0
 var _jump_velocity := 0.0
@@ -75,6 +89,20 @@ var _idle_face_timer := 0.0
 ## Hits taken (no health system yet: hits only give feedback).
 signal damaged(info: DamageInfo)
 var damage_taken := 0.0
+
+
+## Target ground speed for a stick push of `amount` (0..1): walk, run or sprint.
+func gait_speed(amount: float, sprinting: bool) -> float:
+	if amount <= 0.001:
+		return 0.0
+	if sprinting:
+		return sprint_speed
+	if amount <= walk_zone:
+		return walk_speed * amount / walk_zone
+	var blend_end := walk_zone + walk_to_run_blend
+	if amount <= blend_end:
+		return lerpf(walk_speed, run_min_speed, (amount - walk_zone) / walk_to_run_blend)
+	return lerpf(run_min_speed, run_speed, clampf((amount - blend_end) / maxf(sprint_zone - blend_end, 0.01), 0.0, 1.0))
 
 
 ## Called by enemy weapons (DamageInfo.apply).
@@ -127,7 +155,11 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	var wish_amount := wish.length()
 	var wish_dir := wish / wish_amount if wish_amount > 0.001 else Vector3.ZERO
 
-	is_sprinting = cmd.sprint_held and wish_amount > 0.1
+	if wish_amount >= sprint_zone:
+		_stick_sprint = true
+	elif wish_amount < sprint_exit:
+		_stick_sprint = false
+	is_sprinting = (cmd.sprint_held or _stick_sprint) and wish_amount > 0.1
 
 	# --- dodge start ---
 	if cmd.dodge_pressed and not is_dodging and _dodge_cooldown_timer <= 0.0 and (on_floor or _air_dodges_left > 0):
@@ -149,8 +181,7 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 		if _dodge_timer <= 0.0:
 			is_dodging = false
 	else:
-		var speed := sprint_speed if is_sprinting else walk_speed
-		var target := Vector2(wish.x, wish.z) * speed
+		var target := Vector2(wish_dir.x, wish_dir.z) * gait_speed(wish_amount, is_sprinting)
 		var rate: float
 		if on_floor:
 			rate = ground_accel if wish_amount > 0.0 else ground_decel

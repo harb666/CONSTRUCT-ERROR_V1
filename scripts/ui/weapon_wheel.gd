@@ -10,7 +10,7 @@ extends Control
 ##
 ## Everything comes from the player's WeaponLoadout / WeaponRegistry (icons,
 ## names, colours, allowed arms), so new weapons appear without UI changes.
-## Desktop: hold Q and move the mouse.
+## Desktop: hold Tab and move the mouse.
 
 signal opened
 signal closed
@@ -117,8 +117,8 @@ func close() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Desktop testing: hold Q, move the mouse, release Q.
-	if event is InputEventKey and event.keycode == KEY_Q and not event.echo:
+	# Desktop testing: hold Tab, move the mouse, release Tab.
+	if event is InputEventKey and event.keycode == KEY_TAB and not event.echo:
 		if event.pressed and not is_open:
 			_key_open = true
 			open_at(get_viewport().get_mouse_position())

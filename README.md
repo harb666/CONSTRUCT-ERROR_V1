@@ -13,11 +13,14 @@ The HUD shows the branch/commit of the running build.
 ## Controls
 | Touch | Keyboard / pad |
 |---|---|
-| Left side: floating move stick | WASD / left stick |
+| Left side: floating move stick - light push walks, firmer push runs, all the way sprints (for as long as it's held there) | WASD (full = sprint) / left stick |
 | Right side: drag to look | mouse drag / right stick |
 | JUMP (tap again in air = double jump) | Space / A |
 | DODGE (direction = stick, else facing) | Q or Ctrl / B |
-| SPRINT (toggle; turns off when you let go of the stick) | Shift (hold) / RT |
+| SPRINT (toggle; turns off when you let go of the stick) - optional, the stick sprints by itself | Shift (hold) / RT |
+| Weapon button (hold, drag to a weapon, release) | Tab (hold) + mouse |
+
+Gaits from the stick (`PlayerController`): pushed up to `walk_zone` (0.5) it walks (up to `walk_speed` 4 m/s), further it blends into a run (`run_min_speed` 6.2 .. `run_speed` 8.5 m/s), and from `sprint_zone` (0.9) it sprints at `sprint_speed` 11.5 m/s until the push drops below `sprint_exit` (0.82; no flicker at the edge). Speeds line up with the Walking / Running / RunFast clips.
 
 ## Layout
 - `scripts/input/` – `PlayerCommand` (one tick of intent, serialisable), `PlayerInput` (source base class), `LocalPlayerInput` (this device).
@@ -67,7 +70,7 @@ The HUD shows the branch/commit of the running build.
 - `WeaponRegistry` (`resources/weapons/weapon_registry.tres`): every weapon in wheel order. Each `WeaponDefinition` has id, display name, icon (`tools/render_weapon_icons.gd` renders `assets/ui/weapon_icons/<id>.png` from the weapon scene), accent colour, `unlocked_at_start` and `allowed_sides`. A new weapon = definition + registry entry (+ icon render); no UI changes.
 - `WeaponLoadout` (on the player): session unlocks (only the Default Cannon at start), `equip(side, def)`, `available_for(side)`. Pads: the first pickup unlocks the weapon and puts it on the RIGHT arm; a pad for an already unlocked weapon is left alone (it's in the wheel). Nothing is ever removed.
 - Switching (`WeaponSlot.switch_to`, ~0.3 s): the old weapon stops firing and retracts into the arm (scales into its mount) with an energy burst in its colour (`WeaponSwitchFx`: flash, ring round the arm, arcs, sparks), then the new weapon snaps out of the same WeaponSocket with a small overshoot and fires as soon as it is half out. Only that arm is affected; its target lock stays, so the new weapon takes over the target at once.
-- `WeaponWheel` (`scripts/ui/weapon_wheel.gd`): one compact HUD button (shows both arms' weapons) in the touch cluster. Hold it: the wheel opens in the middle (left half = LEFT ARM, right half = RIGHT ARM, centre = what each arm holds / will hold), the game slows to x0.5 (movement keeps working on the other thumb). Drag towards a weapon (direction from where the thumb went down; 48 px dead zone, sideways band to pick an arm, hysteresis) and release to equip it on that arm; release near the start to cancel. Highlights: hovered arm, hovered weapon (its colour, name), equipped weapons (tick). Desktop: hold Q, move the mouse.
+- `WeaponWheel` (`scripts/ui/weapon_wheel.gd`): one compact HUD button (shows both arms' weapons) in the touch cluster. Hold it: the wheel opens in the middle (left half = LEFT ARM, right half = RIGHT ARM, centre = what each arm holds / will hold), the game slows to x0.5 (movement keeps working on the other thumb). Drag towards a weapon (direction from where the thumb went down; 48 px dead zone, sideways band to pick an arm, hysteresis) and release to equip it on that arm; release near the start to cancel. Highlights: hovered arm, hovered weapon (its colour, name), equipped weapons (tick). Desktop: hold Tab, move the mouse.
 
 ## Tap-to-target auto fire
 Four separate, reusable pieces (any weapon/enemy can use them):
