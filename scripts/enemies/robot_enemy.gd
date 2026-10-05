@@ -36,6 +36,10 @@ const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
 @export var preferred_range := Vector2(7.0, 14.0)
 @export var combat_speed := 2.6
 @export var run_anim_speed := 3.4
+## Most the upper body turns from the legs before it walks backwards
+## (facing the target) instead.
+@export var max_twist_deg := 105.0
+@export var backpedal_speed_factor := 0.6
 ## Seconds between strafe direction decisions.
 @export var strafe_time := Vector2(1.0, 2.4)
 @export var fire_range := 26.0
@@ -111,6 +115,8 @@ var _cool_t := 0.0
 var _next_cannon := 0
 var _sep := Vector3.ZERO
 var _move_anim := &"Walking"
+var _anim_backwards := false
+var _backing := false
 
 
 func _ready() -> void:
@@ -152,6 +158,7 @@ func _build_model() -> void:
 	_anim.play(&"Walking")
 	_anim.seek(_phase * _anim.current_animation_length, true)
 	_move_anim = &"Walking"
+	_anim_backwards = false
 	_aim = RobotArmAim.new()
 	_aim.name = "ArmAim"
 	_skeleton.add_child(_aim)
@@ -432,28 +439,47 @@ func _combat(delta: float) -> void:
 			_strafe_dir = -_strafe_dir
 			_strafe_t = randf_range(strafe_time.x, strafe_time.y)
 			want = Vector3.UP.cross(dir_to) * _strafe_dir * 0.8 + _sep * 1.5
-	want = want.normalized() * combat_speed if want.length_squared() > 0.01 else Vector3.ZERO
+	var spd_want := combat_speed * (backpedal_speed_factor if _backing else 1.0)
+	want = want.normalized() * spd_want if want.length_squared() > 0.01 else Vector3.ZERO
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
 	if (hv - want).length() < 4.0:
 		hv += (want - hv).limit_length(walk_accel * 1.8 * delta)
 		linear_velocity = Vector3(hv.x, v.y, hv.z)
-	# Always face the player.
-	_yaw = lerp_angle(_yaw, atan2(dir_to.x, dir_to.z), clampf(turn_speed * 1.6 * delta, 0.0, 1.0))
+	# Like the player character: legs face where it's going, the upper body
+	# twists to keep the chest and cannons on the target. Moving away from
+	# the target it faces it and walks backwards instead.
+	var player_yaw := atan2(dir_to.x, dir_to.z)
+	var spd := hv.length()
+	var legs_yaw := player_yaw
+	var backwards := false
+	if spd > 0.4:
+		var move_yaw := atan2(hv.x, hv.z)
+		# Hysteresis so it doesn't flip between forwards/backwards.
+		var limit := max_twist_deg + (-12.0 if _backing else 12.0)
+		if absf(wrapf(move_yaw - player_yaw, -PI, PI)) > deg_to_rad(limit):
+			legs_yaw = move_yaw + PI
+			backwards = true
+		else:
+			legs_yaw = move_yaw
+	_yaw = lerp_angle(_yaw, legs_yaw, clampf(turn_speed * 3.5 * delta, 0.0, 1.0))
 	_visual.rotation.y = _yaw
-	_set_move_anim(hv.length())
+	_aim.twist = clampf(wrapf(player_yaw - _yaw, -PI, PI), -deg_to_rad(max_twist_deg), deg_to_rad(max_twist_deg))
+	_backing = backwards
+	_set_move_anim(spd, backwards)
 	# Aim both cannons at the player.
 	_aim.target_point = _aim_point()
 	_aim.target_weight = 1.0
 	_update_fire(delta, d)
 
 
-func _set_move_anim(speed: float) -> void:
-	var run := speed > 1.9
+func _set_move_anim(speed: float, backwards := false) -> void:
+	var run := speed > 1.9 and not backwards
 	var a := &"Running" if run else &"Walking"
-	if a != _move_anim:
+	if a != _move_anim or backwards != _anim_backwards:
 		_move_anim = a
-		_anim.play(a, 0.2)
+		_anim_backwards = backwards
+		_anim.play(a, 0.2, -1.0 if backwards else 1.0)
 	_anim.speed_scale = clampf(speed / (run_anim_speed if run else walk_anim_speed), 0.5, 1.6)
 
 
@@ -509,9 +535,12 @@ func _patrol(delta: float) -> void:
 		return
 	if freeze:
 		return  # held by something (e.g. captured in a gravity well)
-	if _move_anim != &"Walking":
+	if _move_anim != &"Walking" or _anim_backwards:
 		_move_anim = &"Walking"
+		_anim_backwards = false
 		_anim.play(&"Walking", 0.25)
+	if _aim:
+		_aim.twist = 0.0
 	var axis := Vector3(patrol_axis.x, 0, patrol_axis.z).normalized()
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
@@ -721,3 +750,12 @@ func _respawn() -> void:
 	set_physics_process(true)
 	if _targetable:
 		_targetable.revive()
+
+
+## Angle (deg) between where the upper body faces and the target (tests).
+func upper_body_facing_error() -> float:
+	if target == null:
+		return 0.0
+	var to := target.global_position - global_position
+	var chest_yaw := _yaw + (_aim.twist * _aim.weight if _aim else 0.0)
+	return absf(rad_to_deg(wrapf(atan2(to.x, to.z) - chest_yaw, -PI, PI)))

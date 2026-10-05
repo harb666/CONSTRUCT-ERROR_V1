@@ -804,19 +804,24 @@ func _robot_combat_tests(main: Node) -> void:
 	var start := r.global_position
 	var moved := 0.0
 	var facing_err := 0.0
+	var legs_err := 0.0
 	var samples := 0
 	for i in Engine.physics_ticks_per_second * 6:
 		await _ticks(1)
 		bolts_max = maxi(bolts_max, PlasmaBolt.active_count())
 		moved = maxf(moved, r.global_position.distance_to(start))
 		if r.target and i > 60:
-			var to := p.global_position - r.global_position
-			var fwd := r._visual.global_basis.z  # the model faces +Z
-			facing_err = maxf(facing_err, rad_to_deg(Vector2(fwd.x, fwd.z).angle_to(Vector2(to.x, to.z))))
+			facing_err = maxf(facing_err, r.upper_body_facing_error())
 			samples += 1
+			var hv := Vector2(r.linear_velocity.x, r.linear_velocity.z)
+			if hv.length() > 1.0:
+				var legs := Vector2(r._visual.global_basis.z.x, r._visual.global_basis.z.z)
+				var ang := rad_to_deg(absf(legs.angle_to(hv)))
+				legs_err = maxf(legs_err, minf(ang, absf(180.0 - ang)))
 	_check(r.target == p, "robot detects and engages the player")
 	_check(moved > 1.5, "it moves/strafes while fighting (%.1f m)" % moved)
-	_check(samples > 0 and facing_err < 35.0, "keeps facing the player (worst %.0f deg)" % facing_err)
+	_check(samples > 0 and facing_err < 35.0, "upper body keeps facing the player (worst %.0f deg)" % facing_err)
+	_check(legs_err < 60.0, "legs face along its movement (forwards or backpedalling), no sideways floating (worst %.0f deg)" % legs_err)
 	_check(r.shots_fired >= 6, "fires bursts from its cannons (%d shots in 6 s)" % r.shots_fired)
 	_check(r.shots_fired < 40, "bursts, not constant spam (%d shots in 6 s)" % r.shots_fired)
 	_check(bolts_max > 0, "green plasma bolts fly (%d at once)" % bolts_max)

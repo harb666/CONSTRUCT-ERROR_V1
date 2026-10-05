@@ -7,6 +7,10 @@ extends SkeletonModifier3D
 
 ## World point to aim at.
 var target_point := Vector3.ZERO
+## Upper-body twist (radians, about the body's up axis) so the chest faces
+## the target while the legs face where it's walking; spread over the spine.
+var twist := 0.0
+var _spine: Array[int] = []
 ## 0..1 blend (set by the robot; eased here).
 var weight := 0.0
 var target_weight := 0.0
@@ -24,6 +28,11 @@ var _have_muzzles := false
 
 func setup(skel: Skeleton3D, muzzles: Dictionary) -> void:
 	_sides.clear()
+	_spine.clear()
+	for b in ["mixamorig_Spine", "mixamorig_Spine1", "mixamorig_Spine2"]:
+		var i := skel.find_bone(b)
+		if i >= 0:
+			_spine.append(i)
 	for side in ["Left", "Right"]:
 		var arm := skel.find_bone("mixamorig_%sArm" % side)
 		var fore := skel.find_bone("mixamorig_%sForeArm" % side)
@@ -60,6 +69,12 @@ func _process_modification() -> void:
 	if weight <= 0.001:
 		_store_muzzles(skel)
 		return
+	# Twist the spine first (parents before the arms).
+	if absf(twist) > 0.001 and not _spine.is_empty():
+		var part := twist * weight / _spine.size()
+		for b in _spine:
+			var g := skel.get_bone_global_pose(b)
+			skel.set_bone_global_pose(b, Transform3D(Basis(Vector3.UP, part) * g.basis, g.origin))
 	var target_local := skel.global_transform.affine_inverse() * target_point
 	for s in _sides:
 		var arm: int = s[0]
