@@ -128,19 +128,54 @@ func _build_model() -> void:
 
 static var _whole_mesh: ArrayMesh
 static var _whole_skin: Skin
+## Much simpler copy for when it's far away (only a few pixels tall).
+const FAR_MODEL := preload("res://assets/characters/robot/robot_enemy_far.glb")
+static var _far_mesh: ArrayMesh
+static var _far_skin: Skin
+## Camera distance (m) where it swaps to the far mesh, and the hysteresis.
+@export var far_distance := 30.0
+@export var far_margin := 2.0
 var _whole: MeshInstance3D
+var _whole_far: MeshInstance3D
+## Casts the robot's shadow using the simple mesh (a shadow is a soft
+## silhouette; the full-detail body itself doesn't need to cast it).
+var _shadow_proxy: MeshInstance3D
 var _sections: Array[MeshInstance3D] = []
 
 
 ## All section surfaces merged per material (built once, shared by robots).
 static func _build_whole_mesh(skel: Skeleton3D) -> void:
+	var r := _merge_sections(skel)
+	_whole_mesh = r[0]
+	_whole_skin = r[1]
+	# Distant version: same merge of the simplified model, using the main
+	# robot's materials (it carries no textures of its own).
+	var far: Node3D = FAR_MODEL.instantiate()
+	var far_skel := far.find_child("Skeleton3D", true, false) as Skeleton3D
+	var rf := _merge_sections(far_skel)
+	var simple: ArrayMesh = rf[0]
+	_far_skin = rf[1]
+	# Simplified main body + the full-detail small glow-detail surface (tiny,
+	# and the part that would otherwise visibly vanish).
+	_far_mesh = ArrayMesh.new()
+	_far_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, simple.surface_get_arrays(0))
+	_far_mesh.surface_set_material(0, _whole_mesh.surface_get_material(0))
+	for k in range(1, _whole_mesh.get_surface_count()):
+		_far_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _whole_mesh.surface_get_arrays(k))
+		_far_mesh.surface_set_material(k, _whole_mesh.surface_get_material(k))
+	far.free()
+
+
+## [merged ArrayMesh, Skin] of every section mesh under `skel`.
+static func _merge_sections(skel: Skeleton3D) -> Array:
+	var skin: Skin
 	var by_mat := {}  # material -> [arrays parts]
 	var order: Array = []
 	for mi in skel.get_children():
 		if not (mi is MeshInstance3D):
 			continue
 		var m: Mesh = (mi as MeshInstance3D).mesh
-		_whole_skin = (mi as MeshInstance3D).skin
+		skin = (mi as MeshInstance3D).skin
 		for k in m.get_surface_count():
 			var mat := m.surface_get_material(k)
 			if not by_mat.has(mat):
@@ -169,7 +204,7 @@ static func _build_whole_mesh(skel: Skeleton3D) -> void:
 			base += n
 		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)
 		out.surface_set_material(out.get_surface_count() - 1, mat)
-	_whole_mesh = out
+	return [out, skin]
 
 
 func _use_whole_mesh() -> void:
@@ -185,6 +220,25 @@ func _use_whole_mesh() -> void:
 	_whole.skin = _whole_skin
 	_skeleton.add_child(_whole)
 	_whole.skeleton = NodePath("..")
+	_whole.visibility_range_end = far_distance
+	_whole.visibility_range_end_margin = far_margin
+	_whole_far = MeshInstance3D.new()
+	_whole_far.name = "WholeBodyFar"
+	_whole_far.mesh = _far_mesh
+	_whole_far.skin = _far_skin
+	_skeleton.add_child(_whole_far)
+	_whole_far.skeleton = NodePath("..")
+	_whole_far.visibility_range_begin = far_distance
+	_whole_far.visibility_range_begin_margin = far_margin
+	_whole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_whole_far.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shadow_proxy = MeshInstance3D.new()
+	_shadow_proxy.name = "ShadowProxy"
+	_shadow_proxy.mesh = _far_mesh
+	_shadow_proxy.skin = _far_skin
+	_shadow_proxy.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	_skeleton.add_child(_shadow_proxy)
+	_shadow_proxy.skeleton = NodePath("..")
 	for s in _sections:
 		s.visible = false
 
@@ -193,10 +247,13 @@ func _use_section_meshes() -> void:
 	for s in _sections:
 		if is_instance_valid(s):
 			s.visible = true
-	if _whole and is_instance_valid(_whole):
-		_whole.visible = false  # never drawn together with the sections
-		_whole.queue_free()
+	for w in [_whole, _whole_far, _shadow_proxy]:
+		if w and is_instance_valid(w):
+			w.visible = false  # never drawn together with the sections
+			w.queue_free()
 	_whole = null
+	_whole_far = null
+	_shadow_proxy = null
 
 
 ## True while drawn as the single merged mesh (tests/debug).

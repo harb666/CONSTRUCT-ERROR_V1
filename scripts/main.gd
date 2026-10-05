@@ -16,6 +16,11 @@ var players := {}  # player_id -> PlayerController
 
 func _ready() -> void:
 	spawn_player(1, true)
+	var stress := StressTest.robot_count()
+	if stress > 0:
+		StressTest.populate(self, stress)
+		print("stress test: %d robots" % stress)
+	debug_hud.set("show_perf", StressTest.perf_enabled())
 
 
 func spawn_player(player_id: int, is_local: bool) -> PlayerController:
