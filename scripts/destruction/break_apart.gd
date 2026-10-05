@@ -276,6 +276,7 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 			pose.add_child(mi)
 			mi.transform = local
 			mi.skeleton = NodePath("..")
+			mi.visible = true
 		_detached[s.section_name] = true
 	for s in group:
 		_carrier[s.section_name] = pose

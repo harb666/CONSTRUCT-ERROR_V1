@@ -581,8 +581,12 @@ func _robot_tests(main: Node) -> void:
 	# Normal death: assembled, death clip, behaviour stops, target invalid.
 	var r2 := _spawn_robot(main, spot + Vector3(4, 0, 0))
 	await _ticks(10)
+	_check(r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return not m.visible), "living robot draws as one merged mesh")
+	var whole_surfaces: int = r2._whole.mesh.get_surface_count()
+	_check(whole_surfaces == 2, "merged robot mesh = 2 draw surfaces (was %d section meshes)" % r2._sections.size())
 	r2.apply_damage(DamageInfo.make(10, DamageInfo.Type.BULLET, r2.global_position + Vector3(0, 1, 2), Vector3(0, 0, -1), 1.0))
 	_check(not r2.alive and r2.last_destruction == BreakApart.Level.NONE, "low-force kill: dies whole")
+	_check(not r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return m.visible), "on death it switches to its separate sections")
 	_check(r2._anim.current_animation == String(r2.last_death_anim) and r2.last_death_anim != &"Walking", "plays one of its own death clips (%s)" % r2.last_death_anim)
 	_check(not r2.get_node("Targetable").is_valid_target(), "dead robot can't be targeted")
 	await _ticks(90)
@@ -598,6 +602,8 @@ func _robot_tests(main: Node) -> void:
 	var cuts: Array[BreakSection] = []
 	cuts.assign(r3.get_breaker().sections)
 	var head_before := (sk.global_transform * sk.get_bone_global_pose(head_b))
+	r3._use_section_meshes()  # as die() does
+	await _ticks(1)
 	r3.alive = false
 	var pieces := r3.get_breaker().detach(cuts, big, Vector3.ZERO)
 	_check(pieces.size() == 13, "extreme: every prepared section becomes its own piece (%d)" % pieces.size())

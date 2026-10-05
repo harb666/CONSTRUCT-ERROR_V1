@@ -120,3 +120,4 @@ Volumes/ranges are exports on `BlackHoleProjectile` (Audio group). After firing,
 
 ## Character mesh reduction
 `grinch.glb` (110k -> 74k vertices) and `robot_enemy.glb` (108k -> 60k) were simplified with gltfpack (`-si 0.6` / `-si 0.2 -slb -kn -km -ke -ac -af 0 -noq`: named nodes/sections, materials, skins and the 28-bone rigs kept), then `tools/transplant_animations.py` copied the ORIGINAL animation data back in byte for byte (gltfpack thins keyframes), so every pose of every clip is identical to the source.
+- **Living robots draw as one mesh**: `RobotEnemy` merges the 15 section meshes (same skin, same 2 materials, same skeleton) into one shared 2-surface mesh, built once on the first spawn (~30 ms desktop). Sections stay loaded but hidden; `die()` switches back to them before any breakup, so death/breakup behave exactly as before. 9 robots in view: 401 -> 86 draw calls; pixel output identical (max 1/255 rounding).

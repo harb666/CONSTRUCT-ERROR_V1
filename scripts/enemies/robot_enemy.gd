@@ -103,6 +103,7 @@ func _build_model() -> void:
 	_model.position = Vector3(0, 0, 0.245)
 	_skeleton = _model.find_child("Skeleton3D", true, false) as Skeleton3D
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	_use_whole_mesh()
 	for a in [&"Walking", &"Running"]:
 		if _anim.has_animation(a):
 			_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
@@ -117,6 +118,90 @@ func _build_model() -> void:
 	add_child(_breaker)
 	_yaw = atan2(patrol_axis.x * _dir, patrol_axis.z * _dir)
 	_visual.rotation.y = _yaw
+
+
+# --- One mesh while alive (performance) ---
+#
+# The 15 body sections are only needed when the robot breaks apart. While
+# it's alive it draws ONE mesh made of all of them (identical geometry,
+# skin and materials on the same skeleton): 2 draw calls instead of ~28.
+
+static var _whole_mesh: ArrayMesh
+static var _whole_skin: Skin
+var _whole: MeshInstance3D
+var _sections: Array[MeshInstance3D] = []
+
+
+## All section surfaces merged per material (built once, shared by robots).
+static func _build_whole_mesh(skel: Skeleton3D) -> void:
+	var by_mat := {}  # material -> [arrays parts]
+	var order: Array = []
+	for mi in skel.get_children():
+		if not (mi is MeshInstance3D):
+			continue
+		var m: Mesh = (mi as MeshInstance3D).mesh
+		_whole_skin = (mi as MeshInstance3D).skin
+		for k in m.get_surface_count():
+			var mat := m.surface_get_material(k)
+			if not by_mat.has(mat):
+				by_mat[mat] = []
+				order.append(mat)
+			by_mat[mat].append(m.surface_get_arrays(k))
+	var out := ArrayMesh.new()
+	for mat in order:
+		var merged := []
+		merged.resize(Mesh.ARRAY_MAX)
+		var base := 0
+		for arr: Array in by_mat[mat]:
+			var n: int = (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+			for t in Mesh.ARRAY_MAX:
+				if arr[t] == null:
+					continue
+				if t == Mesh.ARRAY_INDEX:
+					var idx: PackedInt32Array = arr[t]
+					var shifted := PackedInt32Array()
+					shifted.resize(idx.size())
+					for i in idx.size():
+						shifted[i] = idx[i] + base
+					merged[t] = shifted if merged[t] == null else merged[t] + shifted
+				else:
+					merged[t] = arr[t].duplicate() if merged[t] == null else merged[t] + arr[t]
+			base += n
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged)
+		out.surface_set_material(out.get_surface_count() - 1, mat)
+	_whole_mesh = out
+
+
+func _use_whole_mesh() -> void:
+	_sections.clear()
+	for c in _skeleton.get_children():
+		if c is MeshInstance3D:
+			_sections.append(c)
+	if _whole_mesh == null:
+		_build_whole_mesh(_skeleton)
+	_whole = MeshInstance3D.new()
+	_whole.name = "WholeBody"
+	_whole.mesh = _whole_mesh
+	_whole.skin = _whole_skin
+	_skeleton.add_child(_whole)
+	_whole.skeleton = NodePath("..")
+	for s in _sections:
+		s.visible = false
+
+
+func _use_section_meshes() -> void:
+	for s in _sections:
+		if is_instance_valid(s):
+			s.visible = true
+	if _whole and is_instance_valid(_whole):
+		_whole.visible = false  # never drawn together with the sections
+		_whole.queue_free()
+	_whole = null
+
+
+## True while drawn as the single merged mesh (tests/debug).
+func is_whole_mesh() -> bool:
+	return _whole != null and is_instance_valid(_whole) and _whole.visible
 
 
 ## Gravity wells shrink/spin these; a living robot stays full size (it is
@@ -220,6 +305,9 @@ func apply_damage(info: DamageInfo) -> void:
 func die(info: DamageInfo) -> void:
 	if not alive:
 		return
+	# Back to the separate sections (same skeleton, same pose) so it can
+	# break apart.
+	_use_section_meshes()
 	alive = false
 	health = 0.0
 	if _targetable:
