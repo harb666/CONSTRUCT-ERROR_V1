@@ -7,6 +7,8 @@ extends Node3D
 
 @export var controller_path: NodePath = ^"../.."
 @export var model_path: NodePath = ^"Model"
+## Optional caps sealing open holes in the model (e.g. hand-less gauntlets).
+@export var mesh_caps: MeshCaps
 
 @export_group("Locomotion")
 ## Horizontal speeds (m/s) at which each clip is fully weighted. Clips appear
@@ -112,6 +114,8 @@ const LOCK_NODES := {"Right": "TargetLock", "Left": "TargetLockLeft"}
 func _ready() -> void:
 	controller = get_node(controller_path) as PlayerController
 	var model := get_node(model_path)
+	if mesh_caps:
+		mesh_caps.apply(model)
 	_anim_player = model.find_child("AnimationPlayer", true, false)
 	var skeleton: Skeleton3D = model.find_children("*", "Skeleton3D", true, false)[0]
 

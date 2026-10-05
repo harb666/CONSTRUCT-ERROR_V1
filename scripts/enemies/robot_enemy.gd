@@ -12,6 +12,9 @@ signal died(info: DamageInfo)
 signal hit(count: int)
 
 const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
+## Seals the model's cut sections (its own interior caps made opaque, plus
+## caps for the few cuts it lacks) so no part is see-through when broken.
+const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 
 @export var max_health := 2.0
 @export var section_set: BreakSectionSet = preload("res://resources/enemies/robot_break_sections.tres")
@@ -168,6 +171,7 @@ func _build_model() -> void:
 	_model.position = Vector3(0, 0, 0.245)
 	_skeleton = _model.find_child("Skeleton3D", true, false) as Skeleton3D
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	CAPS.apply(_model)
 	_use_whole_mesh()
 	for a in [&"Walking", &"Running"]:
 		if _anim.has_animation(a):

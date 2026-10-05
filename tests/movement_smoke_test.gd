@@ -401,6 +401,7 @@ func _run() -> void:
 	await _weapon_fit_tests(main)
 	await _weapon_socket_tests(main)
 	await _weapon_switch_tests(main)
+	await _mesh_cap_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -1662,3 +1663,67 @@ func _weapon_switch_tests(main: Node) -> void:
 	for i in 10:
 		await process_frame
 	_check(Engine.time_scale == 1.0, "game speed back to normal")
+
+
+## Open holes sealed with minimal caps: the player's hand-less gauntlets and
+## the robot's cut sections (its own interior caps made opaque + caps for the
+## cuts it lacked), with no extra draw calls and LODs kept.
+func _mesh_cap_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var g_src: ArrayMesh = (load("res://assets/characters/grinch/grinch.glb") as PackedScene).instantiate().find_children("*", "MeshInstance3D", true, false)[0].mesh
+	var g_caps: MeshCaps = load("res://assets/characters/grinch/grinch_caps.res")
+	var body: MeshInstance3D = null
+	for mi: MeshInstance3D in p.get_node("Visual").find_children("*", "MeshInstance3D", true, false):
+		if mi.skin and mi.mesh and mi.mesh.get_surface_count() == g_src.get_surface_count() and mi.mesh.surface_get_array_len(0) > 50000:
+			body = mi
+	var cap_v: int = (g_caps.caps.values()[0].vertices as PackedVector3Array).size()
+	_check(body != null and body.mesh.surface_get_array_len(0) == g_src.surface_get_array_len(0) + cap_v, "player: gauntlet ends sealed (+%d vertices, same surface)" % cap_v)
+	_check(g_caps.caps.values()[0].holes == 2, "player: both hand-less gauntlet openings capped")
+	var lods_src: int = RenderingServer.mesh_get_surface(g_src.get_rid(), 0).get("lods", []).size()
+	var lods_now: int = RenderingServer.mesh_get_surface(body.mesh.get_rid(), 0).get("lods", []).size() if body else -1
+	_check(lods_now == lods_src, "player: LODs kept (%d)" % lods_now)
+	# Robot.
+	var r := _spawn_robot(main, Vector3(10, 0, 26))
+	await _ticks(5)
+	var all_opaque := true
+	var surfaces_ok := true
+	var src_scene: Node = (load("res://assets/characters/robot/robot_enemy.glb") as PackedScene).instantiate()
+	var src_counts := {}
+	for mi: MeshInstance3D in src_scene.find_children("*", "MeshInstance3D", true, false):
+		src_counts[mi.name] = mi.mesh.get_surface_count()
+	src_scene.free()
+	for mi in r._sections:
+		var m: Mesh = mi.mesh
+		if src_counts.has(mi.name) and m.get_surface_count() != src_counts[mi.name]:
+			surfaces_ok = false
+		for si in m.get_surface_count():
+			var mat := m.surface_get_material(si) as BaseMaterial3D
+			if mat and mat.resource_name.contains("Interior") and (mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or mat.albedo_color.a < 1.0):
+				all_opaque = false
+	_check(all_opaque, "robot: interior caps of every section are solid (opaque)")
+	_check(surfaces_ok and r._whole.mesh.get_surface_count() == 2, "robot: no extra surfaces / draw calls (whole body still 2)")
+	var rc: MeshCaps = load("res://assets/characters/robot/robot_caps.res")
+	var holes := 0
+	for k in rc.caps:
+		holes += int(rc.caps[k].holes)
+	_check(holes == 5 and rc.caps.has("Torso") and rc.caps.has("Left_Upper_Arm") and rc.caps.has("Pelvis") and rc.caps.has("Left_Thigh"), "robot: the 5 uncapped cuts (left shoulder, left hip, pelvis) get caps")
+	# Pieces keep the sealed meshes.
+	r._use_section_meshes()
+	var cuts: Array[BreakSection] = []
+	cuts.assign(r.get_breaker().sections)
+	var pieces := r.get_breaker().detach(cuts, DamageInfo.make(99, DamageInfo.Type.EXPLOSION, r.global_position + Vector3.UP, Vector3.FORWARD, 30.0, 30.0), Vector3.ZERO)
+	r.alive = false
+	var sealed := true
+	for pc in pieces:
+		for mi: MeshInstance3D in pc.find_children("*", "MeshInstance3D", true, false):
+			for si in mi.mesh.get_surface_count():
+				var mat := mi.mesh.surface_get_material(si) as BaseMaterial3D
+				if mat and mat.resource_name.contains("Interior") and mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+					sealed = false
+	_check(pieces.size() == 13 and sealed, "robot: every broken piece keeps its sealed cut faces")
+	await _ticks(2)
+	for pc in pieces:
+		if is_instance_valid(pc):
+			pc.queue_free()
+	r.queue_free()
+	await _ticks(2)
