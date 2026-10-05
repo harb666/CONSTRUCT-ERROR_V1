@@ -393,6 +393,7 @@ func _run() -> void:
 	await _supernova_finish_tests(main)
 	await _robot_combat_tests(main)
 	await _dual_wield_tests(main)
+	await _shotgun_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -1068,3 +1069,171 @@ func _dual_wield_tests(main: Node) -> void:
 	await _ticks(3)
 	for r in [ra, rb, rc]:
 		r.queue_free()
+
+
+## Five-barrel shotgun: pad (orange, separate from the BHG pad), pickup into
+## the RIGHT slot, five streams from five barrels, close-range kill, spread
+## and damage falling off with distance, subtle secondary hits, VFX, dual use.
+func _shotgun_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	sel.clear()
+	sel.forget_last_tap()
+	var pad: WeaponSpawnPad = main.get_node("ShotgunSpawnPad")
+	var bh_pad: WeaponSpawnPad = main.get_node("WeaponSpawnPad")
+	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	_check(spawner.display is Shotgun, "shotgun floats above its own pad")
+	var box := AABB()
+	var first := true
+	for mi: MeshInstance3D in spawner.display.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh:
+			var ab: AABB = mi.global_transform * mi.mesh.get_aabb()
+			box = ab if first else box.merge(ab)
+			first = false
+	var off := box.get_center() - pad.global_position
+	_check(Vector2(off.x, off.z).length() < 0.05 and off.y > 0.6, "shotgun is centred above the pad (%.2f m off)" % Vector2(off.x, off.z).length())
+	var rot_a := spawner._pivot.rotation.y
+	await _ticks(20)
+	_check(absf(spawner._pivot.rotation.y - rot_a) > 0.05, "shotgun display rotates")
+	var ring: MeshInstance3D = pad.get_node("GlowRing")
+	var ring_col: Color = (ring.get_active_material(0) as StandardMaterial3D).albedo_color
+	_check(ring_col.r > 0.9 and ring_col.g > 0.3 and ring_col.g < 0.6 and ring_col.b < 0.2, "shotgun pad glows orange (%s)" % ring_col)
+	var model_mi: MeshInstance3D = pad.get_node("Model").find_children("*", "MeshInstance3D", true, false)[0]
+	_check(model_mi.get_active_material(0) is ShaderMaterial, "shotgun pad model recoloured")
+	var bh_ring: Color = (bh_pad.get_node("GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	var bh_model: MeshInstance3D = bh_pad.get_node("Model").find_children("*", "MeshInstance3D", true, false)[0]
+	_check(bh_ring.b > 0.9 and bh_model.get_active_material(0) is StandardMaterial3D, "Black Hole Generator pad keeps its purple glow")
+	_check(bh_pad.weapon.id == &"black_hole_generator" and pad.weapon.id == &"shotgun", "each pad offers its own weapon")
+
+	# Walk onto the pad: the shotgun goes into the RIGHT slot.
+	var left_before := h.weapon("Left")
+	p.global_position = pad.global_position + Vector3(0, 0.05, 3.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	Input.action_press("move_forward")
+	for i in 60:
+		await _ticks(1)
+		if h.weapon("Right") is Shotgun:
+			break
+	Input.action_release("move_forward")
+	await _ticks(10)
+	_check(h.weapon("Right") is Shotgun and spawner.display == null, "walking onto the pad equips the shotgun (RIGHT slot)")
+	_check(h.weapon("Left") == left_before and h.weapon("Left") is PlasmaCannon, "LEFT slot keeps its weapon")
+	var sg := h.weapon("Right") as Shotgun
+	_check(sg.barrel_positions().size() == 5, "five barrel muzzles")
+	var bp := sg.barrel_positions()
+	var min_gap := INF
+	for i in 5:
+		for j in range(i + 1, 5):
+			min_gap = minf(min_gap, bp[i].distance_to(bp[j]))
+	_check(min_gap > 0.02, "each barrel has its own muzzle point (closest %.3f m)" % min_gap)
+
+	# Close range: one blast, all five streams, kills a normal robot.
+	var base := Vector3(-14, 0, 33)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	var near := _spawn_robot(main, base + Vector3(0, 0, -3.0))
+	await _ticks(10)
+	var tn: Targetable = near.get_node("Targetable")
+	sg._cool = 0.0
+	_check(sg.fire_at(p, tn.get_aim_point()), "shotgun fires")
+	_check(sg.last_shot.size() == 5, "every shot fires all five barrels (%d streams)" % sg.last_shot.size())
+	var from_ok := true
+	var bp2 := sg.barrel_positions()
+	for i in sg.last_shot.size():
+		from_ok = from_ok and (sg.last_shot[i].from as Vector3).distance_to(bp2[i]) < 0.001
+	_check(from_ok, "each stream starts exactly at its own barrel")
+	_check(ShotgunStream.active_count() >= 5, "five visible streams (%d)" % ShotgunStream.active_count())
+	_check(sg._flash.is_flashing() and sg._flash._light.light_energy > 1.0, "flaming muzzle flash with orange light")
+	var hits_close := 0
+	for st in sg.last_shot:
+		if st.target == tn:
+			hits_close += 1
+	_check(hits_close == 5, "close range: all five streams on the target (%d)" % hits_close)
+	_check(near.alive, "damage lands when the streams arrive, not instantly")
+	await _ticks(3)
+	_check(not near.alive, "a clean close-range blast kills a normal enemy")
+	await _ticks(30)
+	_check(ShotgunStream.active_count() == 0 and not sg._flash.is_flashing(), "streams and flash are brief")
+
+	# Further away: wider spread, fewer hits, less damage per stream.
+	_check(sg.spread_at(3.0) < sg.spread_at(10.0) and sg.spread_at(10.0) < sg.spread_at(18.0), "spread grows with distance")
+	_check(sg.damage_at(3.0) > sg.damage_at(12.0) and sg.damage_at(12.0) > sg.damage_at(22.0), "damage per stream falls with distance")
+	var far := _spawn_robot(main, base + Vector3(0, 0, -17.0))
+	far.max_health = 999.0
+	far.health = 999.0
+	await _ticks(10)
+	var tf: Targetable = far.get_node("Targetable")
+	var hits_far := 0
+	var dmg_far := 0.0
+	for k in 10:
+		sg._cool = 0.0
+		var h0 := far.health
+		sg.fire_at(p, tf.get_aim_point())
+		for st in sg.last_shot:
+			if st.target == tf:
+				hits_far += 1
+		await _ticks(8)
+		dmg_far += h0 - far.health
+	_check(hits_far / 10.0 < 3.0 and hits_far > 0, "at 17 m fewer streams hit (%.1f per shot)" % (hits_far / 10.0))
+	_check(dmg_far / 10.0 < 1.5, "so a far shot does much less damage (%.2f per shot)" % (dmg_far / 10.0))
+	far.queue_free()
+
+	# Medium range with enemies next to the target: outer streams may bend
+	# onto them for slight damage; the target still takes the most.
+	var a := _spawn_robot(main, base + Vector3(0, 0, -12.0))
+	var b := _spawn_robot(main, base + Vector3(2.3, 0, -12.5))
+	var c2 := _spawn_robot(main, base + Vector3(-2.3, 0, -11.6))
+	for r: RobotEnemy in [a, b, c2]:
+		r.max_health = 999.0
+		r.health = 999.0
+	await _ticks(10)
+	var ta: Targetable = a.get_node("Targetable")
+	var dmg_a := 0.0
+	var dmg_o := 0.0
+	var assisted := 0
+	var max_bend := 0.0
+	for k in 10:
+		sg._cool = 0.0
+		var ha := a.health
+		var ho := b.health + c2.health
+		sg.fire_at(p, ta.get_aim_point())
+		for st in sg.last_shot:
+			if st.assisted:
+				assisted += 1
+		await _ticks(8)
+		dmg_a += ha - a.health
+		dmg_o += ho - (b.health + c2.health)
+	_check(assisted > 0 and dmg_o > 0.0, "outer streams semi-lock onto nearby enemies (%d streams, %.2f dmg)" % [assisted, dmg_o])
+	_check(dmg_o < dmg_a * 0.4, "secondary hits do only slight damage (%.2f vs %.2f on the target)" % [dmg_o, dmg_a])
+	_check(assisted <= 20, "at most one bent stream per nearby enemy per shot (%d in 10 shots)" % assisted)
+
+	# Auto-fire through the normal slot/lock path, and dual-wield ready: the
+	# same shotgun definition works in the LEFT slot too.
+	h.equip(pad.weapon, "Left")
+	var sl := h.weapon("Left") as Shotgun
+	_check(sl != null and sl != sg and (sl.get_parent() as BoneAttachment3D).bone_name == "mixamorig_LeftForeArm", "shotgun also mounts on the LEFT arm")
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	sel.tap_target(ta)  # double tap: both slots
+	var r0 := sg.shots_fired
+	var l0 := sl.shots_fired
+	for i in 120:
+		await _ticks(1)
+		if sg.shots_fired > r0 and sl.shots_fired > l0:
+			break
+	_check(sg.shots_fired > r0 and sl.shots_fired > l0, "shotgun + shotgun: both auto-fire at the locked enemy")
+	sel.clear()
+	await _ticks(3)
+	for r: RobotEnemy in [a, b, c2]:
+		r.queue_free()
+	if is_instance_valid(near):
+		near.queue_free()
+	h.equip(h.default_weapon, "Left")
+	h.equip(h.default_weapon, "Right")
+	await _ticks(3)

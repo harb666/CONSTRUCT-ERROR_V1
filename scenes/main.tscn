@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/world/test_arena.gd" id="2"]
@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_enemy.tscn" id="7"]
 [ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
 [ext_resource type="PackedScene" path="res://scenes/props/physics_prop.tscn" id="9"]
+[ext_resource type="Resource" path="res://resources/weapons/shotgun.tres" id="10"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -41,6 +42,11 @@ script = ExtResource("2")
 [node name="WeaponSpawnPad" parent="." instance=ExtResource("5")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
 weapon = ExtResource("6")
+
+[node name="ShotgunSpawnPad" parent="." instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 1)
+weapon = ExtResource("10")
+glow_color = Color(1, 0.42, 0.05, 1)
 
 [node name="Targets" type="Node3D" parent="."]
 

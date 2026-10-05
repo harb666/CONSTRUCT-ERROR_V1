@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/shotgun.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"shotgun"
+display_name = "Shotgun"
+weapon_scene = ExtResource("2")
+mount_offset = -0.05
+mount_lift = 0.06
+mount_out = 0.03
+display_height = 1.05
+display_scale = 1.4
