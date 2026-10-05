@@ -182,7 +182,12 @@ func _run() -> void:
 	_check(shown_core.global_position.distance_to(spawner.display.find_marker("Black_Hole_Projectile_Spawn").global_position) < 0.001, "black hole stays centred while tumbling")
 	var core_anim: AnimationPlayer = shown_core.find_child("AnimationPlayer", true, false)
 	_check(core_anim.is_playing() and core_anim.current_animation == "Accretion_Disk_Rotation", "black hole animation plays")
-	_check(holder.current == null, "player starts unarmed")
+	# Default dual wield: a cannon on each forearm, separate instances.
+	var spawn_r := holder.weapon("Right")
+	var spawn_l := holder.weapon("Left")
+	_check(spawn_r is PlasmaCannon and spawn_l is PlasmaCannon and spawn_r != spawn_l, "spawns with a default cannon in each slot")
+	_check(spawn_r.get_parent() is BoneAttachment3D and (spawn_r.get_parent() as BoneAttachment3D).bone_name == "mixamorig_RightForeArm"
+		and (spawn_l.get_parent() as BoneAttachment3D).bone_name == "mixamorig_LeftForeArm", "cannons mounted on the right and left forearms")
 	p.global_position = pad.global_position + Vector3(0, 0.05, 4.0)
 	p.velocity = Vector3.ZERO
 	p.reset_physics_interpolation()
@@ -200,7 +205,8 @@ func _run() -> void:
 	_check(air_ticks < 6, "stays grounded crossing the pad (%d airborne ticks)" % air_ticks)
 	_check(p.global_position.z < pad.global_position.z - 1.5, "walks across and off the far side")
 	_check(spawner.display == null, "pickup removes the floating display")
-	_check(holder.current is BlackHoleGenerator, "Black Hole Generator equipped")
+	_check(holder.current is BlackHoleGenerator and holder.weapon("Right") is BlackHoleGenerator, "Black Hole Generator equipped in the RIGHT slot")
+	_check(holder.weapon("Left") == spawn_l and is_instance_valid(spawn_l), "LEFT slot keeps its default cannon")
 	var gun := holder.current as BlackHoleGenerator
 	await _ticks(5)
 	var chamber := gun.find_marker("Black_Hole_Projectile_Spawn")
@@ -255,7 +261,14 @@ func _run() -> void:
 	(holder.current as BlackHoleGenerator).recharge_delay = 0.6
 	(holder.current as BlackHoleGenerator).recharge_grow = 0.4
 	var shots: Array = []
-	holder.weapon_fired.connect(func(_w) -> void: shots.append(1))
+	holder.slot_fired.connect(func(side: String, _w) -> void:
+		if side == "Right":
+			shots.append(1))
+	var left_shots: Array = []
+	holder.slot_fired.connect(func(side: String, _w) -> void:
+		if side == "Left":
+			left_shots.append(1))
+	var lock_l: TargetLock = p.get_node("TargetLockLeft")
 	var projs: Array = []
 	var stuck_on: Array = []
 	var hits_at_lock := d2.hits
@@ -328,6 +341,7 @@ func _run() -> void:
 	await _ticks(30)
 
 	# Tap the same enemy again: unlock and stop firing.
+	selector.forget_last_tap()
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
 	await _ticks(3)
 	_check(not lock.has_target(), "tapping the same enemy unlocks")
@@ -340,27 +354,30 @@ func _run() -> void:
 	await _ticks(3)
 	_check(not lock.has_target(), "tapping empty space selects nothing")
 
-	# Lock one enemy, then tap another: switches immediately.
+	# Lock one enemy (RIGHT), then tap another: the LEFT slot takes it.
+	selector.forget_last_tap()
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
 	await _ticks(3)
 	await _tap(tc2, rig.camera.unproject_position(d1.get_node("Targetable").get_aim_point()))
 	await _ticks(3)
-	_check(lock.current == d1.get_node("Targetable"), "tapping a different enemy switches lock")
+	_check(lock_l.current == d1.get_node("Targetable") and lock.current == d2.get_node("Targetable"), "second enemy goes to the LEFT slot, RIGHT keeps the first")
 
-	# Enemy dies: lock clears and firing stops.
+	# Left slot's enemy dies: only that slot clears; its firing stops.
 	for i in 900:
 		await _ticks(1)
-		if not lock.has_target():
+		if not lock_l.has_target():
 			break
-	_check(d1.health <= 0 and not lock.has_target(), "lock clears when the enemy dies")
-	_check(selector.selected == null, "selection clears when the enemy dies")
-	var shots_dead := shots.size()
+	_check(d1.health <= 0 and not lock_l.has_target(), "left lock clears when its enemy dies")
+	_check(selector.selected_left == null and selector.selected == d2.get_node("Targetable") and lock.has_target(), "only the left selection clears; right stays locked")
+	var shots_dead := left_shots.size()
 	await _ticks(60)
-	_check(shots.size() == shots_dead, "stops firing after the kill")
+	_check(left_shots.size() == shots_dead, "left cannon stops firing after the kill")
+	selector.clear()
 	await _ticks(260)
 	_check(d1.alive and d1.health == d1.max_health and d1.get_node("Targetable").is_valid_target(), "robot respawns")
 
 	# Out of range: lock clears.
+	selector.forget_last_tap()
 	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()))
 	await _ticks(3)
 	_check(lock.has_target(), "re-lock before range test")
@@ -375,6 +392,7 @@ func _run() -> void:
 	await _flight_gravity_tests(main)
 	await _supernova_finish_tests(main)
 	await _robot_combat_tests(main)
+	await _dual_wield_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -837,3 +855,216 @@ func _robot_combat_tests(main: Node) -> void:
 	_check(r.shots_fired == shots_dead and r.target == null, "dead robots stop fighting")
 	RobotEnemy.ai_enabled = false
 	r.queue_free()
+
+
+static func _seg_dist(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3) -> float:
+	var best := INF
+	for i in 21:
+		var a := p1.lerp(q1, i / 20.0)
+		best = minf(best, a.distance_to(Geometry3D.get_closest_point_to_segment(a, p2, q2)))
+	return best
+
+
+## Closest approach (m) between the two cannons' axes, and between each cannon
+## and the other arm's upper arm/forearm. Sampled inside the skeleton update
+## (bone poses read later don't include the procedural aim layer).
+func _cannon_clearance(p: PlayerController) -> Vector2:
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sk: Skeleton3D = p.find_children("*", "Skeleton3D", true, false)[0]
+	await sk.skeleton_updated
+	var seg := {}
+	for side in ["Right", "Left"]:
+		var w := h.weapon(side)
+		seg[side] = [w.find_marker(Weapon.SOCKET_MARKER).global_position, w.find_marker(Weapon.MUZZLE_MARKER).global_position]
+	var cc := _seg_dist(seg.Right[0], seg.Right[1], seg.Left[0], seg.Left[1])
+	var arm := INF
+	var g := sk.global_transform
+	for side in ["Right", "Left"]:
+		var other := "Left" if side == "Right" else "Right"
+		var a0 := g * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sArm" % other)).origin
+		var a1 := g * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sForeArm" % other)).origin
+		var a2 := g * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sHand" % other)).origin
+		arm = minf(arm, minf(_seg_dist(seg[side][0], seg[side][1], a0, a1), _seg_dist(seg[side][0], seg[side][1], a1, a2)))
+	return Vector2(cc, arm)
+
+
+## Dual wield: two default cannons, per-slot tap targeting, independent aim,
+## firing and recoil, no clipping, movement unaffected.
+func _dual_wield_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var lock_r: TargetLock = p.get_node("TargetLock")
+	var lock_l: TargetLock = p.get_node("TargetLockLeft")
+	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
+	sel.clear()
+	sel.forget_last_tap()
+	# Swap back: the RIGHT slot returns to the default cannon.
+	h.equip(h.default_weapon, "Right")
+	var wr := h.weapon("Right") as PlasmaCannon
+	var wl := h.weapon("Left") as PlasmaCannon
+	_check(wr != null and wl != null and wr != wl, "both slots hold a default cannon (right swapped back)")
+	var c := PlayerCommand.new()
+	c.target_id = 3
+	c.target_id_left = 7
+	var c2 := PlayerCommand.from_dict(c.to_dict())
+	_check(c2.target_id == 3 and c2.target_id_left == 7, "both slots' targets survive command serialisation")
+
+	var base := Vector3(-14, 0, 33)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	var ra := _spawn_robot(main, base + Vector3(3.5, 0, -10))   # on the player's right
+	var rb := _spawn_robot(main, base + Vector3(-3.5, 0, -10))  # on the player's left
+	var rc := _spawn_robot(main, base + Vector3(0, 0, -14))
+	for r: RobotEnemy in [ra, rb, rc]:
+		r.max_health = 500.0
+		r.health = 500.0
+	var ta: Targetable = ra.get_node("Targetable")
+	var tb: Targetable = rb.get_node("Targetable")
+	var tc: Targetable = rc.get_node("Targetable")
+	await _ticks(20)
+
+	# First enemy -> RIGHT cannon locks and fires; LEFT idle.
+	var r0 := wr.shots_fired
+	var l0 := wl.shots_fired
+	var ha := ra.hits
+	sel.tap_target(ta)
+	await _ticks(45)
+	_check(lock_r.current == ta and not lock_l.has_target(), "first tap: RIGHT slot locks the enemy")
+	_check(wr.shots_fired > r0 and wl.shots_fired == l0, "only the right cannon fires (%d / %d)" % [wr.shots_fired - r0, wl.shots_fired - l0])
+	_check(ra.hits > ha, "right cannon's plasma hits its target")
+	# Second enemy -> LEFT cannon.
+	sel.forget_last_tap()
+	sel.tap_target(tb)
+	await _ticks(30)
+	_check(lock_l.current == tb and lock_r.current == ta, "second enemy: LEFT slot locks it, RIGHT keeps the first")
+	r0 = wr.shots_fired
+	l0 = wl.shots_fired
+	ha = ra.hits
+	var hb := rb.hits
+	var both_kick := 0.0
+	for i in 60:
+		await _ticks(1)
+		both_kick = maxf(both_kick, minf(anim.recoil_side.Right, anim.recoil_side.Left))
+	_check(wr.shots_fired > r0 + 1 and wl.shots_fired > l0 + 1, "both cannons fire at the same time (%d / %d in 1 s)" % [wr.shots_fired - r0, wl.shots_fired - l0])
+	_check(ra.hits > ha and rb.hits > hb, "both enemies are hit simultaneously")
+	_check(both_kick > 0.05, "both arms recoil together (%.2f)" % both_kick)
+	var aim_r := rad_to_deg(wr.get_barrel_direction().angle_to(ta.get_aim_point() - wr.global_position))
+	var aim_l := rad_to_deg(wl.get_barrel_direction().angle_to(tb.get_aim_point() - wl.global_position))
+	var apart := rad_to_deg(wr.get_barrel_direction().angle_to(wl.get_barrel_direction()))
+	_check(aim_r < 12.0 and aim_l < 12.0 and apart > 20.0, "arms aim independently (right %.0f deg, left %.0f deg off; %.0f deg apart)" % [aim_r, aim_l, apart])
+	var body_yaw := p.rotation.y
+	_check(absf(wrapf(body_yaw, -PI, PI)) < 0.35, "whole character doesn't turn to either target (%.0f deg)" % rad_to_deg(body_yaw))
+	var cl: Vector2 = await _cannon_clearance(p)
+	_check(cl.x > 0.15 and cl.y > 0.12, "no cannon clipping, split aim (%.2f / %.2f m)" % [cl.x, cl.y])
+
+	# Tapping one slot's enemy (different targets) unlocks only that slot.
+	sel.forget_last_tap()
+	sel.tap_target(tb)
+	await _ticks(40)
+	_check(lock_r.current == ta and not lock_l.has_target(), "tapping the left slot's enemy unlocks only the left")
+	# Independent recoil: right keeps kicking, left is still.
+	var peak_r := 0.0
+	var peak_l := 0.0
+	for i in 40:
+		await process_frame
+		peak_r = maxf(peak_r, anim.recoil_side.Right)
+		peak_l = maxf(peak_l, absf(anim.recoil_side.Left))
+	_check(peak_r > 0.15 and peak_l < 0.02, "independent recoil (right %.2f, left %.2f)" % [peak_r, peak_l])
+
+	# Double tap -> both lock the same enemy.
+	sel.clear()
+	sel.forget_last_tap()
+	await _ticks(5)
+	sel.tap_target(ta)
+	sel.tap_target(ta)
+	await _ticks(40)
+	_check(lock_r.current == ta and lock_l.current == ta, "double tap: both cannons lock the same enemy")
+	r0 = wr.shots_fired
+	l0 = wl.shots_fired
+	await _ticks(40)
+	_check(wr.shots_fired > r0 and wl.shots_fired > l0, "both cannons fire at the shared target")
+	cl = await _cannon_clearance(p)
+	_check(cl.x > 0.15 and cl.y > 0.12, "no cannon clipping, shared target (%.2f / %.2f m)" % [cl.x, cl.y])
+	# Tap it again: LEFT unlocks first, then RIGHT.
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	await _ticks(3)
+	_check(lock_r.current == ta and not lock_l.has_target(), "tap shared enemy: LEFT unlocks first")
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	await _ticks(3)
+	_check(not lock_r.has_target() and not lock_l.has_target(), "tap again: RIGHT unlocks")
+
+	# Both busy: a third enemy replaces the older assignment.
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	sel.forget_last_tap()
+	sel.tap_target(tb)
+	sel.forget_last_tap()
+	sel.tap_target(tc)
+	await _ticks(3)
+	_check(lock_r.current == tc and lock_l.current == tb, "third enemy replaces the slot locked longest ago")
+
+	# Crossed targets (right slot on the left enemy and vice versa): arms
+	# cross over/under without the cannons touching, both still fire.
+	sel.clear()
+	sel.forget_last_tap()
+	sel.tap_target(tb)
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	var worst := Vector2(INF, INF)
+	r0 = wr.shots_fired
+	l0 = wl.shots_fired
+	for i in 70:
+		await _ticks(1)
+		if i > 35:
+			var k: Vector2 = await _cannon_clearance(p)
+			worst = Vector2(minf(worst.x, k.x), minf(worst.y, k.y))
+	_check(lock_r.current == tb and lock_l.current == ta, "crossed targets locked")
+	_check(worst.x > 0.15 and worst.y > 0.12, "no cannon clipping with crossed arms (%.2f / %.2f m)" % [worst.x, worst.y])
+	_check(wr.shots_fired > r0 and wl.shots_fired > l0, "both fire at crossed targets")
+
+	# Movement and animations keep working while both are locked.
+	sel.clear()
+	sel.forget_last_tap()
+	sel.tap_target(ta)
+	sel.forget_last_tap()
+	sel.tap_target(tb)
+	await _ticks(10)
+	r0 = wr.shots_fired
+	l0 = wl.shots_fired
+	worst = Vector2(INF, INF)
+	Input.action_press("move_right")
+	for i in 70:
+		await _ticks(1)
+		if i > 30:
+			var k: Vector2 = await _cannon_clearance(p)
+			worst = Vector2(minf(worst.x, k.x), minf(worst.y, k.y))
+	_check(Vector2(p.velocity.x, p.velocity.z).length() > 5.0 and p.is_facing_yaw(-PI * 0.5, 0.35), "runs normally (legs follow movement) while dual locked")
+	_check(anim.current_state == "Locomotion", "locomotion animation keeps playing (%s)" % anim.current_state)
+	Input.action_press("jump")
+	await _ticks(2)
+	Input.action_release("jump")
+	await _ticks(10)
+	_check(not p.is_on_floor() and anim.current_state in ["Jump", "AirJump", "Fall"], "jumps while dual locked (%s)" % anim.current_state)
+	for i in 30:
+		await _ticks(1)
+		var k: Vector2 = await _cannon_clearance(p)
+		worst = Vector2(minf(worst.x, k.x), minf(worst.y, k.y))
+	Input.action_release("move_right")
+	_check(wr.shots_fired > r0 and wl.shots_fired > l0, "both keep firing while moving")
+	_check(worst.x > 0.15 and worst.y > 0.12, "no cannon clipping while running/jumping (%.2f / %.2f m)" % [worst.x, worst.y])
+	await _ticks(40)
+
+	# A slot's target dies: only that slot clears.
+	p.velocity = Vector3.ZERO
+	rb.apply_damage(DamageInfo.make(999, DamageInfo.Type.BULLET, rb.global_position, Vector3.FORWARD, 1.0))
+	await _ticks(5)
+	_check(not lock_l.has_target() and sel.selected_left == null and lock_r.current == ta, "target death clears only its slot")
+	sel.clear()
+	await _ticks(3)
+	for r in [ra, rb, rc]:
+		r.queue_free()

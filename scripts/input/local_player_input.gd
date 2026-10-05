@@ -27,7 +27,8 @@ func get_command() -> PlayerCommand:
 	c.dodge_pressed = dodge_held and not _prev_dodge
 	_prev_jump = c.jump_held
 	_prev_dodge = dodge_held
-	c.target_id = target_selector.selected_id() if target_selector else 0
+	c.target_id = target_selector.selected_id("Right") if target_selector else 0
+	c.target_id_left = target_selector.selected_id("Left") if target_selector else 0
 	c.sprint_held = Input.is_action_pressed("sprint")
 	return c
 

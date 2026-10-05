@@ -86,10 +86,18 @@ var _pending_land := false
 var _state_time := 0.0
 var _arm_aim: ArmAimModifier
 ## Arm holding a weapon ("Left"/"Right"/""): kept raised in every state.
+## (Dual wield: see `armed`, one flag per arm.)
 var armed_side := ""
-## Current recoil spring value (~1 at peak, slightly negative on rebound).
-var recoil := 0.0
-var _recoil_v := 0.0
+var armed := {"Left": false, "Right": false}
+## Recoil spring per arm (~1 at peak, slightly negative on rebound).
+var recoil_side := {"Left": 0.0, "Right": 0.0}
+var _recoil_v := {"Left": 0.0, "Right": 0.0}
+## Strongest of the two arms' recoil (read-only convenience).
+var recoil: float:
+	get:
+		return recoil_side.Right if absf(recoil_side.Right) >= absf(recoil_side.Left) else recoil_side.Left
+## Target lock per arm (the "TargetLock" node drives the right arm).
+const LOCK_NODES := {"Right": "TargetLock", "Left": "TargetLockLeft"}
 
 
 func _ready() -> void:
@@ -210,12 +218,20 @@ func _on_landed(impact_speed: float) -> void:
 	_pending_land = impact_speed >= min_land_impact
 
 
-## Kick the procedural recoil (strength 1 = full heavy-weapon kick).
-func add_recoil(strength: float) -> void:
-	_recoil_v += recoil_kick_velocity * strength
+## Kick the procedural recoil of one arm (strength 1 = full heavy-weapon kick).
+func add_recoil(strength: float, side := "Right") -> void:
+	_recoil_v[side] += recoil_kick_velocity * strength
+
+
+## Mark an arm as holding (or no longer holding) a weapon.
+func set_armed(side: String, is_armed: bool) -> void:
+	armed[side] = is_armed
+	armed_side = "Right" if armed.Right else ("Left" if armed.Left else "")
 
 
 func set_armed_side(side: String) -> void:
+	for s in ["Left", "Right"]:
+		armed[s] = s == side
 	armed_side = side
 
 
@@ -266,27 +282,28 @@ func _process(delta: float) -> void:
 	if current_state == "Locomotion" and on_floor:
 		aim_target = smoothstep(walk_to, run_from, speed)
 	_arm_aim.weight = lerpf(_arm_aim.weight, aim_target, 1.0 - exp(-aim_blend_rate * delta))
-	# Upper body tracks the locked target (legs keep following movement).
-	var lock := controller.get_node_or_null("TargetLock") as TargetLock
-	var tracking := lock != null and lock.has_target() and armed_side != "" and not is_dead
-	if tracking:
-		_arm_aim.track_point = lock.get_aim_point()
-		_arm_aim.track_side = armed_side
-	_arm_aim.track_weight = move_toward(_arm_aim.track_weight, 1.0 if tracking else 0.0, delta * track_blend_speed)
-	# Recoil spring (sub-stepped for stability at low frame rates).
+	# Each armed arm tracks its own locked target (legs follow movement).
 	var steps := 4
 	var h := delta / steps
-	for i in steps:
-		_recoil_v += (-recoil_stiffness * recoil - recoil_damping * _recoil_v) * h
-		recoil += _recoil_v * h
-	if absf(recoil) < 0.0005 and absf(_recoil_v) < 0.005:
-		recoil = 0.0
-		_recoil_v = 0.0
-	_arm_aim.recoil = recoil
-	if armed_side != "":
-		_arm_aim.track_side = armed_side
 	for side in ["Left", "Right"]:
-		var armed_target := 1.0 if side == armed_side and not is_dead else 0.0
+		var lock := controller.get_node_or_null(LOCK_NODES[side]) as TargetLock
+		var tracking: bool = lock != null and lock.has_target() and armed[side] and not is_dead
+		if tracking:
+			_arm_aim.track_point[side] = lock.get_aim_point()
+		_arm_aim.track_weight[side] = move_toward(_arm_aim.track_weight[side], 1.0 if tracking else 0.0, delta * track_blend_speed)
+		# Recoil spring (sub-stepped for stability at low frame rates).
+		var r: float = recoil_side[side]
+		var v: float = _recoil_v[side]
+		for i in steps:
+			v += (-recoil_stiffness * r - recoil_damping * v) * h
+			r += v * h
+		if absf(r) < 0.0005 and absf(v) < 0.005:
+			r = 0.0
+			v = 0.0
+		recoil_side[side] = r
+		_recoil_v[side] = v
+		_arm_aim.recoil_side[side] = r
+		var armed_target := 1.0 if armed[side] and not is_dead else 0.0
 		_arm_aim.armed_weight[side] = lerpf(_arm_aim.armed_weight[side], armed_target, 1.0 - exp(-aim_blend_rate * delta))
 
 

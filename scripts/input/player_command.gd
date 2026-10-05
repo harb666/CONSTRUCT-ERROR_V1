@@ -13,8 +13,10 @@ var dodge_pressed := false
 ## Held states.
 var jump_held := false
 var sprint_held := false
-## Selected target (Targetable.target_id, 0 = none). Weapons auto-fire at it.
+## Selected targets per weapon slot (Targetable.target_id, 0 = none): RIGHT
+## and LEFT. Each slot's weapon auto-fires at its own.
 var target_id := 0
+var target_id_left := 0
 
 
 func to_dict() -> Dictionary:
@@ -26,6 +28,7 @@ func to_dict() -> Dictionary:
 		"jh": jump_held,
 		"sh": sprint_held,
 		"t": target_id,
+		"tl": target_id_left,
 	}
 
 
@@ -38,4 +41,5 @@ static func from_dict(d: Dictionary) -> PlayerCommand:
 	c.jump_held = d.get("jh", false)
 	c.sprint_held = d.get("sh", false)
 	c.target_id = d.get("t", 0)
+	c.target_id_left = d.get("tl", 0)
 	return c

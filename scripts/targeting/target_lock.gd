@@ -8,6 +8,9 @@ signal target_locked(target: Targetable)
 signal target_lost(reason: String)
 
 @export var max_range := 40.0
+## Which weapon slot's target this lock holds (dual wield): "Right" reads the
+## command's target_id, "Left" its target_id_left.
+@export var side := "Right"
 
 var current: Targetable
 var _player: Node3D
@@ -21,7 +24,8 @@ func _ready() -> void:
 
 
 func _on_command(cmd: PlayerCommand, _delta: float) -> void:
-	var wanted := Targetable.find_by_id(cmd.target_id) if cmd.target_id != 0 else null
+	var id := cmd.target_id if side == "Right" else cmd.target_id_left
+	var wanted := Targetable.find_by_id(id) if id != 0 else null
 	if wanted != current:
 		if wanted == null:
 			_set_target(null, "released")

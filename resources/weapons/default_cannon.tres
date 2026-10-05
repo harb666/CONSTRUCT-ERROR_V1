@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/default_cannon.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = &"default_cannon"
+display_name = "Plasma Cannon"
+weapon_scene = ExtResource("2")
+mount_offset = -0.05
+mount_lift = 0.05
+mount_out = 0.03

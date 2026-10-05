@@ -1,13 +1,27 @@
 class_name WeaponHolder
 extends Node
-## Lives on a player. Equips weapons onto existing skeleton bones via a
-## BoneAttachment3D (no rig changes). Reads only WeaponDefinition data, so it
-## works for any weapon and for local or (later) remote players.
+## Lives on a player. Dual wield: a RIGHT and a LEFT WeaponSlot, each with its
+## own weapon, target lock, aiming, firing, cooldown, recoil and swapping.
+## Weapons go onto existing skeleton bones via BoneAttachment3D (no rig
+## changes). Holds no weapon-specific logic: it reads only WeaponDefinition
+## data and the Weapon interface, so it works for any weapon and for local
+## or (later) remote players.
+##
+## Both slots start with `default_weapon` (the permanent default cannons).
+## Pickups go to the RIGHT slot; the LEFT keeps its default.
 
 signal weapon_equipped(definition: WeaponDefinition)
 signal weapon_fired(weapon: Weapon)
-## The instant a shot leaves the muzzle (local player hooks the camera kick).
+## The instant a shot leaves a muzzle (local player hooks the camera kick).
 signal weapon_recoil(strength: float)
+## Per-slot versions of the above.
+signal slot_equipped(side: String, definition: WeaponDefinition)
+signal slot_fired(side: String, weapon: Weapon)
+
+const SIDES := ["Right", "Left"]
+
+## Equipped into both arms at spawn and restored when a slot is emptied.
+@export var default_weapon: WeaponDefinition
 
 ## Extra slide of the weapon back along its barrel and muzzle climb at peak
 ## recoil (on top of the arm's own recoil).
@@ -19,43 +33,80 @@ signal weapon_recoil(strength: float)
 @export var fire_cone_degrees := 25.0
 
 @export var visual_path: NodePath = ^"../Visual/GrinchVisual"
+## Target lock per slot.
 @export var target_lock_path: NodePath = ^"../TargetLock"
+@export var left_target_lock_path: NodePath = ^"../TargetLockLeft"
 
-var current: Weapon
-var current_definition: WeaponDefinition
-var _attachment: BoneAttachment3D
-var _socket := Transform3D.IDENTITY
+var slots := {}
+
+## The RIGHT slot's weapon (single-weapon callers, pickups, HUD).
+var current: Weapon:
+	get:
+		return slots.Right.current if slots.has("Right") else null
+var current_definition: WeaponDefinition:
+	get:
+		return slots.Right.definition if slots.has("Right") else null
 
 
 func _ready() -> void:
 	var player := get_parent() as PlayerController
+	var animator := get_node_or_null(visual_path) as CharacterAnimator
+	var sk := _skeleton()
+	for side in SIDES:
+		var slot := WeaponSlot.new()
+		slot.name = side + "Slot"
+		slot.side = side
+		slot.animator = animator
+		slot.skeleton = sk
+		slot.lock = get_node_or_null(target_lock_path if side == "Right" else left_target_lock_path) as TargetLock
+		slot.recoil_slide = recoil_slide
+		slot.recoil_pitch_deg = recoil_pitch_deg
+		slot.fire_cone_degrees = fire_cone_degrees
+		add_child(slot)
+		slot.fired.connect(func(s: WeaponSlot, w: Weapon) -> void:
+			slot_fired.emit(s.side, w)
+			weapon_fired.emit(w))
+		slot.recoiled.connect(func(_s: WeaponSlot, strength: float) -> void: weapon_recoil.emit(strength))
+		slot.equipped.connect(func(s: WeaponSlot, d: WeaponDefinition) -> void:
+			slot_equipped.emit(s.side, d)
+			weapon_equipped.emit(d))
+		slots[side] = slot
 	if player:
 		player.command_processed.connect(_on_command)
+	if default_weapon:
+		for side in SIDES:
+			equip(default_weapon, side)
 
 
-## Auto-fire: each tick, if a target is locked and the (upper-body-aimed)
-## weapon points at it, fire as fast as the weapon allows. Movement is never
-## touched here, except turning a standing player towards a target that is
-## outside the upper body's reach.
+func slot(side: String) -> WeaponSlot:
+	return slots.get(side)
+
+
+func weapon(side: String) -> Weapon:
+	return slots[side].current if slots.has(side) else null
+
+
+## Auto-fire: each tick every slot fires at its own locked target as fast as
+## its weapon allows, once that arm's (upper-body-aimed) barrel points at it.
+## Movement is never touched here, except turning a standing player towards
+## its targets when they are outside the upper body's reach.
 func _on_command(cmd: PlayerCommand, _delta: float) -> void:
-	var lock := get_node_or_null(target_lock_path) as TargetLock
-	if current == null or lock == null or not lock.has_target():
-		return
 	var player := get_parent() as PlayerController
-	var point := lock.get_aim_point()
-	if current.has_method("update_aim"):
-		current.update_aim(point)
-	var to := point - current.global_position
-	to.y = 0.0
-	if cmd.move.length() < 0.1 and to.length() > 0.01:
-		player.face_yaw_when_idle(atan2(-to.x, -to.z))
-	if not current.can_fire():
-		return
-	var aim_dir := (point - current.global_position).normalized()
-	if current.get_barrel_direction().angle_to(aim_dir) > deg_to_rad(fire_cone_degrees):
-		return
-	if current.fire_at(player, point):
-		weapon_fired.emit(current)
+	var sum := Vector3.ZERO
+	var n := 0
+	for side in SIDES:
+		var s: WeaponSlot = slots[side]
+		if s.current == null or not s.has_target():
+			continue
+		var to := s.lock.get_aim_point() - player.global_position
+		to.y = 0.0
+		if to.length() > 0.01:
+			sum += to.normalized()
+			n += 1
+	if n > 0 and cmd.move.length() < 0.1 and sum.length() > 0.01:
+		player.face_yaw_when_idle(atan2(-sum.x, -sum.z))
+	for side in SIDES:
+		(slots[side] as WeaponSlot).update(player)
 
 
 func _skeleton() -> Skeleton3D:
@@ -70,84 +121,17 @@ func can_equip(_definition: WeaponDefinition) -> bool:
 	return true
 
 
-func equip(definition: WeaponDefinition) -> Weapon:
-	unequip()
-	var sk := _skeleton()
-	if sk == null or definition.weapon_scene == null:
+## Equip into a slot (pickups: the RIGHT slot). The other slot is untouched.
+func equip(definition: WeaponDefinition, side := "Right") -> Weapon:
+	if not slots.has(side):
 		return null
-	_attachment = BoneAttachment3D.new()
-	_attachment.name = "WeaponMount"
-	_attachment.bone_name = definition.mount_bone
-	# Posed every rendered frame from the skeleton, so not physics-interpolated.
-	_attachment.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	sk.add_child(_attachment)
-
-	var weapon: Weapon = definition.weapon_scene.instantiate()
-	weapon.definition = definition
-	_attachment.add_child(weapon)
-	# Placed in world space every rendered frame from the skeleton's
-	# interpolated pose (like the camera), so it never lags the character.
-	weapon.top_level = true
-	weapon.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	_socket = weapon.get_socket_transform()
-	if not sk.skeleton_updated.is_connected(_align_weapon):
-		sk.skeleton_updated.connect(_align_weapon)
-	current = weapon
-	current_definition = definition
-	_align_weapon()
-	weapon.on_equipped(get_parent())
-	weapon.recoiled.connect(_on_weapon_recoil)
-	var animator := get_node_or_null(visual_path) as CharacterAnimator
-	if animator:
-		animator.set_armed_side(definition.mount_side)
-	weapon_equipped.emit(definition)
-	return weapon
+	return (slots[side] as WeaponSlot).equip(definition, get_parent())
 
 
-## Runs after every skeleton pose update: the weapon's socket axis (+X) follows
-## the forearm, its position rides the bone, and it is rolled around the
-## forearm so the weapon's top stays facing up (forearm twist from the
-## animations would otherwise tilt it).
-func _on_weapon_recoil(strength: float) -> void:
-	var animator := get_node_or_null(visual_path) as CharacterAnimator
-	if animator:
-		animator.add_recoil(strength)
-	weapon_recoil.emit(strength)
-
-
-func _recoil_value() -> float:
-	var animator := get_node_or_null(visual_path) as CharacterAnimator
-	return animator.recoil if animator else 0.0
-
-
-func _align_weapon() -> void:
-	if current == null or _attachment == null or not is_instance_valid(current):
+## Empty a slot (its arm lowers). `restore_default` puts the default back.
+func unequip(side := "Right", restore_default := false) -> void:
+	if not slots.has(side):
 		return
-	var def := current_definition
-	# Read the final (post-modifier) pose straight from the skeleton.
-	var sk := _attachment.get_parent() as Skeleton3D
-	var bone := sk.get_global_transform_interpolated() * sk.get_bone_global_pose(_attachment.bone_idx)
-	var axis := bone.basis.y.normalized()
-	var up := Vector3.UP - axis * axis.dot(Vector3.UP)
-	if up.length_squared() < 1e-4:
-		up = bone.basis.z - axis * axis.dot(bone.basis.z)
-	up = up.normalized().rotated(axis, deg_to_rad(def.mount_roll_degrees))
-	var basis := Basis(axis, up, axis.cross(up))
-	var r := _recoil_value()
-	if r != 0.0:
-		# Muzzle climbs around the weapon's side axis; whole cannon slides back.
-		basis = Basis(basis.z, deg_to_rad(recoil_pitch_deg) * r) * basis
-	basis = basis.scaled(Vector3.ONE * def.mount_scale)
-	var socket_world := bone.origin + axis * (def.mount_offset - recoil_slide * maxf(r, -0.3))
-	current.global_transform = Transform3D(basis, socket_world) * _socket.affine_inverse()
-
-
-func unequip() -> void:
-	if _attachment:
-		_attachment.queue_free()
-	_attachment = null
-	current = null
-	current_definition = null
-	var animator := get_node_or_null(visual_path) as CharacterAnimator
-	if animator:
-		animator.set_armed_side("")
+	(slots[side] as WeaponSlot).unequip()
+	if restore_default and default_weapon:
+		equip(default_weapon, side)

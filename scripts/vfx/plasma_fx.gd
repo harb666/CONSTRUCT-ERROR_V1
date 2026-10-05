@@ -1,6 +1,7 @@
 class_name PlasmaFx
 extends Node3D
-## Green plasma effects for the robots' hand cannons (pooled, mobile-light):
+## Plasma effects (pooled, mobile-light), green by default (robots' hand
+## cannons); any colour can be passed (the player's cyan cannons):
 ##  - muzzle_flash(): punchy green flash at a cannon muzzle + a brief green
 ##    light (lights shared from a small pool: few lights on mobile).
 ##  - impact(): bright flash + expanding ring + green sparks; on level
@@ -35,22 +36,27 @@ var _arc_ends: Array[Vector3] = []
 var _arc_t := 0.0
 var _sparks: CPUParticles3D
 var _roll := 0.0
+var _color := GREEN
+var _hot := HOT
+static var _ramps := {}
 
 
 # --- Public API ---
 
 ## Green flash at a cannon muzzle, pointing along `dir`.
-static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3) -> void:
+static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3, col := GREEN, hot := HOT) -> void:
 	var f := _take(tree, Kind.FLASH)
 	if f:
+		f._recolor(col, hot)
 		f._start_flash(at, dir)
-	_flash_light(tree, at + dir * 0.1)
+	_flash_light(tree, at + dir * 0.1, col)
 
 
 ## Plasma hits something at `at` with surface `normal`.
-static func impact(tree: SceneTree, at: Vector3, normal: Vector3, leave_mark: bool) -> void:
+static func impact(tree: SceneTree, at: Vector3, normal: Vector3, leave_mark: bool, col := GREEN, hot := HOT) -> void:
 	var f := _take(tree, Kind.IMPACT)
 	if f:
+		f._recolor(col, hot)
 		f._start_impact(at, normal, leave_mark)
 
 
@@ -90,7 +96,7 @@ static func _take(tree: SceneTree, k: Kind) -> PlasmaFx:
 	return oldest
 
 
-static func _flash_light(tree: SceneTree, at: Vector3) -> void:
+static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN) -> void:
 	_lights = _lights.filter(func(l: OmniLight3D) -> bool: return is_instance_valid(l) and l.is_inside_tree())
 	if _lights.size() < MAX_LIGHTS:
 		var l := OmniLight3D.new()
@@ -104,6 +110,7 @@ static func _flash_light(tree: SceneTree, at: Vector3) -> void:
 		_light_t.append(0.0)
 	_light_next = (_light_next + 1) % _lights.size()
 	var light := _lights[_light_next]
+	light.light_color = col
 	light.global_position = at
 	light.light_energy = 3.0
 	light.visible = true
@@ -119,6 +126,32 @@ static func _flash_light(tree: SceneTree, at: Vector3) -> void:
 
 
 # --- Instance ---
+
+## Switch this pooled effect's colours (only touches materials on a change).
+func _recolor(col: Color, hot: Color) -> void:
+	if col == _color and hot == _hot:
+		return
+	_color = col
+	_hot = hot
+	var mains: Array = [_flash] if kind == Kind.FLASH else [_scorch, _ring]
+	var hots: Array = [_ring] if kind == Kind.FLASH else [_flash]
+	for i in _arcs.size():
+		(mains if i > 0 else hots).append(_arcs[i])
+	for q in mains:
+		((q as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = col
+	for q in hots:
+		((q as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = hot
+	if _sparks:
+		_sparks.color_ramp = _spark_ramp(col, hot)
+
+
+static func _spark_ramp(col: Color, hot: Color) -> Gradient:
+	var key := str(col) + str(hot)
+	if not _ramps.has(key):
+		var mid := col.lerp(Color.WHITE, 0.25)
+		var end := Color(col.r * 0.6, col.g * 0.6, col.b * 0.6, 0.0)
+		_ramps[key] = Vfx.ramp([Color(hot.r, hot.g, hot.b, 1), Color(mid.r, mid.g, mid.b, 1), end], [0.0, 0.4, 1.0])
+	return _ramps[key]
 
 func _ready() -> void:
 	top_level = true

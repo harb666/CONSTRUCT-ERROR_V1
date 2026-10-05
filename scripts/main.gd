@@ -60,15 +60,21 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		local_input.add_child(selector)
 		local_input.target_selector = selector
 		touch_controls.tapped.connect(selector.handle_tap)
+		# One lock per weapon slot; losing a target clears only that slot.
 		var lock := player.get_node("TargetLock") as TargetLock
+		var lock_left := player.get_node("TargetLockLeft") as TargetLock
 		selector.max_range = lock.max_range
-		lock.target_lost.connect(func(_reason: String) -> void: selector.clear())
+		for l: TargetLock in [lock, lock_left]:
+			var side := l.side
+			l.target_lost.connect(func(_reason: String) -> void: selector.clear_side(side))
 		var marker := $UI/TargetMarker
 		marker.lock = lock
+		marker.lock_left = lock_left
 		marker.camera = rig.camera
 		debug_hud.player = player
 		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
 		if holder:
+			rig.aiming = holder.current != null
 			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
 				rig.aiming = true)
 	return player

@@ -443,18 +443,19 @@ func _combat(delta: float) -> void:
 	want = want.normalized() * spd_want if want.length_squared() > 0.01 else Vector3.ZERO
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
-	if (hv - want).length() < 4.0:
-		hv += (want - hv).limit_length(walk_accel * 1.8 * delta)
-		linear_velocity = Vector3(hv.x, v.y, hv.z)
 	# Like the player character: legs face where it's going, the upper body
 	# twists to keep the chest and cannons on the target. Moving away from
-	# the target it faces it and walks backwards instead.
+	# the target it faces it and walks backwards instead. Reversing (e.g. a
+	# strafe switching sides) it first brakes with the legs still facing the
+	# old way, then turns the legs and sets off; while the legs turn it holds
+	# back, so it never slides sideways.
 	var player_yaw := atan2(dir_to.x, dir_to.z)
-	var spd := hv.length()
+	var reversing := hv.length() > 0.6 and want.length_squared() > 0.01 and hv.dot(want) < 0.0
+	var heading := hv if reversing or want.length_squared() <= 0.01 else want
 	var legs_yaw := player_yaw
-	var backwards := false
-	if spd > 0.4:
-		var move_yaw := atan2(hv.x, hv.z)
+	var backwards := _backing if reversing else false
+	if heading.length() > 0.4:
+		var move_yaw := atan2(heading.x, heading.z)
 		# Hysteresis so it doesn't flip between forwards/backwards.
 		var limit := max_twist_deg + (-12.0 if _backing else 12.0)
 		if absf(wrapf(move_yaw - player_yaw, -PI, PI)) > deg_to_rad(limit):
@@ -462,8 +463,23 @@ func _combat(delta: float) -> void:
 			backwards = true
 		else:
 			legs_yaw = move_yaw
-	_yaw = lerp_angle(_yaw, legs_yaw, clampf(turn_speed * 3.5 * delta, 0.0, 1.0))
+	# Turn the legs the way round that keeps facing the target side (never
+	# swinging through its back, which would whip the upper-body twist).
+	var turn := wrapf(legs_yaw - _yaw, -PI, PI)
+	var rel := wrapf(_yaw - player_yaw, -PI, PI)
+	if absf(rel + turn) > PI:
+		turn -= signf(turn) * TAU
+	_yaw += turn * clampf(turn_speed * 3.5 * delta, 0.0, 1.0)
 	_visual.rotation.y = _yaw
+	var leg_err := absf(wrapf(legs_yaw - _yaw, -PI, PI))
+	if reversing:
+		want = Vector3.ZERO
+	else:
+		want *= clampf(1.0 - (leg_err - deg_to_rad(25.0)) / deg_to_rad(45.0), 0.0, 1.0)
+	if (hv - want).length() < 4.0:
+		hv += (want - hv).limit_length(walk_accel * 1.8 * delta)
+		linear_velocity = Vector3(hv.x, v.y, hv.z)
+	var spd := hv.length()
 	_aim.twist = clampf(wrapf(player_yaw - _yaw, -PI, PI), -deg_to_rad(max_twist_deg), deg_to_rad(max_twist_deg))
 	_backing = backwards
 	_set_move_anim(spd, backwards)

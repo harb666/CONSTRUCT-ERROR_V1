@@ -12,21 +12,39 @@ var weight := 0.0
 ## Per-arm minimum weight while that arm holds a weapon (smoothed by animator).
 var armed_weight := {"Left": 0.0, "Right": 0.0}
 
-## Weapon recoil (spring value from the CharacterAnimator: ~1 at peak kick,
-## slightly negative on the rebound). Applied to the armed arm (elbow driven
-## back, muzzle climbs) and, smaller, to the chest (lean back + twist).
-var recoil := 0.0
+## Weapon recoil per arm (spring values from the CharacterAnimator: ~1 at
+## peak kick, slightly negative on the rebound). Each arm kicks on its own
+## (elbow driven back, muzzle climbs); the chest leans with the combined kick
+## and twists towards the side that fired.
+var recoil_side := {"Left": 0.0, "Right": 0.0}
 @export var recoil_upper_arm_deg := 28.0
 @export var recoil_forearm_deg := 16.0
 @export var recoil_chest_lean_deg := 7.0
 @export var recoil_chest_twist_deg := 5.0
 
-## Target tracking (locked enemy). When track_weight > 0 the spine twists
-## towards `track_point` (world space) and the armed arm aims straight at it;
-## hips and legs keep following the movement animation.
-var track_weight := 0.0
-var track_point := Vector3.ZERO
-var track_side := "Right"
+## Independent target tracking per arm (dual wield). Each arm aims at its own
+## `track_point[side]` (world space) with `track_weight[side]`; the spine
+## twists towards the average of the tracked targets; hips and legs keep
+## following the movement animation.
+var track_weight := {"Left": 0.0, "Right": 0.0}
+var track_point := {"Left": Vector3.ZERO, "Right": Vector3.ZERO}
+## Half the distance kept between the two arms' aim lines (m): arms aim
+## PARALLEL at a shared target instead of converging, so cannons never meet.
+@export var aim_half_spacing := 0.2
+## Most an arm may aim across the body (towards the other side), relative to
+## the twisted chest, and how far the two arms' aim may cross (left arm aimed
+## right of the right arm) before both are held back: within this the
+## forearm cannons pass clear of each other.
+@export var max_inward_yaw := 40.0
+@export var max_cross_deg := 60.0
+## When the arms cross (each slot's target on the other side), the right arm
+## lifts and the left drops by up to this much (degrees) so the cannons pass
+## over/under each other instead of colliding. Starts once they cross by
+## `cross_stagger_start` (a shared target is aimed at almost in parallel),
+## full at `cross_stagger_full`.
+@export var cross_stagger_deg := 14.0
+@export var cross_stagger_start := 6.0
+@export var cross_stagger_full := 20.0
 ## Max total spine twist (degrees), shared over Spine/Spine1/Spine2.
 @export var max_spine_twist := 60.0
 @export var max_spine_pitch := 25.0
@@ -56,23 +74,57 @@ func _ready() -> void:
 
 
 func _process_modification_with_delta(_delta: float) -> void:
-	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001 and track_weight <= 0.001 and absf(recoil) < 0.001:
+	var tracking: bool = track_weight.Left > 0.001 or track_weight.Right > 0.001
+	var recoiling: bool = absf(recoil_side.Left) > 0.001 or absf(recoil_side.Right) > 0.001
+	if weight <= 0.001 and armed_weight.Left <= 0.001 and armed_weight.Right <= 0.001 and not tracking and not recoiling:
 		return
 	var sk := get_skeleton()
 	if sk == null or _bones.is_empty():
 		return
 
-	# Target direction in skeleton space (+Z = character forward).
-	var track_yaw := 0.0
-	var track_pitch := 0.0
-	if track_weight > 0.001:
-		var to_sk := sk.get_global_transform_interpolated().affine_inverse() * track_point
-		var chest_pos := sk.get_bone_global_pose(_bones.chest).origin
-		var d := to_sk - chest_pos
-		track_yaw = atan2(d.x, d.z)
-		track_pitch = atan2(d.y, Vector2(d.x, d.z).length())
-		_twist_spine(sk, track_yaw * track_weight, track_pitch * track_weight)
-	if absf(recoil) > 0.001:
+	# Per-arm target direction in skeleton space (+Z = character forward,
+	# +X = character's left), from a point beside the chest on that arm's
+	# side so a shared target is aimed at in parallel.
+	var inv := sk.get_global_transform_interpolated().affine_inverse()
+	var chest_pos := sk.get_bone_global_pose(_bones.chest).origin
+	var yaw := {"Left": 0.0, "Right": 0.0}
+	var pitch := {"Left": 0.0, "Right": 0.0}
+	var spine_yaw := 0.0
+	var spine_pitch := 0.0
+	var wsum := 0.0
+	for side in ["Left", "Right"]:
+		var tw: float = track_weight[side]
+		if tw <= 0.001:
+			continue
+		var mirror := 1.0 if side == "Left" else -1.0
+		var d: Vector3 = inv * (track_point[side] as Vector3) - (chest_pos + Vector3(aim_half_spacing * mirror, 0, 0))
+		yaw[side] = atan2(d.x, d.z)
+		pitch[side] = atan2(d.y, Vector2(d.x, d.z).length())
+		spine_yaw += yaw[side] * tw
+		spine_pitch += pitch[side] * tw
+		wsum += tw
+	if wsum > 0.001:
+		# Upper body turns towards the average target; weight = strongest arm.
+		var ws := maxf(track_weight.Left, track_weight.Right)
+		_twist_spine(sk, spine_yaw / wsum * ws, spine_pitch / wsum * ws)
+	var spine_turn := clampf(spine_yaw / maxf(wsum, 0.001), -deg_to_rad(max_spine_twist), deg_to_rad(max_spine_twist)) if wsum > 0.001 else 0.0
+	# Never let an arm aim far across the body, and never let them cross.
+	var inward := deg_to_rad(max_inward_yaw)
+	yaw.Left = maxf(yaw.Left, spine_turn - inward) if track_weight.Left > 0.001 else yaw.Left
+	yaw.Right = minf(yaw.Right, spine_turn + inward) if track_weight.Right > 0.001 else yaw.Right
+	if track_weight.Left > 0.001 and track_weight.Right > 0.001:
+		var cross := deg_to_rad(max_cross_deg)
+		if yaw.Left < yaw.Right - cross:
+			var mid: float = (yaw.Left + yaw.Right) * 0.5
+			yaw.Left = mid - cross * 0.5
+			yaw.Right = mid + cross * 0.5
+		# Crossed: stagger vertically (right over, left under).
+		var crossing: float = clampf((yaw.Right - yaw.Left - deg_to_rad(cross_stagger_start)) / deg_to_rad(cross_stagger_full - cross_stagger_start), 0.0, 1.0)
+		if crossing > 0.0:
+			var st := deg_to_rad(cross_stagger_deg) * crossing
+			pitch.Right += st
+			pitch.Left -= st
+	if recoiling:
 		_chest_recoil(sk)
 	# Character frame: skeleton space faces +Z. Follow part of the chest's
 	# yaw sway so the arms ride with the torso instead of looking bolted on.
@@ -86,23 +138,24 @@ func _process_modification_with_delta(_delta: float) -> void:
 	for side in ["Left", "Right"]:
 		var mirror := 1.0 if side == "Left" else -1.0
 		var ids: Array = _bones[side]
+		var tw: float = track_weight[side]
 		var arm_frame := frame
-		if side == track_side and track_weight > 0.001:
-			var yaw := clampf(track_yaw, -deg_to_rad(max_arm_yaw), deg_to_rad(max_arm_yaw))
-			var pitch := clampf(track_pitch, -deg_to_rad(max_arm_pitch), deg_to_rad(max_arm_pitch))
-			var aim := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -pitch)
-			arm_frame = Basis(frame.get_rotation_quaternion().slerp(aim.get_rotation_quaternion(), track_weight))
+		if tw > 0.001:
+			var y := clampf(yaw[side], -deg_to_rad(max_arm_yaw), deg_to_rad(max_arm_yaw))
+			var p := clampf(pitch[side], -deg_to_rad(max_arm_pitch), deg_to_rad(max_arm_pitch))
+			var aim := Basis(Vector3.UP, y) * Basis(Vector3.RIGHT, -p)
+			arm_frame = Basis(frame.get_rotation_quaternion().slerp(aim.get_rotation_quaternion(), tw))
 		var up_local := Vector3(upper_arm_dir.x * mirror, upper_arm_dir.y, upper_arm_dir.z).normalized()
 		var fore_local := Vector3(forearm_dir.x * mirror, forearm_dir.y, forearm_dir.z).normalized()
-		if side == track_side and absf(recoil) > 0.001:
-			# Kick: elbow driven back, forearm/muzzle climbs (in the arm's frame).
-			up_local = Basis(Vector3.RIGHT, deg_to_rad(recoil_upper_arm_deg) * recoil) * up_local
-			fore_local = Basis(Vector3.RIGHT, -deg_to_rad(recoil_forearm_deg) * recoil) * fore_local
+		var r: float = recoil_side[side]
+		if absf(r) > 0.001:
+			# Kick: elbow driven back, forearm/muzzle climbs (in the arm's
+			# own frame: pitch only, so it never swings into the other arm).
+			up_local = Basis(Vector3.RIGHT, deg_to_rad(recoil_upper_arm_deg) * r) * up_local
+			fore_local = Basis(Vector3.RIGHT, -deg_to_rad(recoil_forearm_deg) * r) * fore_local
 		var up_dir := arm_frame * up_local
 		var fore_dir := arm_frame * fore_local
-		var w := maxf(weight, armed_weight[side])
-		if side == track_side:
-			w = maxf(w, track_weight)
+		var w := maxf(maxf(weight, armed_weight[side]), tw)
 		if w <= 0.001:
 			continue
 		_aim_bone(sk, ids[0], up_dir, w * (1.0 - keep_upper_swing))
@@ -127,8 +180,10 @@ func _twist_spine(sk: Skeleton3D, yaw: float, pitch: float) -> void:
 func _chest_recoil(sk: Skeleton3D) -> void:
 	var b: int = _bones.chest
 	var gp := sk.get_bone_global_pose(b)
-	var twist_sign := 1.0 if track_side == "Right" else -1.0
-	var r := Basis(Vector3.UP, deg_to_rad(recoil_chest_twist_deg) * recoil * twist_sign) * Basis(Vector3.RIGHT, -deg_to_rad(recoil_chest_lean_deg) * recoil)
+	# Both firing: stronger lean, twists cancel out.
+	var lean: float = clampf(recoil_side.Left + recoil_side.Right, -1.5, 1.5)
+	var twist: float = recoil_side.Right - recoil_side.Left
+	var r := Basis(Vector3.UP, deg_to_rad(recoil_chest_twist_deg) * twist) * Basis(Vector3.RIGHT, -deg_to_rad(recoil_chest_lean_deg) * lean)
 	gp.basis = r * gp.basis
 	sk.set_bone_global_pose(b, gp)
 

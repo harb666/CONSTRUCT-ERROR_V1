@@ -1,7 +1,8 @@
 class_name PlasmaBolt
 extends Node3D
-## Fast green plasma projectile (robot hand cannons). Pooled; moves with one
-## ray cast per physics tick (no physics body), passes through enemies, and
+## Fast plasma projectile (robot hand cannons: green; the player's default
+## cannons: cyan). Pooled; moves with one ray cast per physics tick (no
+## physics body), passes through its shooter's own side (`pass_group`), and
 ## on impact deals DamageInfo, nudges props and spawns PlasmaFx.impact.
 ## Visual: a hot glowing core plus a camera-facing trail ribbon.
 
@@ -18,6 +19,10 @@ var max_range := 45.0
 var velocity := Vector3.ZERO
 var shooter: Node
 var active := false
+## Bodies in this group are flown through (the shooter's own side).
+var pass_group := &"enemies"
+var color := GREEN
+var hot := HOT
 
 var _core: MeshInstance3D
 var _glow: MeshInstance3D
@@ -28,10 +33,13 @@ var _tail := Vector3.ZERO
 
 
 ## Fire a bolt from `from` along `dir`.
-static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_speed := 30.0, dmg := 1.0) -> PlasmaBolt:
+static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_speed := 30.0, dmg := 1.0,
+		col := GREEN, hot_col := HOT, through := &"enemies") -> PlasmaBolt:
 	var b := _take(tree)
 	if b == null:
 		return null
+	b.pass_group = through
+	b._set_colors(col, hot_col)
 	b._launch(from, dir.normalized(), by, bolt_speed, dmg)
 	return b
 
@@ -63,13 +71,13 @@ static func active_count() -> int:
 func _ready() -> void:
 	top_level = true
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	_trail = Vfx.quad("glow", GREEN, Vector2.ONE)
+	_trail = Vfx.quad("glow", color, Vector2.ONE)
 	_trail.top_level = true
 	add_child(_trail)
-	_glow = Vfx.quad("glow", GREEN, Vector2.ONE)
+	_glow = Vfx.quad("glow", color, Vector2.ONE)
 	_glow.top_level = true
 	add_child(_glow)
-	_core = Vfx.quad("glow", HOT, Vector2.ONE)
+	_core = Vfx.quad("glow", hot, Vector2.ONE)
 	_core.top_level = true
 	add_child(_core)
 	for q in [_trail, _glow, _core]:
@@ -77,6 +85,16 @@ func _ready() -> void:
 	visible = false
 	set_physics_process(false)
 	set_process(false)
+
+
+func _set_colors(c: Color, h: Color) -> void:
+	color = c
+	hot = h
+	if _trail == null:
+		return  # not ready yet: _ready() builds with these colours
+	for q in [_trail, _glow]:
+		((q as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = c
+	(_core.material_override as StandardMaterial3D).albedo_color = h
 
 
 func _launch(from: Vector3, dir: Vector3, by: Node, bolt_speed: float, dmg: float) -> void:
@@ -110,8 +128,8 @@ func _physics_process(delta: float) -> void:
 		if hit.is_empty():
 			break
 		var col: Object = hit.collider
-		if col is Node and (col as Node).is_in_group(&"enemies"):
-			# Robots don't shoot each other: fly on through.
+		if col is Node and (col as Node).is_in_group(pass_group):
+			# No friendly fire: fly on through.
 			_exclude.append(hit.rid)
 			continue
 		_impact(hit.position, hit.normal, col)
@@ -128,7 +146,7 @@ func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
 	# Scorch marks only on solid level geometry (they don't follow movers).
-	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D)
+	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D, color, hot)
 	_stop()
 
 
