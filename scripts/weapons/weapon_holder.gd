@@ -63,6 +63,7 @@ func _ready() -> void:
 		slot.recoil_pitch_deg = recoil_pitch_deg
 		slot.fire_cone_degrees = fire_cone_degrees
 		add_child(slot)
+		slot.ensure_socket()
 		slot.fired.connect(func(s: WeaponSlot, w: Weapon) -> void:
 			slot_fired.emit(s.side, w)
 			weapon_fired.emit(w))

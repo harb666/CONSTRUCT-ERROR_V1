@@ -33,6 +33,15 @@ extends Node3D
 ## How fast the upper body turns onto / off a locked target (weight per second).
 @export var track_blend_speed := 5.0
 
+@export_group("Weapon sockets")
+## Character-side weapon sockets (left and right), the same for every weapon:
+## on the forearm axis, this far past the elbow (m), kept upright. Taken from
+## the Black Hole Generator's mount, the reference for all weapons.
+@export var weapon_socket_offset := 0.05
+## From the socket to the open end of the forearm gauntlet (m), where ARM_END
+## weapons plug in (measured from this character's mesh).
+@export var arm_end_offset := 0.34
+
 @export_group("Recoil")
 ## Spring that drives the procedural recoil (fast kick, rebound, settle).
 @export var recoil_stiffness := 260.0

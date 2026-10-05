@@ -16,13 +16,26 @@ extends Resource
 ## dual wield the slot decides: mount_bone's side is swapped to match and the
 ## roll/outward offsets are mirrored for the left arm.
 @export var mount_side := "Right"
-## Distance along the bone (+Y, towards the hand) to place the weapon's socket.
-@export var mount_offset := 0.05
+
+## How the weapon meets the character's WeaponSocket (see CharacterAnimator
+## "Weapon sockets"; the socket is the Black Hole Generator's mount):
+##  SLEEVE  - the weapon's Arm_Socket_Attachment marker sits ON the socket; the
+##            weapon is a sleeve big enough to swallow the forearm (BHG).
+##  ARM_END - the weapon's rear plugs into the open end of the forearm
+##            (`arm_end_insert` deep) and extends forward only.
+## Either way any weapon geometry left behind the arm-end boundary
+## (SLEEVE: behind the socket) is trimmed off the held copy.
+enum MountMode { SLEEVE, ARM_END }
+@export var mount_mode := MountMode.SLEEVE
+## How far the rear of an ARM_END weapon slides into the arm's open end (m).
+@export var arm_end_insert := 0.04
+## Small weapon-specific nudge along the forearm from the mount point (m).
+@export var mount_offset := 0.0
 ## Roll of the weapon around the forearm axis.
 @export var mount_roll_degrees := 0.0
 @export var mount_scale := 1.0
-## Offsets of the socket from the forearm axis (m): up (weapon top side) and
-## outward, away from the body (mirrored per arm).
+## Small offsets from the forearm axis (m): up (weapon top side) and
+## outward, away from the body (mirrored per arm). Normally 0 (centred).
 @export var mount_lift := 0.0
 @export var mount_out := 0.0
 

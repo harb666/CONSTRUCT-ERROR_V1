@@ -396,6 +396,7 @@ func _run() -> void:
 	await _shotgun_tests(main)
 	await _robot_death_variety_tests(main)
 	await _weapon_fit_tests(main)
+	await _weapon_socket_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -861,6 +862,10 @@ func _robot_combat_tests(main: Node) -> void:
 	r.queue_free()
 
 
+func add_child_to_root(n: Node) -> void:
+	get_root().add_child(n)
+
+
 static func _seg_dist(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3) -> float:
 	var best := INF
 	for i in 21:
@@ -1086,6 +1091,13 @@ func _shotgun_tests(main: Node) -> void:
 	var pad: WeaponSpawnPad = main.get_node("ShotgunSpawnPad")
 	var bh_pad: WeaponSpawnPad = main.get_node("WeaponSpawnPad")
 	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	# Earlier tests can carry the player across this pad (gravity wells pull
+	# it around): start from a fresh display and default weapons.
+	if spawner.display == null:
+		h.equip(h.default_weapon, "Right")
+		h.equip(h.default_weapon, "Left")
+		spawner.spawn_display()
+		await _ticks(2)
 	_check(spawner.display is Shotgun, "shotgun floats above its own pad")
 	var box := AABB()
 	var first := true
@@ -1380,4 +1392,103 @@ func _weapon_fit_tests(main: Node) -> void:
 	h.equip(h.default_weapon, "Left")
 	for r: RobotEnemy in [ta, tb, tc]:
 		r.queue_free()
+	await _ticks(3)
+
+
+## Weapon arm attachment standard: one character-side WeaponSocket per arm,
+## exactly at the Black Hole Generator's (reference) mount; the BHG mount is
+## unchanged; ARM_END weapons plug into the arm's open end, centred, and
+## never extend back along the forearm; geometry that would is trimmed.
+func _weapon_socket_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sk: Skeleton3D = p.find_children("*", "Skeleton3D", true, false)[0]
+	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
+	var bhg: WeaponDefinition = load("res://resources/weapons/black_hole_generator.tres")
+	var sg: WeaponDefinition = load("res://resources/weapons/shotgun.tres")
+	p.global_position = Vector3(-14, 0, 33)
+	p.velocity = Vector3.ZERO
+	await _ticks(10)
+	var socket_err := 0.0
+	var bhg_err := 0.0
+	var rear_min := INF
+	var centre_max := 0.0
+	for combo in [[bhg, bhg], [h.default_weapon, sg], [sg, h.default_weapon]]:
+		h.equip(combo[0], "Right")
+		h.equip(combo[1], "Left")
+		for i in 12:
+			await _ticks(1)
+			await sk.skeleton_updated
+			for side in ["Right", "Left"]:
+				var slot := h.slot(side)
+				var bone := sk.get_global_transform_interpolated() * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sForeArm" % side))
+				var axis := bone.basis.y.normalized()
+				var up := (Vector3.UP - axis * axis.dot(Vector3.UP)).normalized()
+				var ref := Transform3D(Basis(axis, up, axis.cross(up)), bone.origin + axis * 0.05)
+				socket_err = maxf(socket_err, slot.socket_node.global_transform.origin.distance_to(ref.origin))
+				var w := h.weapon(side)
+				if slot.definition == bhg:
+					# The original Black Hole Generator mount (pre-socket formula).
+					var expect := ref * slot._socket.affine_inverse()
+					var d := w.global_transform.origin.distance_to(expect.origin)
+					for k in 3:
+						d = maxf(d, (w.global_transform.basis[k] - expect.basis[k]).length())
+					bhg_err = maxf(bhg_err, d)
+				else:
+					var box := WeaponBounds.obb(w)
+					var c: Vector3 = box[0]
+					var back := (c - ref.origin).dot(axis)
+					for v: Vector3 in box[1]:
+						back -= absf(v.dot(axis))
+					rear_min = minf(rear_min, back)
+					var lateral := (c - ref.origin) - axis * (c - ref.origin).dot(axis)
+					centre_max = maxf(centre_max, lateral.length())
+	_check(socket_err < 0.001, "left/right WeaponSockets sit at the reference (BHG) mount for every weapon (%.4f m)" % socket_err)
+	_check(bhg_err < 0.001, "Black Hole Generator mount unchanged (%.6f m)" % bhg_err)
+	var arm_end := anim.arm_end_offset - sg.arm_end_insert
+	_check(rear_min > arm_end - 0.035, "cannon/shotgun start at the arm's open end, never back along the forearm (rear %.3f m past the socket, arm end %.3f)" % [rear_min, anim.arm_end_offset])
+	_check(centre_max < 0.05, "cannon/shotgun centred on the forearm axis (%.3f m off)" % centre_max)
+	# Rear trimming: a weapon mounted too far back loses only the geometry
+	# behind the arm boundary; its visible front and the pad copy are whole.
+	var deep := sg.duplicate() as WeaponDefinition
+	deep.mount_offset = -0.25
+	var full := h.equip(sg, "Right")
+	var full_n := 0
+	for mi: MeshInstance3D in full.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh:
+			for si in mi.mesh.get_surface_count():
+				full_n += mi.mesh.surface_get_array_index_len(si)
+	var w2 := h.equip(deep, "Right")
+	await _ticks(2)
+	await sk.skeleton_updated
+	var slot2 := h.slot("Right")
+	var limit := slot2.trim_x() - 0.002
+	var to_socket := slot2._rest_mount()
+	var kept := 0
+	var behind := 0
+	for mi: MeshInstance3D in w2.find_children("*", "MeshInstance3D", true, false):
+		if not (mi.mesh is ArrayMesh):
+			continue
+		var xf := to_socket * w2._local_xf(mi)
+		for si in mi.mesh.get_surface_count():
+			var arr: Array = mi.mesh.surface_get_arrays(si)
+			var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var ix: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+			kept += ix.size()
+			for i in ix:
+				if (xf * vs[i]).x < limit:
+					behind += 1
+	_check(behind == 0 and kept > 0 and kept < full_n, "rear trimming hides only the part behind the arm (%d of %d indices kept)" % [kept, full_n])
+	# A fresh pickup display (pads never trim) still has the whole mesh.
+	var disp: Weapon = sg.weapon_scene.instantiate()
+	add_child_to_root(disp)
+	var disp_n := 0
+	for mi: MeshInstance3D in disp.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh:
+			for si in mi.mesh.get_surface_count():
+				disp_n += mi.mesh.surface_get_array_index_len(si)
+	_check(disp_n == full_n, "weapon on a pad keeps its whole mesh (%d indices)" % disp_n)
+	disp.queue_free()
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
 	await _ticks(3)

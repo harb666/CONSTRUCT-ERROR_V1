@@ -28,6 +28,15 @@ var fire_cone_degrees := 25.0
 var _attachment: BoneAttachment3D
 var _socket := Transform3D.IDENTITY
 var _fit_cache: Array[AABB] = []
+## Character-side weapon socket for this arm (follows the forearm; see
+## CharacterAnimator "Weapon sockets"). Every weapon mounts relative to it.
+var socket_node: Marker3D
+var _socket_bone := -1
+
+const DEFAULT_SOCKET_OFFSET := 0.05
+const DEFAULT_ARM_END := 0.34
+## Trimmed copies of weapon meshes, shared: key -> ArrayMesh.
+static var _trim_cache := {}
 
 
 ## +1 for the right arm, -1 for the left (mirrors per-weapon mount offsets).
@@ -65,6 +74,28 @@ func mount_bone_for(def: WeaponDefinition) -> String:
 	return def.mount_bone.replace(other, side)
 
 
+## Create this arm's WeaponSocket (call once the skeleton is known).
+func ensure_socket() -> void:
+	if socket_node or skeleton == null:
+		return
+	_socket_bone = skeleton.find_bone("mixamorig_%sForeArm" % side)
+	socket_node = Marker3D.new()
+	socket_node.name = "%sWeaponSocket" % side
+	socket_node.top_level = true
+	socket_node.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	skeleton.add_child(socket_node)
+	skeleton.skeleton_updated.connect(align)
+	align()
+
+
+func socket_offset() -> float:
+	return animator.weapon_socket_offset if animator else DEFAULT_SOCKET_OFFSET
+
+
+func arm_end_offset() -> float:
+	return animator.arm_end_offset if animator else DEFAULT_ARM_END
+
+
 func equip(def: WeaponDefinition, player: Node) -> Weapon:
 	unequip()
 	if skeleton == null or def == null or def.weapon_scene == null:
@@ -90,6 +121,7 @@ func equip(def: WeaponDefinition, player: Node) -> Weapon:
 		skeleton.skeleton_updated.connect(align)
 	current = weapon
 	definition = def
+	_trim_rear()
 	align()
 	weapon.on_equipped(player)
 	weapon.recoiled.connect(_on_weapon_recoil)
@@ -125,27 +157,67 @@ func _recoil_value() -> float:
 ## Closest the weapon's rear may come to the elbow (m), recoil included:
 ## weapons never stick out behind the elbow.
 const MIN_REAR_GAP := 0.01
+## How much deeper than its rest position an ARM_END weapon may recoil into
+## the arm's open end (m).
+const ARM_END_RECOIL_ROOM := 0.03
+
+
+## Where the weapon's rear boundary is in the socket frame: the arm's open end
+## (less the insert) for ARM_END weapons, the socket itself for sleeves.
+## Weapon geometry behind it is trimmed off.
+func trim_x() -> float:
+	if definition and definition.mount_mode == WeaponDefinition.MountMode.ARM_END:
+		return arm_end_offset() - definition.arm_end_insert
+	return 0.0
+
+
+## The weapon's marker placement in the socket frame (origin = WeaponSocket,
+## +X along the forearm, +Y up, +Z = X x Y) at rest: [basis (scaled), position
+## of the weapon's Arm_Socket_Attachment marker].
+func _rest_parts() -> Array:
+	var def := definition
+	var b := Basis(Vector3.RIGHT, deg_to_rad(def.mount_roll_degrees) * mirror())
+	var x := def.mount_offset
+	if def.mount_mode == WeaponDefinition.MountMode.ARM_END:
+		# Rear of the (untrimmed) weapon, measured from its own socket marker.
+		var rear := (_socket.affine_inverse() * _untrimmed_aabb()).position.x
+		x += trim_x() - rear * def.mount_scale
+	var pos := Vector3(x, 0, 0) + b * Vector3(0, def.mount_lift, def.mount_out * mirror())
+	return [b.scaled(Vector3.ONE * def.mount_scale), pos]
+
+
+func _rest_mount() -> Transform3D:
+	var parts := _rest_parts()
+	return Transform3D(parts[0], parts[1]) * _socket.affine_inverse()
+
+
+func _untrimmed_aabb() -> AABB:
+	if not current.has_meta("untrimmed_aabb"):
+		current.set_meta("untrimmed_aabb", current.get_local_aabb())
+	return current.get_meta("untrimmed_aabb")
 
 
 ## The weapon's mount in the forearm frame (origin = elbow, +X along the
 ## forearm, +Y up, +Z = X x Y), recoil `r` included.
 func mount_transform(r := 0.0) -> Transform3D:
-	var def := definition
-	var b := Basis(Vector3.RIGHT, deg_to_rad(def.mount_roll_degrees) * mirror())
-	var pos := b * Vector3(def.mount_offset, def.mount_lift, def.mount_out * mirror())
+	var parts := _rest_parts()
+	var b: Basis = parts[0]
+	var pos: Vector3 = parts[1]
 	if r != 0.0:
-		# Muzzle climbs around the weapon's side axis; the weapon slides back
-		# along the forearm, but never past the elbow.
-		var kick := Basis(b.z, deg_to_rad(recoil_pitch_deg) * r)
-		b = kick * b
-		# Rear-most point of the tilted weapon (tilting a tall weapon swings
-		# its back corner rearwards too).
-		var box := fit_box()
+		# Muzzle climbs around the weapon's side axis (pivoting on its socket
+		# marker); the weapon slides back along the forearm, but never past
+		# its rear boundary (tilting a tall weapon swings its back corner
+		# rearwards too).
+		var kick := Basis(b.z.normalized(), deg_to_rad(recoil_pitch_deg) * r)
+		var box := Transform3D(b, pos) * _socket.affine_inverse() * current.get_local_aabb()
 		var rear := INF
 		for i in 8:
 			rear = minf(rear, (pos + kick * (box.get_endpoint(i) - pos)).x)
-		pos.x -= minf(recoil_slide * maxf(r, -0.3), rear - MIN_REAR_GAP)
-	return Transform3D(b.scaled(Vector3.ONE * def.mount_scale), pos) * _socket.affine_inverse()
+		var min_rear := trim_x() - ARM_END_RECOIL_ROOM if definition.mount_mode == WeaponDefinition.MountMode.ARM_END \
+			else MIN_REAR_GAP - socket_offset()
+		b = kick * b
+		pos.x -= minf(recoil_slide * maxf(r, -0.3), rear - min_rear)
+	return Transform3D(Basis.IDENTITY, Vector3(socket_offset(), 0, 0)) * Transform3D(b, pos) * _socket.affine_inverse()
 
 
 ## The weapon's visible bounds in the forearm frame, at rest (no recoil).
@@ -155,12 +227,69 @@ func fit_box() -> AABB:
 	if current == null or not is_instance_valid(current):
 		return AABB()
 	if _fit_cache.size() == 0:
-		var def := definition
-		var b := Basis(Vector3.RIGHT, deg_to_rad(def.mount_roll_degrees) * mirror())
-		var pos := b * Vector3(def.mount_offset, def.mount_lift, def.mount_out * mirror())
-		var xf := Transform3D(b.scaled(Vector3.ONE * def.mount_scale), pos) * _socket.affine_inverse()
-		_fit_cache.append(xf * current.get_local_aabb())
+		_fit_cache.append(mount_transform(0.0) * current.get_local_aabb())
 	return _fit_cache[0]
+
+
+## Hide the held copy's geometry behind the rear boundary (the arm), so no
+## part of a weapon ever shows through the forearm. Shared trimmed meshes;
+## the pickup display keeps the whole weapon.
+func _trim_rear() -> void:
+	var to_socket := _rest_mount()
+	var limit := trim_x() - 0.002
+	var trimmed := false
+	for mi: MeshInstance3D in current.find_children("*", "MeshInstance3D", true, false):
+		if not (mi.mesh is ArrayMesh):
+			continue
+		var xf := to_socket * current._local_xf(mi)
+		var key := "%d|%s|%.4f" % [mi.mesh.get_rid().get_id(), xf, limit]
+		if not _trim_cache.has(key):
+			_trim_cache[key] = _trimmed_mesh(mi.mesh as ArrayMesh, xf, limit)
+		var m: ArrayMesh = _trim_cache[key]
+		if m != mi.mesh:
+			mi.mesh = m
+			trimmed = true
+	if trimmed:
+		current.remove_meta("local_aabb")
+		_fit_cache.clear()
+
+
+## `mesh` without the triangles that reach behind x = `limit` (in the frame
+## `xf` maps mesh space to), or `mesh` itself if nothing reaches back there.
+static func _trimmed_mesh(mesh: ArrayMesh, xf: Transform3D, limit: float) -> ArrayMesh:
+	var out := ArrayMesh.new()
+	var any := false
+	for si in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(si)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var behind := PackedByteArray()
+		behind.resize(verts.size())
+		var n_behind := 0
+		for i in verts.size():
+			if (xf * verts[i]).x < limit:
+				behind[i] = 1
+				n_behind += 1
+		var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX] if arrays[Mesh.ARRAY_INDEX] != null else PackedInt32Array()
+		if idx.is_empty():
+			idx.resize(verts.size())
+			for i in verts.size():
+				idx[i] = i
+		var keep := PackedInt32Array()
+		if n_behind > 0:
+			any = true
+			for t in range(0, idx.size(), 3):
+				if behind[idx[t]] == 0 and behind[idx[t + 1]] == 0 and behind[idx[t + 2]] == 0:
+					keep.append(idx[t])
+					keep.append(idx[t + 1])
+					keep.append(idx[t + 2])
+		else:
+			keep = idx
+		arrays[Mesh.ARRAY_INDEX] = keep
+		if keep.is_empty():
+			continue
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		out.surface_set_material(out.get_surface_count() - 1, mesh.surface_get_material(si))
+	return out if any else mesh
 
 
 ## Forearm frame from a bone transform (+Y along the bone), any space whose
@@ -174,14 +303,18 @@ static func forearm_frame(bone: Transform3D) -> Transform3D:
 	return Transform3D(Basis(axis, up, axis.cross(up)), bone.origin)
 
 
-## Runs after every skeleton pose update: the weapon's socket axis (+X) follows
-## the forearm, its position rides the bone, and it stays upright (forearm
-## twist from the animations would otherwise tilt it). Left-arm mounts are
-## mirrored.
+## Runs after every skeleton pose update: the WeaponSocket follows the
+## forearm (on its axis, upright: forearm twist from the animations would
+## otherwise tilt weapons) and the weapon is placed on it. Left-arm mounts
+## are mirrored.
 func align() -> void:
-	if current == null or _attachment == null or not is_instance_valid(current):
+	var sk := skeleton
+	if sk == null or _socket_bone < 0:
 		return
 	# Read the final (post-modifier) pose straight from the skeleton.
-	var sk := _attachment.get_parent() as Skeleton3D
-	var bone := sk.get_global_transform_interpolated() * sk.get_bone_global_pose(_attachment.bone_idx)
-	current.global_transform = forearm_frame(bone) * mount_transform(_recoil_value())
+	var frame := forearm_frame(sk.get_global_transform_interpolated() * sk.get_bone_global_pose(_socket_bone))
+	if socket_node:
+		socket_node.global_transform = frame * Transform3D(Basis.IDENTITY, Vector3(socket_offset(), 0, 0))
+	if current == null or _attachment == null or not is_instance_valid(current):
+		return
+	current.global_transform = frame * mount_transform(_recoil_value())
