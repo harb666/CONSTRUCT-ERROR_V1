@@ -117,3 +117,6 @@ Volumes/ranges are exports on `BlackHoleProjectile` (Audio group). After firing,
 
 ## Supernova burst
 `assets/vfx/supernova/supernova_finish.glb` is a 50-frame, 657k-vertex Sketchfab flipbook (layers pile up into an expanding plasma burst over 8.8 s). It is too heavy for the web build, so `tools/bake_supernova_finish.gd` bakes 9 of its layer groups (~124k vertices, 4 MB) into `supernova_finish_baked.scn` with each layer's original appear time; the GLB itself is excluded from export. `SupernovaFinish` (`scripts/vfx/supernova_finish.gd`) plays it at every supernova: layers appear in their original order compressed into `duration` 0.8 s (build-up, then fade), translucent (alpha blend, no depth writes), scaled to `supernova_radius + supernova_finish_margin` (1 m past the damage radius).
+
+## Character mesh reduction
+`grinch.glb` (110k -> 74k vertices) and `robot_enemy.glb` (108k -> 60k) were simplified with gltfpack (`-si 0.6` / `-si 0.2 -slb -kn -km -ke -ac -af 0 -noq`: named nodes/sections, materials, skins and the 28-bone rigs kept), then `tools/transplant_animations.py` copied the ORIGINAL animation data back in byte for byte (gltfpack thins keyframes), so every pose of every clip is identical to the source.
