@@ -186,6 +186,8 @@ func _run() -> void:
 	var spawn_r := holder.weapon("Right")
 	var spawn_l := holder.weapon("Left")
 	_check(spawn_r is PlasmaCannon and spawn_l is PlasmaCannon and spawn_r != spawn_l, "spawns with a default cannon in each slot")
+	var loadout0: WeaponLoadout = p.get_node("WeaponLoadout")
+	_check(loadout0.unlocked_weapons().size() == 1 and loadout0.unlocked_weapons()[0] == holder.default_weapon, "session starts with only the Default Cannon unlocked")
 	_check(spawn_r.get_parent() is BoneAttachment3D and (spawn_r.get_parent() as BoneAttachment3D).bone_name == "mixamorig_RightForeArm"
 		and (spawn_l.get_parent() as BoneAttachment3D).bone_name == "mixamorig_LeftForeArm", "cannons mounted on the right and left forearms")
 	p.global_position = pad.global_position + Vector3(0, 0.05, 4.0)
@@ -207,6 +209,7 @@ func _run() -> void:
 	_check(spawner.display == null, "pickup removes the floating display")
 	_check(holder.current is BlackHoleGenerator and holder.weapon("Right") is BlackHoleGenerator, "Black Hole Generator equipped in the RIGHT slot")
 	_check(holder.weapon("Left") == spawn_l and is_instance_valid(spawn_l), "LEFT slot keeps its default cannon")
+	_check(loadout0.is_unlocked((pad as WeaponSpawnPad).weapon) and loadout0.unlocked_weapons().size() == 2, "first pickup unlocks the Black Hole Generator for the session")
 	var gun := holder.current as BlackHoleGenerator
 	await _ticks(5)
 	var chamber := gun.find_marker("Black_Hole_Projectile_Spawn")
@@ -397,6 +400,7 @@ func _run() -> void:
 	await _robot_death_variety_tests(main)
 	await _weapon_fit_tests(main)
 	await _weapon_socket_tests(main)
+	await _weapon_switch_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -1093,9 +1097,11 @@ func _shotgun_tests(main: Node) -> void:
 	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
 	# Earlier tests can carry the player across this pad (gravity wells pull
 	# it around): start from a fresh display and default weapons.
+	var lo: WeaponLoadout = p.get_node("WeaponLoadout")
 	if spawner.display == null:
 		h.equip(h.default_weapon, "Right")
 		h.equip(h.default_weapon, "Left")
+		lo.relock(pad.weapon)
 		spawner.spawn_display()
 		await _ticks(2)
 	_check(spawner.display is Shotgun, "shotgun floats above its own pad")
@@ -1492,3 +1498,167 @@ func _weapon_socket_tests(main: Node) -> void:
 	h.equip(h.default_weapon, "Right")
 	h.equip(h.default_weapon, "Left")
 	await _ticks(3)
+
+
+## Drag the wheel from its button towards `def` on `side` and release.
+func _wheel_pick(wheel: WeaponWheel, side: String, def: WeaponDefinition, start: Vector2) -> void:
+	wheel.open_at(start)
+	await process_frame
+	var dir := (wheel.item_position(side, def) - wheel.wheel_centre()).normalized()
+	for k in 4:
+		wheel.drag_to(start + dir * (30.0 + 30.0 * k))
+		await process_frame
+	wheel.release_at(start + dir * 120.0)
+
+
+## Weapon wheel + dual-wield loadout: unlocks, hold-drag-release equipping,
+## one arm switching without touching the other, the switch sequence,
+## targets kept, registry-driven.
+func _weapon_switch_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var lo: WeaponLoadout = p.get_node("WeaponLoadout")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var wheel: WeaponWheel = main.get_node("UI/WeaponWheel")
+	var tc: TouchControls = main.get_node("UI/TouchControls")
+	var cannon := h.default_weapon
+	var sg: WeaponDefinition = load("res://resources/weapons/shotgun.tres")
+	var bhg: WeaponDefinition = load("res://resources/weapons/black_hole_generator.tres")
+	sel.clear()
+	h.equip(cannon, "Right")
+	h.equip(cannon, "Left")
+	lo.unlock(sg)
+	lo.unlock(bhg)
+	var base := Vector3(-14, 0, 33)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	_check(wheel.loadout == lo and tc.wheel_enabled and tc.button_radius("weapon_wheel") >= 40.0, "weapon-switch button on the touch HUD")
+	_check(not wheel.is_open and Engine.time_scale == 1.0, "wheel hidden until the button is held")
+	var start := tc.button_center("weapon_wheel")
+
+	# Open while moving: movement keeps going, game slows a little.
+	Input.action_press("move_forward")
+	await _ticks(20)
+	wheel.open_at(start)
+	for i in 12:
+		await process_frame
+	var spd := Vector2(p.velocity.x, p.velocity.z).length()
+	_check(wheel.is_open and spd > 3.0, "wheel opens while moving; movement continues (%.1f m/s)" % spd)
+	_check(Engine.time_scale < 0.8 and Engine.time_scale >= 0.4, "game slows slightly while the wheel is open (x%.2f)" % Engine.time_scale)
+	_check(wheel._items.Left.size() == 3 and wheel._items.Right.size() == 3, "both arms list all 3 unlocked weapons")
+	# Release in the dead zone: nothing changes.
+	wheel.drag_to(start + Vector2(20, -15))
+	await process_frame
+	_check(wheel.hover_def == null, "small drags select nothing (dead zone)")
+	wheel.release_at(start + Vector2(20, -15))
+	await create_timer(0.2, true, false, true).timeout  # wheel easing runs in real time
+	Input.action_release("move_forward")
+	_check(not wheel.is_open and Engine.time_scale == 1.0 and h.slot("Right").definition == cannon and h.slot("Left").definition == cannon, "releasing in the dead zone changes nothing; speed back to normal")
+
+	# Shotgun to RIGHT (left untouched), timed.
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	var left_w := h.weapon("Left")
+	var left_phase_max := 0
+	var times := {"start": -1.0, "end": -1.0, "now": 0.0}
+	h.slot("Right").switch_started.connect(func(_s, _a, _b) -> void: times.start = times.now, CONNECT_ONE_SHOT)
+	h.slot("Right").switch_finished.connect(func(_s, _d) -> void: times.end = times.now, CONNECT_ONE_SHOT)
+	await _wheel_pick(wheel, "Right", sg, start)
+	var shrank := false
+	for i in 40:
+		await _ticks(1)
+		times.now += 1.0 / Engine.physics_ticks_per_second
+		left_phase_max = maxi(left_phase_max, h.slot("Left").switch_phase)
+		shrank = shrank or (h.slot("Right").switch_phase == 1 and h.slot("Right").switch_scale < 0.6)
+	_check(h.weapon("Right") is Shotgun and h.slot("Right").switch_scale == 1.0, "equip Shotgun to the RIGHT arm through the wheel")
+	_check(h.weapon("Left") == left_w and left_phase_max == 0, "LEFT arm untouched while RIGHT switches")
+	_check(shrank, "old weapon retracts into the arm before the new one appears")
+	var dur: float = times.end - times.start
+	_check(times.start >= 0.0 and dur >= 0.25 and dur <= 0.4, "switch takes %.2f s (0.25-0.4)" % dur)
+	# BHG to LEFT.
+	var right_w := h.weapon("Right")
+	await _wheel_pick(wheel, "Left", bhg, start)
+	await _ticks(30)
+	_check(h.weapon("Left") is BlackHoleGenerator and h.weapon("Right") == right_w, "equip Black Hole Generator to the LEFT arm; RIGHT keeps its Shotgun")
+	# Swap only RIGHT, then only LEFT.
+	left_w = h.weapon("Left")
+	await _wheel_pick(wheel, "Right", cannon, start)
+	await _ticks(30)
+	_check(h.weapon("Right") is PlasmaCannon and h.weapon("Left") == left_w, "swap only RIGHT (Shotgun -> Cannon); LEFT unaffected")
+	right_w = h.weapon("Right")
+	await _wheel_pick(wheel, "Left", sg, start)
+	await _ticks(30)
+	_check(h.weapon("Left") is Shotgun and h.weapon("Right") == right_w, "swap only LEFT (BHG -> Shotgun); RIGHT unaffected")
+	# Shotgun + Shotgun.
+	await _wheel_pick(wheel, "Right", sg, start)
+	await _ticks(30)
+	_check(h.weapon("Left") is Shotgun and h.weapon("Right") is Shotgun and h.weapon("Left") != h.weapon("Right"), "Shotgun + Shotgun")
+	_check(lo.unlocked_weapons().size() == 3, "every unlocked weapon stays available")
+
+	# Switch one arm while the other is firing; targets kept.
+	var ra := _spawn_robot(main, base + Vector3(2.5, 0, -6))
+	var rb := _spawn_robot(main, base + Vector3(-2.5, 0, -6))
+	for r: RobotEnemy in [ra, rb]:
+		r.max_health = 9999.0
+		r.health = 9999.0
+	await _ticks(10)
+	h.equip(cannon, "Right")
+	sel.clear()
+	sel.forget_last_tap()
+	sel.tap_target(ra.get_node("Targetable"))
+	sel.forget_last_tap()
+	sel.tap_target(rb.get_node("Targetable"))
+	await _ticks(40)
+	var lock_r: TargetLock = p.get_node("TargetLock")
+	var lock_l: TargetLock = p.get_node("TargetLockLeft")
+	var lsg := h.weapon("Left") as Shotgun
+	var l0 := lsg.shots_fired
+	var hits_b := rb.hits
+	var fired := {"right": false}
+	h.slot("Right").fired.connect(func(_s, _w) -> void: fired.right = true)
+	lo.equip("Right", bhg)
+	for i in 24:
+		await _ticks(1)
+	_check(h.weapon("Right") is BlackHoleGenerator and h.slot("Right").switch_phase == 0, "RIGHT switched to the Black Hole Generator")
+	_check(lock_r.current == ra.get_node("Targetable") and lock_l.current == rb.get_node("Targetable"), "both arms keep their own targets through the switch")
+	for i in 54:
+		await _ticks(1)
+	_check(lsg == h.weapon("Left") and lsg.shots_fired > l0 and rb.hits > hits_b, "LEFT shotgun keeps tracking/firing while RIGHT switches (%d shots)" % (lsg.shots_fired - l0))
+	# The new weapon takes over that arm's target at once.
+	for i in 120:
+		if fired.right:
+			break
+		await _ticks(1)
+	_check(fired.right, "the new weapon fires at that arm's existing target")
+	# A pad for an unlocked weapon stays put (no need to return to it).
+	var pad: WeaponSpawnPad = main.get_node("ShotgunSpawnPad")
+	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	if spawner.display == null:
+		spawner.spawn_display()
+	await _ticks(2)
+	spawner._on_body_entered(p)
+	_check(spawner.display != null and lo.is_unlocked(sg), "walking onto a pad for an unlocked weapon leaves it there")
+	# Allowed arms + registry-driven: a new right-only weapon shows only there.
+	var extra := cannon.duplicate() as WeaponDefinition
+	extra.id = &"test_right_only"
+	extra.allowed_sides = PackedStringArray(["Right"])
+	lo.unlock(extra)
+	wheel.open_at(start)
+	await process_frame
+	_check(wheel._items.Right.size() == 4 and wheel._items.Left.size() == 3, "new weapons appear in the wheel from data alone (allowed arms respected)")
+	wheel.close()
+	_check(not lo.equip("Left", extra), "a weapon can't go on an arm it doesn't allow")
+	lo.relock(extra)
+	sel.clear()
+	for r in [ra, rb]:
+		r.queue_free()
+	h.equip(cannon, "Right")
+	h.equip(cannon, "Left")
+	for i in 10:
+		await process_frame
+	_check(Engine.time_scale == 1.0, "game speed back to normal")

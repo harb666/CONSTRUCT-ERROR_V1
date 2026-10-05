@@ -9,6 +9,16 @@ extends Resource
 ## Scene whose root extends Weapon.
 @export var weapon_scene: PackedScene
 
+@export_group("Loadout")
+## Picture for the weapon wheel (tools/render_weapon_icons.gd makes these).
+@export var icon: Texture2D
+## Main colour of the weapon's energy (wheel highlights, switch flash).
+@export var accent_color := Color(0.4, 0.8, 1.0)
+## Available from the start of a session (otherwise unlocked by a pickup).
+@export var unlocked_at_start := false
+## Arms it can be equipped to.
+@export var allowed_sides: PackedStringArray = ["Left", "Right"]
+
 @export_group("Mount")
 ## Skeleton bone the weapon attaches to (existing bones only).
 @export var mount_bone := "mixamorig_RightForeArm"

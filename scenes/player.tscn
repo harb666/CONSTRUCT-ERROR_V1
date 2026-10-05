@@ -1,10 +1,12 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/characters/grinch_visual.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/weapons/weapon_holder.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/targeting/target_lock.gd" id="4"]
 [ext_resource type="Resource" path="res://resources/weapons/default_cannon.tres" id="5"]
+[ext_resource type="Script" path="res://scripts/weapons/weapon_loadout.gd" id="6"]
+[ext_resource type="Resource" path="res://resources/weapons/weapon_registry.tres" id="7"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
 radius = 0.4
@@ -33,3 +35,7 @@ script = ExtResource("4")
 [node name="TargetLockLeft" type="Node" parent="."]
 script = ExtResource("4")
 side = "Left"
+
+[node name="WeaponLoadout" type="Node" parent="."]
+script = ExtResource("6")
+registry = ExtResource("7")

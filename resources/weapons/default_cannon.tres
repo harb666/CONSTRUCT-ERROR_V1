@@ -1,11 +1,15 @@
-[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_definition.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/weapons/default_cannon.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/ui/weapon_icons/default_cannon.png" id="icon"]
 
 [resource]
 script = ExtResource("1")
 id = &"default_cannon"
 display_name = "Plasma Cannon"
 weapon_scene = ExtResource("2")
+icon = ExtResource("icon")
+accent_color = Color(0.2, 0.8, 1, 1)
+unlocked_at_start = true
 mount_mode = 1

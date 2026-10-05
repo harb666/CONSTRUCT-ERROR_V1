@@ -7,6 +7,11 @@ extends Control
 signal look_dragged(radians: Vector2)
 ## A quick touch with almost no movement (used for tap-to-target).
 signal tapped(position: Vector2)
+## Weapon-wheel button: held (finger down), dragged, released. The finger is
+## owned by the wheel (no look, no tap) until it lifts.
+signal wheel_pressed(position: Vector2)
+signal wheel_dragged(position: Vector2)
+signal wheel_released(position: Vector2)
 
 ## A touch counts as a tap if released within this time and distance.
 @export var tap_max_time := 0.35
@@ -22,6 +27,8 @@ const BUTTONS := [
 	{"action": "jump", "label": "JUMP", "radius": 70.0, "offset": Vector2(-120, -120)},
 	{"action": "dodge", "label": "DODGE", "radius": 54.0, "offset": Vector2(-280, -90)},
 	{"action": "sprint", "label": "SPRINT", "radius": 48.0, "offset": Vector2(-110, -290), "toggle": true},
+	# Drawn by the WeaponWheel (shows the equipped weapons).
+	{"action": "weapon_wheel", "label": "", "radius": 44.0, "offset": Vector2(-262, -238), "wheel": true},
 ]
 
 var _move_finger := -1
@@ -37,6 +44,8 @@ var _hidden := {}
 ## finger index -> [start position, start time (s), distance moved]
 var _tap_track := {}
 var _font: Font
+## The weapon-wheel button only exists when a wheel is connected.
+var wheel_enabled := false
 
 
 func _ready() -> void:
@@ -47,6 +56,21 @@ func _ready() -> void:
 	_button_fingers.fill(-1)
 	_button_last.resize(BUTTONS.size())
 	visible = DisplayServer.is_touchscreen_available()
+
+
+## Centre of a button by action name (for overlays like the weapon wheel).
+func button_center(action: String) -> Vector2:
+	for i in BUTTONS.size():
+		if BUTTONS[i].action == action:
+			return _button_center(i)
+	return Vector2.ZERO
+
+
+func button_radius(action: String) -> float:
+	for b in BUTTONS:
+		if b.action == action:
+			return b.radius
+	return 0.0
 
 
 func _button_center(i: int) -> Vector2:
@@ -78,7 +102,8 @@ func _on_touch_down(index: int, pos: Vector2) -> void:
 	for i in BUTTONS.size():
 		if _hidden.has(BUTTONS[i].action):
 			continue
-		if _button_fingers[i] == -1 and pos.distance_to(_button_center(i)) <= BUTTONS[i].radius * 1.25:
+		if _button_fingers[i] == -1 and pos.distance_to(_button_center(i)) <= BUTTONS[i].radius * 1.25 \
+				and not (BUTTONS[i].get("wheel", false) and not wheel_enabled):
 			_button_fingers[i] = index
 			_button_last[i] = pos
 			_press_button(i)
@@ -113,6 +138,9 @@ func _on_touch_drag(index: int, pos: Vector2) -> void:
 		look_dragged.emit(d * look_sensitivity)
 	else:
 		for i in BUTTONS.size():
+			if _button_fingers[i] == index and BUTTONS[i].get("wheel", false):
+				_button_last[i] = pos
+				wheel_dragged.emit(pos)
 			if _button_fingers[i] == index and BUTTONS[i].get("look", false):
 				var d := pos - _button_last[i]
 				_button_last[i] = pos
@@ -141,7 +169,9 @@ func _on_touch_up(index: int) -> void:
 	for i in BUTTONS.size():
 		if _button_fingers[i] == index:
 			_button_fingers[i] = -1
-			if not BUTTONS[i].get("toggle", false):
+			if BUTTONS[i].get("wheel", false):
+				wheel_released.emit(_button_last[i])
+			elif not BUTTONS[i].get("toggle", false):
 				Input.action_release(BUTTONS[i].action)
 	queue_redraw()
 
@@ -154,12 +184,18 @@ func set_action_enabled(action: String, enabled: bool) -> void:
 		for i in BUTTONS.size():
 			if BUTTONS[i].action == action and _button_fingers[i] != -1:
 				_button_fingers[i] = -1
-				Input.action_release(action)
+				if BUTTONS[i].get("wheel", false):
+					wheel_released.emit(_button_last[i])
+				else:
+					Input.action_release(action)
 	queue_redraw()
 
 
 func _press_button(i: int) -> void:
 	var b: Dictionary = BUTTONS[i]
+	if b.get("wheel", false):
+		wheel_pressed.emit(_button_last[i])
+		return
 	if b.get("toggle", false):
 		_sprint_toggled = not _sprint_toggled
 		if _sprint_toggled:
@@ -202,7 +238,7 @@ func _draw() -> void:
 	# Buttons.
 	for i in BUTTONS.size():
 		var b: Dictionary = BUTTONS[i]
-		if _hidden.has(b.action):
+		if _hidden.has(b.action) or b.get("wheel", false):
 			continue
 		var c := _button_center(i)
 		var active: bool = _button_fingers[i] != -1 or (b.get("toggle", false) and _sprint_toggled)

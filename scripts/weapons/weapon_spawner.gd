@@ -74,12 +74,20 @@ func _update_pivot() -> void:
 func _on_body_entered(body: Node) -> void:
 	if display == null:
 		return
+	var loadout := body.get_node_or_null("WeaponLoadout") as WeaponLoadout
 	var holder := body.get_node_or_null("WeaponHolder") as WeaponHolder
-	if holder == null or not holder.can_equip(weapon):
+	if loadout:
+		# Already unlocked: it's in the weapon wheel; leave the pickup here.
+		if loadout.is_unlocked(weapon):
+			return
+	elif holder == null or not holder.can_equip(weapon):
 		return
 	display.queue_free()
 	display = null
-	holder.equip(weapon)
+	if loadout:
+		loadout.collect(weapon)  # unlock + (first time) onto the RIGHT arm
+	else:
+		holder.equip(weapon)
 	weapon_taken.emit(body, weapon)
 	if respawn_time > 0.0:
 		get_tree().create_timer(respawn_time).timeout.connect(spawn_display)

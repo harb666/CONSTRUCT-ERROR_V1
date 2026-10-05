@@ -10,6 +10,15 @@ extends Node
 signal equipped(slot: WeaponSlot, definition: WeaponDefinition)
 signal fired(slot: WeaponSlot, weapon: Weapon)
 signal recoiled(slot: WeaponSlot, strength: float)
+## Weapon switching (switch_to): started / new weapon fully in place.
+signal switch_started(slot: WeaponSlot, from_def: WeaponDefinition, to_def: WeaponDefinition)
+signal switch_finished(slot: WeaponSlot, definition: WeaponDefinition)
+
+## Switch timing (s): the old weapon retracts into the arm, then the new one
+## snaps out of the same mount (~0.3 s in all). It can fire as soon as it is
+## half out.
+const RETRACT_TIME := 0.11
+const EXTEND_TIME := 0.18
 
 var side := "Right"
 var lock: TargetLock
@@ -38,6 +47,15 @@ const DEFAULT_ARM_END := 0.34
 ## Trimmed copies of weapon meshes, shared: key -> ArrayMesh.
 static var _trim_cache := {}
 
+## Switching state: 0 = idle, 1 = retracting the old weapon, 2 = the new one
+## materialising. `switch_scale` shrinks/grows the weapon about its mount.
+var switch_phase := 0
+var switch_scale := 1.0
+var _switch_t := 0.0
+var _pending: WeaponDefinition
+var _owner_player: Node
+var _fx: WeaponSwitchFx
+
 
 ## +1 for the right arm, -1 for the left (mirrors per-weapon mount offsets).
 func mirror() -> float:
@@ -52,6 +70,9 @@ func has_target() -> bool:
 ## Returns true if a shot left the muzzle.
 func update(shooter: Node3D) -> bool:
 	if current == null or not is_instance_valid(current) or not has_target():
+		return false
+	# Mid-switch: the old weapon has stopped; the new one fires once half out.
+	if switch_phase == 1 or (switch_phase == 2 and switch_scale < 0.5):
 		return false
 	var point := lock.get_aim_point()
 	if current.has_method("update_aim"):
@@ -84,7 +105,12 @@ func ensure_socket() -> void:
 	socket_node.top_level = true
 	socket_node.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	skeleton.add_child(socket_node)
+	_fx = WeaponSwitchFx.new()
+	_fx.name = "SwitchFx"
+	socket_node.add_child(_fx)
+	_fx.position = Vector3(arm_end_offset(), 0, 0)
 	skeleton.skeleton_updated.connect(align)
+	set_process(false)
 	align()
 
 
@@ -130,6 +156,69 @@ func equip(def: WeaponDefinition, player: Node) -> Weapon:
 		animator.set_weapon_fit(side, fit_box())
 	equipped.emit(self, def)
 	return weapon
+
+
+## Switch this arm to `def` with the retract / materialise sequence. The
+## other arm is never touched; this arm's target lock stays, so the new weapon
+## takes over the current target at once.
+func switch_to(def: WeaponDefinition, player: Node) -> void:
+	if def == null:
+		return
+	var showing := _pending if _pending else definition
+	if showing == def and (switch_phase == 0 or _pending == null):
+		return
+	_owner_player = player
+	var from := definition
+	_pending = def
+	switch_started.emit(self, from, def)
+	if current == null or switch_phase == 2:
+		# Nothing to put away (or the last one is still coming out: swap it
+		# straight for the newest choice).
+		_begin_extend()
+	elif switch_phase == 0:
+		switch_phase = 1
+		_switch_t = 0.0
+		if _fx and from:
+			_fx.play(from.accent_color, 0.85, RETRACT_TIME + 0.08)
+	set_process(true)
+
+
+## Whatever this arm will hold once a switch in progress is done.
+func target_definition() -> WeaponDefinition:
+	return _pending if _pending else definition
+
+
+func _begin_extend() -> void:
+	var def := _pending
+	_pending = null
+	equip(def, _owner_player if _owner_player else get_parent().get_parent())
+	switch_phase = 2
+	_switch_t = 0.0
+	switch_scale = 0.05
+	if _fx:
+		_fx.play(def.accent_color, 1.0)
+
+
+func _process(delta: float) -> void:
+	_switch_t += delta
+	match switch_phase:
+		1:
+			var k := clampf(_switch_t / RETRACT_TIME, 0.0, 1.0)
+			switch_scale = 1.0 - k * k
+			if k >= 1.0:
+				_begin_extend()
+		2:
+			var k := clampf(_switch_t / EXTEND_TIME, 0.0, 1.0)
+			# Snap out with a little overshoot.
+			var c := 1.9
+			switch_scale = 1.0 + (c + 1.0) * pow(k - 1.0, 3) + c * pow(k - 1.0, 2)
+			if k >= 1.0:
+				switch_scale = 1.0
+				switch_phase = 0
+				set_process(false)
+				switch_finished.emit(self, definition)
+		_:
+			set_process(false)
 
 
 func unequip() -> void:
@@ -217,6 +306,9 @@ func mount_transform(r := 0.0) -> Transform3D:
 			else MIN_REAR_GAP - socket_offset()
 		b = kick * b
 		pos.x -= minf(recoil_slide * maxf(r, -0.3), rear - min_rear)
+	if switch_phase != 0:
+		# Retracting into / snapping out of the arm, about the mount point.
+		b = b.scaled(Vector3.ONE * maxf(switch_scale, 0.02))
 	return Transform3D(Basis.IDENTITY, Vector3(socket_offset(), 0, 0)) * Transform3D(b, pos) * _socket.affine_inverse()
 
 

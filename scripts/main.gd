@@ -72,6 +72,14 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		marker.lock_left = lock_left
 		marker.camera = rig.camera
 		debug_hud.player = player
+		# Weapon wheel (hold the weapon button, drag to an arm's weapon).
+		var loadout := player.get_node_or_null("WeaponLoadout") as WeaponLoadout
+		if loadout:
+			var wheel := WeaponWheel.new()
+			wheel.name = "WeaponWheel"
+			wheel.loadout = loadout
+			wheel.touch = touch_controls
+			$UI.add_child(wheel)
 		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
 		if holder:
 			rig.aiming = holder.current != null

@@ -129,6 +129,13 @@ func equip(definition: WeaponDefinition, side := "Right") -> Weapon:
 	return (slots[side] as WeaponSlot).equip(definition, get_parent())
 
 
+## Switch a slot to another weapon with the retract / materialise sequence
+## (~0.3 s). The other slot is untouched and keeps firing.
+func switch_weapon(definition: WeaponDefinition, side: String) -> void:
+	if slots.has(side):
+		(slots[side] as WeaponSlot).switch_to(definition, get_parent())
+
+
 ## Empty a slot (its arm lowers). `restore_default` puts the default back.
 func unequip(side := "Right", restore_default := false) -> void:
 	if not slots.has(side):
