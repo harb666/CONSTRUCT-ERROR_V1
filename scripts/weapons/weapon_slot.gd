@@ -70,6 +70,7 @@ func has_target() -> bool:
 ## Returns true if a shot left the muzzle.
 func update(shooter: Node3D) -> bool:
 	if current == null or not is_instance_valid(current) or not has_target():
+		_set_aim_offset(Vector3.ZERO)
 		return false
 	# Mid-switch: the old weapon has stopped; the new one fires once half out.
 	if switch_phase == 1 or (switch_phase == 2 and switch_scale < 0.5):
@@ -77,6 +78,9 @@ func update(shooter: Node3D) -> bool:
 	var point := lock.get_aim_point()
 	if current.has_method("update_aim"):
 		current.update_aim(point)
+	# Weapons that fire exactly along their barrel steer the arm's aim so the
+	# barrel (not just the arm) lands on the target.
+	_set_aim_offset(current.aim_correction(point) if current.has_method("aim_correction") else Vector3.ZERO)
 	if not current.can_fire():
 		return false
 	var aim_dir := (point - current.global_position).normalized()
@@ -86,6 +90,11 @@ func update(shooter: Node3D) -> bool:
 		fired.emit(self, current)
 		return true
 	return false
+
+
+func _set_aim_offset(offset: Vector3) -> void:
+	if animator:
+		animator.aim_offset[side] = offset
 
 
 ## The definition's bone, moved to this slot's arm (e.g. RightForeArm ->

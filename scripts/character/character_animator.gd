@@ -102,6 +102,11 @@ var armed_side := ""
 var armed := {"Left": false, "Right": false}
 ## Recoil spring per arm (~1 at peak, slightly negative on rebound).
 var recoil_side := {"Left": 0.0, "Right": 0.0}
+## Per-arm world offset added to the tracked target point. Zero for most
+## weapons; a weapon that fires exactly along its barrel (machine gun) feeds
+## its measured aim error back here (via its WeaponSlot) so the barrel
+## itself lands on the target.
+var aim_offset := {"Left": Vector3.ZERO, "Right": Vector3.ZERO}
 var _recoil_v := {"Left": 0.0, "Right": 0.0}
 ## Strongest of the two arms' recoil (read-only convenience).
 var recoil: float:
@@ -316,7 +321,7 @@ func _process(delta: float) -> void:
 		var lock := controller.get_node_or_null(LOCK_NODES[side]) as TargetLock
 		var tracking: bool = lock != null and lock.has_target() and armed[side] and not is_dead
 		if tracking:
-			_arm_aim.track_point[side] = lock.get_aim_point()
+			_arm_aim.track_point[side] = lock.get_aim_point() + aim_offset[side]
 		_arm_aim.track_weight[side] = move_toward(_arm_aim.track_weight[side], 1.0 if tracking else 0.0, delta * track_blend_speed)
 		# Recoil spring (sub-stepped for stability at low frame rates).
 		var r: float = recoil_side[side]

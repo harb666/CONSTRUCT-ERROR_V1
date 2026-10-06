@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/machine_gun.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/weapons/machine_gun/machine_gun.glb" id="2"]
+
+[node name="MachineGun" type="Node3D"]
+script = ExtResource("1")
+recoil_strength = 0.06
+
+[node name="Model" parent="." instance=ExtResource("2")]
+transform = Transform3D(0.47, 0, 0, 0, 0.47, 0, 0, 0, 0.47, 0, 0, 0)
+
+[node name="Arm_Socket_Attachment" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.448, 0, 0)
+
+[node name="Muzzle_Exit" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.437, -0.0338, 0)

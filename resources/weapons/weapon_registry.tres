@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponRegistry" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="WeaponRegistry" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_registry.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/weapons/default_cannon.tres" id="2"]
 [ext_resource type="Resource" path="res://resources/weapons/black_hole_generator.tres" id="3"]
 [ext_resource type="Resource" path="res://resources/weapons/shotgun.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/weapons/machine_gun.tres" id="5"]
 
 [resource]
 script = ExtResource("1")
-weapons = Array[Resource("res://scripts/weapons/weapon_definition.gd")]([ExtResource("2"), ExtResource("3"), ExtResource("4")])
+weapons = Array[Resource("res://scripts/weapons/weapon_definition.gd")]([ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5")])

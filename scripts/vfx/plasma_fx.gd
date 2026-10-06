@@ -56,12 +56,20 @@ static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3, col := GREE
 ## Plasma hits something at `at` with surface `normal`. `mark_life`: how
 ## long the scorch mark glows; `crackle`: tiny electrical arcs on it.
 static func impact(tree: SceneTree, at: Vector3, normal: Vector3, leave_mark: bool, col := GREEN, hot := HOT,
-		mark_life := 1.3, crackle := true) -> void:
+		mark_life := 1.3, crackle := true, fx_scale := 1.0) -> void:
 	var f := _take(tree, Kind.IMPACT)
 	if f:
 		f._recolor(col, hot)
 		f._crackle = crackle
 		f._start_impact(at, normal, leave_mark, mark_life)
+		f._size *= fx_scale
+		if leave_mark:
+			f._scorch.global_basis = f._scorch.global_basis.scaled(Vector3.ONE * fx_scale)
+
+
+## A very brief light pop at `at` (shared light pool; no new lights).
+static func flash_light(tree: SceneTree, at: Vector3, col: Color, energy := 3.0) -> void:
+	_flash_light(tree, at, col, energy)
 
 
 static func busy_count() -> int:
@@ -100,7 +108,7 @@ static func _take(tree: SceneTree, k: Kind) -> PlasmaFx:
 	return oldest
 
 
-static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN) -> void:
+static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN, energy := 3.0) -> void:
 	_lights = _lights.filter(func(l: OmniLight3D) -> bool: return is_instance_valid(l) and l.is_inside_tree())
 	if _lights.size() < MAX_LIGHTS:
 		var l := OmniLight3D.new()
@@ -116,7 +124,7 @@ static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN) -> void:
 	var light := _lights[_light_next]
 	light.light_color = col
 	light.global_position = at
-	light.light_energy = 3.0
+	light.light_energy = energy
 	light.visible = true
 	_light_t[_light_next] = 0.08
 	# Fades via the pool's driver (see _process of any active effect).

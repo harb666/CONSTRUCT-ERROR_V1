@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_definition.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/machine_gun.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/ui/weapon_icons/machine_gun.png" id="icon"]
+
+[resource]
+script = ExtResource("1")
+id = &"machine_gun"
+display_name = "Machine Gun"
+weapon_scene = ExtResource("2")
+icon = ExtResource("icon")
+accent_color = Color(1, 0.86, 0.08, 1)
+unlocked_at_start = false
+mount_mode = 1
+display_height = 1.05
+display_scale = 1.3

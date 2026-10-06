@@ -16,6 +16,13 @@ extends Node3D
 @export var muzzle_arc_count := 5
 @export var arc_width := 0.13
 @export var reroll_time := Vector2(0.03, 0.09)
+## Colours (defaults: the Black Hole Generator's purple).
+@export var arc_color_a := Vfx.HOT
+@export var arc_color_b := Vfx.PINK
+@export var glow_color := Vfx.PURPLE
+@export var spark_color := Vfx.HOT
+## Glow size at the barrel mouth (weapon-local units) at intensity 0 / 1.
+@export var glow_size := Vector2(0.3, 0.65)
 
 var intensity := 0.0
 
@@ -31,14 +38,14 @@ var _t := 0.0
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	for i in inner_arc_count + muzzle_arc_count:
-		var q := Vfx.quad("bolt", Vfx.HOT if i % 2 == 0 else Vfx.PINK, Vector2.ONE)
+		var q := Vfx.quad("bolt", arc_color_a if i % 2 == 0 else arc_color_b, Vector2.ONE)
 		q.visible = false
 		add_child(q)
 		_arcs.append(q)
 		_a.append(Vector3.ZERO)
 		_b.append(Vector3.ZERO)
 		_timers.append(0.0)
-	_glow = Vfx.quad("glow", Vfx.PURPLE, Vector2.ONE)
+	_glow = Vfx.quad("glow", glow_color, Vector2.ONE)
 	_glow.top_level = true
 	add_child(_glow)
 	_sparks = Vfx.particles("glow", 0.025, 10, 0.3)
@@ -53,7 +60,7 @@ func _ready() -> void:
 	_sparks.initial_velocity_min = 0.3
 	_sparks.initial_velocity_max = 1.2
 	_sparks.gravity = Vector3.ZERO
-	_sparks.color = Vfx.HOT
+	_sparks.color = spark_color
 	_sparks.emitting = false
 	add_child(_sparks)
 	visible = false
@@ -110,5 +117,5 @@ func _process(delta: float) -> void:
 	# Flickering plasma glow at the mouth of the barrel.
 	_glow.global_position = global_transform * Vector3(muzzle_x - 0.02, bore_center.x, bore_center.y)
 	var flicker := 0.75 + 0.25 * sin(_t * 47.0) * sin(_t * 31.0 + 1.3)
-	Vfx.face_camera(_glow, (0.3 + 0.35 * intensity) * flicker * global_basis.get_scale().x, _t * 3.0)
+	Vfx.face_camera(_glow, lerpf(glow_size.x, glow_size.y, intensity) * flicker * global_basis.get_scale().x, _t * 3.0)
 	Vfx.set_alpha(_glow, clampf(intensity * flicker, 0.0, 1.0))

@@ -28,6 +28,12 @@ var mark_life := 1.3
 var crackle := true
 ## Visual size of the bolt and its trail (set after fire()).
 var size := 1.0
+## Electrical flicker of the glow/trail (0 = steady), and a brief light at
+## the impact (shared PlasmaFx light pool); set after fire().
+var flicker := 0.0
+var impact_light := false
+## Size of the impact splash (1 = standard).
+var impact_scale := 1.0
 
 var _core: MeshInstance3D
 var _glow: MeshInstance3D
@@ -35,6 +41,11 @@ var _trail: MeshInstance3D
 var _travelled := 0.0
 var _exclude: Array[RID] = []
 var _tail := Vector3.ZERO
+
+
+## Tint the trail ribbon separately from the glow (call after fire()).
+func set_trail_color(c: Color) -> void:
+	((_trail as MeshInstance3D).material_override as StandardMaterial3D).albedo_color = c
 
 
 ## Fire a bolt from `from` along `dir`.
@@ -107,6 +118,9 @@ func _launch(from: Vector3, dir: Vector3, by: Node, bolt_speed: float, dmg: floa
 	mark_life = 1.3
 	crackle = true
 	size = 1.0
+	flicker = 0.0
+	impact_light = false
+	impact_scale = 1.0
 	speed = bolt_speed
 	damage = dmg
 	velocity = dir * speed
@@ -154,7 +168,9 @@ func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
 	# Scorch marks only on solid level geometry (they don't follow movers).
-	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D, color, hot, mark_life, crackle)
+	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D, color, hot, mark_life, crackle, impact_scale)
+	if impact_light:
+		PlasmaFx.flash_light(get_tree(), at + normal * 0.25, color, 1.6)
 	_stop()
 
 
@@ -170,8 +186,9 @@ func _process(_delta: float) -> void:
 	if cam == null:
 		return
 	var head := global_position
+	var fl := 1.0 + (randf_range(-flicker, flicker) if flicker > 0.0 else 0.0)
 	Vfx.face_camera(_core, 0.3 * size)
-	Vfx.face_camera(_glow, 0.85 * size)
+	Vfx.face_camera(_glow, 0.85 * size * fl, randf() * TAU if flicker > 0.0 else 0.0)
 	_core.global_position = head
 	_glow.global_position = head
 	# Trail: a ribbon from the head back along the flight path.
@@ -183,4 +200,4 @@ func _process(_delta: float) -> void:
 	var y := axis / maxf(length, 0.001)
 	var x := y.cross((cam.global_position - (a + b) * 0.5).normalized()).normalized()
 	var z := x.cross(y)
-	_trail.global_transform = Transform3D(Basis(x * 0.3 * size, y * length, z), (a + b) * 0.5)
+	_trail.global_transform = Transform3D(Basis(x * 0.3 * size * fl, y * length, z), (a + b) * 0.5)

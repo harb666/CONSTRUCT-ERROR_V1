@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/world/toxic_arena.gd" id="2"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
 [ext_resource type="PackedScene" path="res://scenes/props/physics_prop.tscn" id="9"]
 [ext_resource type="Resource" path="res://resources/weapons/shotgun.tres" id="10"]
+[ext_resource type="Resource" path="res://resources/weapons/machine_gun.tres" id="mg"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_boss.tscn" id="11"]
 
 [sub_resource type="Environment" id="env"]
@@ -48,6 +49,11 @@ weapon = ExtResource("6")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.5, 6, -1)
 weapon = ExtResource("10")
 glow_color = Color(1, 0.42, 0.05, 1)
+
+[node name="MachineGunSpawnPad" parent="." instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 6, -7.2)
+weapon = ExtResource("mg")
+glow_color = Color(1, 0.88, 0.05, 1)
 
 [node name="Targets" type="Node3D" parent="."]
 

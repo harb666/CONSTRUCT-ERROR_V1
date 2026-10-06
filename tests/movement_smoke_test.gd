@@ -445,6 +445,7 @@ func _run() -> void:
 	await _weapon_fit_tests(main)
 	await _weapon_socket_tests(main)
 	await _weapon_switch_tests(main)
+	await _machine_gun_tests(main)
 	await _mesh_cap_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
@@ -1398,8 +1399,10 @@ func _weapon_fit_tests(main: Node) -> void:
 	var sel: TargetSelector = p.get_node("Input/TargetSelector")
 	sel.clear()
 	var base := Vector3(-14, 0, 33)
-	var defs := {"cannon": h.default_weapon, "shotgun": load("res://resources/weapons/shotgun.tres"), "bhg": load("res://resources/weapons/black_hole_generator.tres")}
-	var combos := [["cannon", "cannon"], ["shotgun", "cannon"], ["shotgun", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"]]
+	var defs := {"cannon": h.default_weapon, "shotgun": load("res://resources/weapons/shotgun.tres"), "bhg": load("res://resources/weapons/black_hole_generator.tres"),
+		"mg": load("res://resources/weapons/machine_gun.tres")}
+	var combos := [["cannon", "cannon"], ["shotgun", "cannon"], ["shotgun", "shotgun"], ["mg", "mg"], ["mg", "cannon"],
+		["cannon", "mg"], ["mg", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"], ["mg", "bhg"]]
 	var ta := _spawn_robot(main, base + Vector3(0, 0, -10))
 	var tb := _spawn_robot(main, base + Vector3(-7, 0, -7))
 	var tc := _spawn_robot(main, base + Vector3(7, 0, -7))
@@ -1410,6 +1413,25 @@ func _weapon_fit_tests(main: Node) -> void:
 	var b: Targetable = tb.get_node("Targetable")
 	var c: Targetable = tc.get_node("Targetable")
 	for combo in combos:
+		# Let black holes fired in earlier combos finish (their wells drag
+		# the player and targets around) and replace targets they destroyed.
+		await _wait_black_holes()
+		if not (is_instance_valid(ta) and is_instance_valid(tb) and is_instance_valid(tc) and ta.alive and tb.alive and tc.alive):
+			for r in [ta, tb, tc]:
+				if is_instance_valid(r):
+					r.queue_free()
+			sel.clear()
+			await _ticks(2)
+			ta = _spawn_robot(main, base + Vector3(0, 0, -10))
+			tb = _spawn_robot(main, base + Vector3(-7, 0, -7))
+			tc = _spawn_robot(main, base + Vector3(7, 0, -7))
+			for r: RobotEnemy in [ta, tb, tc]:
+				r.max_health = 9999.0
+				r.health = 9999.0
+			a = ta.get_node("Targetable")
+			b = tb.get_node("Targetable")
+			c = tc.get_node("Targetable")
+			await _ticks(10)
 		h.equip(defs[combo[0]], "Right")
 		h.equip(defs[combo[1]], "Left")
 		var worst := {"weapons": INF, "arm": INF, "torso": INF, "rear": -INF}
@@ -1456,9 +1478,195 @@ func _weapon_fit_tests(main: Node) -> void:
 	sel.clear()
 	h.equip(h.default_weapon, "Right")
 	h.equip(h.default_weapon, "Left")
-	for r: RobotEnemy in [ta, tb, tc]:
-		r.queue_free()
+	for r in [ta, tb, tc]:
+		if is_instance_valid(r):
+			r.queue_free()
 	await _ticks(3)
+
+
+## Wait until no black hole / gravity well from earlier shots is active.
+func _wait_black_holes() -> void:
+	for i in 900:
+		if get_root().find_children("*", "BlackHoleProjectile", true, false).is_empty() \
+				and get_root().find_children("*", "GravityWell", true, false).is_empty():
+			return
+		await _ticks(1)
+
+
+## Plasma machine gun: yellow pad (other pads unchanged), pickup into the
+## RIGHT slot, mounted like the other arm weapons, rounds along the barrel,
+## accelerating fire rate, heat -> overheat -> cool down, independent state
+## per arm, bounded recoil and pooled effects.
+func _machine_gun_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var lo: WeaponLoadout = p.get_node("WeaponLoadout")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var sk: Skeleton3D = p.find_children("*", "Skeleton3D", true, false)[0]
+	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
+	sel.clear()
+	sel.forget_last_tap()
+	var pad: WeaponSpawnPad = main.get_node("MachineGunSpawnPad")
+	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	var mg: WeaponDefinition = pad.weapon
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	lo.relock(mg)
+	await _wait_black_holes()
+	if spawner.display == null:
+		spawner.spawn_display()
+	await _ticks(5)
+	_check(mg.id == &"machine_gun" and (load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry).weapons.has(mg), "machine gun is a registered weapon (wheel/unlock system)")
+	_check(spawner.display is MachineGun, "machine gun floats above its own pad")
+	var ring: Color = (pad.get_node("GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	_check(ring.r > 0.9 and ring.g > 0.75 and ring.b < 0.3, "machine gun pad glows yellow (%s)" % ring)
+	var bh_ring: Color = (main.get_node("WeaponSpawnPad/GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	var sg_ring: Color = (main.get_node("ShotgunSpawnPad/GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	_check(bh_ring.b > 0.9 and sg_ring.g < 0.6, "other pads keep their own colours")
+	var disp := spawner.display as MachineGun
+	_check(disp.spin == 0.0 and disp.heat == 0.0 and disp._fx._conduit_mat != null, "pad display shows the calm idle energy flow")
+
+	# Walk onto the pad: RIGHT slot, LEFT untouched.
+	var left_before := h.weapon("Left")
+	p.global_position = pad.global_position + Vector3(0, 0.05, 3.0)
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	Input.action_press("move_forward")
+	for i in 80:
+		await _ticks(1)
+		if h.weapon("Right") is MachineGun:
+			break
+	Input.action_release("move_forward")
+	await _ticks(10)
+	_check(h.weapon("Right") is MachineGun and lo.is_unlocked(mg), "walking onto the pad unlocks the machine gun into the RIGHT slot")
+	_check(h.weapon("Left") == left_before, "LEFT slot keeps its weapon")
+	var R := h.weapon("Right") as MachineGun
+
+	# Mounted like the other arm weapons: on the arm-end socket, barrel along
+	# the forearm, nothing behind the elbow.
+	var base := Vector3(-14, 0, 33)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(15)
+	await sk.skeleton_updated
+	var fb := sk.get_global_transform_interpolated() * sk.get_bone_global_pose(sk.find_bone("mixamorig_RightForeArm"))
+	var axis := fb.basis.y.normalized()
+	_check(R.get_barrel_direction().angle_to(axis) < deg_to_rad(3.0), "barrel points along the forearm (%.1f deg)" % rad_to_deg(R.get_barrel_direction().angle_to(axis)))
+	_check((R.get_parent() as BoneAttachment3D).bone_name == "mixamorig_RightForeArm" and h.slot("Right").definition.mount_mode == WeaponDefinition.MountMode.ARM_END, "mounted on the right forearm's arm-end socket")
+	var mz := R.muzzle_position() - fb.origin
+	_check(mz.dot(axis) > 0.7, "muzzle out in front of the arm (%.2f m)" % mz.dot(axis))
+
+	# Auto-fire at a locked enemy: rate climbs, every round from the muzzle
+	# along the barrel, one flash per round.
+	var r1 := _spawn_robot(main, base + Vector3(0.5, 0, -11))
+	r1.max_health = 99999.0
+	r1.health = 99999.0
+	await _ticks(10)
+	var t1: Targetable = r1.get_node("Targetable")
+	var lights0 := get_root().find_children("*", "OmniLight3D", true, false).size()
+	var flash0 := R._flash.flashes
+	sel.forget_last_tap()
+	sel.tap_target(t1)
+	var counts: Array[int] = []
+	var worst_dir := 0.0
+	var worst_from := 0.0
+	var worst_aim := 0.0
+	var max_rec := 0.0
+	var last_shots := R.shots_fired
+	var energy_1s := 0.0
+	var energy_4s := 0.0
+	var oh_tick := -1
+	var shots_in_lock := 0
+	var lock_shots0 := 0
+	var steam_seen := false
+	var overlay_seen := false
+	for i in 60 * 9:
+		var before := R.shots_fired
+		var pre := R.muzzle_position()
+		await _ticks(1)
+		if i % 60 == 59:
+			counts.append(R.shots_fired - last_shots)
+			last_shots = R.shots_fired
+		if i == 60:
+			energy_1s = R.energy
+		if i == 240:
+			energy_4s = R.energy
+		if R.shots_fired > before:
+			worst_from = maxf(worst_from, minf(R.last_from.distance_to(pre), R.last_from.distance_to(R.muzzle_position())))
+			if i > 60 and not R.overheated:
+				worst_dir = maxf(worst_dir, rad_to_deg(R.last_dir.angle_to(R.get_barrel_direction())))
+				worst_aim = maxf(worst_aim, rad_to_deg(R.get_barrel_direction().angle_to(t1.get_aim_point() - R.muzzle_position())))
+		max_rec = maxf(max_rec, absf(anim.recoil_side.Right))
+		if R.overheated and oh_tick < 0:
+			oh_tick = i
+			lock_shots0 = R.shots_fired
+		if oh_tick >= 0 and R.overheated:
+			shots_in_lock = R.shots_fired - lock_shots0
+			steam_seen = steam_seen or R._fx._steam.emitting
+		overlay_seen = overlay_seen or R._fx._body_mi.material_overlay != null
+		if oh_tick >= 0 and not R.overheated and i > oh_tick + 30:
+			break
+	_check(counts.size() >= 3 and counts[0] >= 7 and counts[0] <= 14, "starts fast (%d rounds in the first second)" % (counts[0] if counts.size() > 0 else -1))
+	_check(counts.size() >= 4 and counts[3] >= 21 and counts[3] > counts[0] * 1.7, "keeps accelerating to a very high rate (%s per second)" % [counts])
+	_check(R.max_fire_rate > 2.0 * 4.0, "far faster than the default cannon (%.0f/s vs 4/s)" % R.max_fire_rate)
+	_check(worst_from < 0.03, "every round leaves from the muzzle (%.3f m)" % worst_from)
+	_check(worst_dir < R.max_spread_deg + 0.6, "rounds fly where the barrel points (worst %.2f deg)" % worst_dir)
+	_check(worst_aim < 2.5, "the barrel itself is kept on the target while firing (worst %.2f deg)" % worst_aim)
+	_check(R._flash.flashes - flash0 == R.shots_fired, "one muzzle flash per round (%d flashes, %d rounds)" % [R._flash.flashes - flash0, R.shots_fired])
+	_check(r1.health < 99999.0, "rounds hit and damage the enemy (%.1f)" % (99999.0 - r1.health))
+	_check(energy_1s < energy_4s, "energy builds with sustained fire (%.2f -> %.2f)" % [energy_1s, energy_4s])
+	_check(oh_tick > 60 * 4 and oh_tick < 60 * 8, "sustained full-rate fire overheats it (after %.1f s)" % (oh_tick / 60.0))
+	_check(shots_in_lock == 0, "no firing while overheated")
+	_check(steam_seen and overlay_seen, "venting steam and a glowing hot barrel")
+	_check(not R.overheated and R.heat_ratio() <= R.resume_heat + 0.01, "cools down and fires again (heat %.0f%%)" % (R.heat_ratio() * 100.0))
+	_check(max_rec > 0.02 and max_rec < 0.6, "sustained recoil stays controlled (peak %.2f)" % max_rec)
+	var lights1 := get_root().find_children("*", "OmniLight3D", true, false).size()
+	_check(lights1 - lights0 <= PlasmaFx.MAX_LIGHTS, "no light per round: at most the shared pool (%d new)" % (lights1 - lights0))
+	_check(PlasmaBolt._pool.size() <= PlasmaBolt.POOL_SIZE, "rounds are pooled (%d)" % PlasmaBolt._pool.size())
+
+	# Let go: heat and energy settle; impact marks fade, nothing piles up.
+	sel.clear()
+	for i in 60 * 5:
+		await _ticks(1)
+		if R.heat <= 0.0 and R.spin <= 0.0:
+			break
+	await _ticks(60)
+	_check(R.heat == 0.0 and R.spin == 0.0 and R.energy < 0.05, "stopping lets the heat dissipate and the energy settle")
+	_check(R._fx._body_mi.material_overlay == null, "barrel glow gone once cool")
+	_check(PlasmaFx.busy_count() == 0 and PlasmaBolt.active_count() == 0, "impact marks and rounds all gone (no permanent decals)")
+
+	# Dual wield: two machine guns, each with its own state.
+	h.equip(mg, "Left")
+	var L := h.weapon("Left") as MachineGun
+	_check(L != null and L != R and (L.get_parent() as BoneAttachment3D).bone_name == "mixamorig_LeftForeArm", "machine gun also mounts on the LEFT arm")
+	sel.forget_last_tap()
+	sel.tap_target(t1)  # right only
+	for i in 150:
+		await _ticks(1)
+	_check(R.spin > 0.5 and R.heat > 10.0 and L.spin == 0.0 and L.heat == 0.0 and L.shots_fired == 0, "each gun keeps its own spin and heat (R %.0f%% / L %.0f%%)" % [R.spin * 100.0, L.spin * 100.0])
+	_check(absf(anim.recoil_side.Left) < 0.001, "only the firing arm recoils")
+	var r2 := _spawn_robot(main, base + Vector3(-3, 0, -10))
+	r2.max_health = 99999.0
+	r2.health = 99999.0
+	await _ticks(5)
+	sel.forget_last_tap()
+	sel.tap_target(r2.get_node("Targetable"))
+	for i in 60:
+		await _ticks(1)
+	_check(L.shots_fired > 0 and R.spin > L.spin, "LEFT spins up from zero on its own target while RIGHT is already hot")
+	sel.clear()
+	await _ticks(10)
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	lo.relock(mg)
+	spawner.spawn_display()
+	for r in [r1, r2]:
+		r.queue_free()
+	await _ticks(5)
 
 
 ## Weapon arm attachment standard: one character-side WeaponSocket per arm,
