@@ -47,6 +47,16 @@ const FULL_CLIP_RATE := BARRELS * CLIP_REVS_PER_S
 ## Chaingun rotor spin axis in the rotor's own space (from the asset) and
 ## how far along it the barrel tips are.
 const ROTOR_AXIS := Vector3(-0.0200662, 0.9543148, 0.2981285)
+## Launcher silo (model units, from tools/build_robot_boss.py): Missile_Spawn
+## is the loaded missile's centre; the nozzle mouth is SILO_MOUTH further
+## along its +Z; the bore is SILO_RADIUS wide.
+const SILO_MOUTH := 0.285
+const SILO_RADIUS := 0.135
+## Reactor core radius (model units).
+const CORE_RADIUS := 0.052
+## Joints the dying robot's arcs jump between.
+const ARC_BONES := ["Hips", "Spine", "Spine2", "Neck", "Head", "LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand",
+	"RightShoulder", "RightArm", "RightForeArm", "RightHand", "LeftUpLeg", "LeftLeg", "RightUpLeg", "RightLeg"]
 const BULLET_COLOR := Color(1.0, 0.55, 0.1)
 const BULLET_HOT := Color(1.0, 0.9, 0.5)
 
@@ -108,11 +118,17 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 @export var missile_first_delay := 3.0
 ## Telegraph: stops shooting and squares up before the launch.
 @export var missile_windup := 0.7
-@export var missile_speed := 15.0
+## Missile speed through the climb / at the end of its dive (m/s).
+@export var missile_speed := 20.0
+@export var missile_dive_speed := 42.0
+## How high the missile climbs above the launcher before arcing over (m).
+@export var missile_climb_height := 16.0
 @export var missile_damage := 3.0
 @export var missile_blast_radius := 2.6
-## Size of the missile itself (it comes out of a big launcher).
-@export var missile_visual_scale := 2.5
+## Missile length (m); a loaded one sits in the launcher's silo.
+@export var missile_length := 1.8
+## After a launch the next missile is loaded this much later (s).
+@export var missile_reload_time := 1.6
 
 @export_group("Chest core")
 ## Delay from the missile launch to the flap starting to open.
@@ -124,6 +140,14 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 ## Shoots its chaingun while the core is exposed.
 @export var fire_while_exposed := false
 @export var core_glow_energy := 3.0
+
+@export_group("Death")
+## Core overloads this long, then blows; the robot collapses at
+## `death_collapse_time` (s after the killing hit).
+@export var death_overload_time := 0.55
+@export var death_collapse_time := 1.05
+## Visor glow (emission energy) while it's alive.
+@export var visor_glow := 2.5
 
 enum State { COMBAT, WINDUP, DEAD }
 
@@ -154,6 +178,13 @@ var chaingun_muzzle: Node3D
 var gun_aim: BossGunAim
 var missile_socket: Node3D
 var flap: Node3D
+## The missile waiting in the silo (hidden while reloading).
+var loaded_missile: Node3D
+var core_fx: BossCoreFx
+var hit_react: BossHitReact
+var launch_fx: LauncherBlast
+## Seconds since the killing hit (-1 while alive).
+var dying_t := -1.0
 
 var _visual: Node3D
 var _targetable: Targetable
@@ -175,6 +206,14 @@ var _core_glow: MeshInstance3D
 var _move_anim := &""
 var _collision: CollisionShape3D
 var _collision_rest: Transform3D
+var _reload_t := 0.0
+var _load_slide := 0.0
+var _sk: Skeleton3D
+var _arc_bones: Array[int] = []
+var _visor_mat: StandardMaterial3D
+var _visor_albedo := Color.WHITE
+var _core_rest: StandardMaterial3D
+var _collapsed := false
 
 static var _lib_cache: AnimationLibrary
 static var _chest_lib: AnimationLibrary
@@ -218,6 +257,10 @@ func _apply_scale() -> void:
 		_targetable.position = _target_rest
 		_targetable.select_radius *= model_scale
 		_targetable.select_half_height *= model_scale
+	# The loaded missile is `missile_length` long in the world.
+	loaded_missile.scale = Vector3.ONE * missile_length / model_scale
+	# Effects reach well beyond the small core so they read at range.
+	core_fx.radius = CORE_RADIUS * model_scale * 2.6
 
 
 func _build_model() -> void:
@@ -238,6 +281,16 @@ func _build_model() -> void:
 	flap = model.find_child("Chest_Frown_Plate_Hinge", true, false) as Node3D
 	_setup_animation()
 	var sk := model.find_child("Skeleton3D", true, false) as Skeleton3D
+	_sk = sk
+	# Hit reactions first, then the chaingun aim on top (keeps aiming true).
+	hit_react = BossHitReact.new()
+	hit_react.name = "HitReact"
+	sk.add_child(hit_react)
+	hit_react.setup(sk)
+	for b in ARC_BONES:
+		var bi := sk.find_bone("mixamorig_" + b)
+		if bi >= 0:
+			_arc_bones.append(bi)
 	gun_aim = BossGunAim.new()
 	gun_aim.name = "GunAim"
 	sk.add_child(gun_aim)
@@ -251,6 +304,29 @@ func _build_model() -> void:
 	_core_glow = Vfx.quad("glow", Color(1.0, 0.1, 0.05), Vector2.ONE * 0.5, BaseMaterial3D.BILLBOARD_ENABLED)
 	_core_glow.visible = false
 	core.add_child(_core_glow)
+	_core_rest = _core_mat.duplicate()
+	# Visor: its own red emissive material (per boss, it flickers out at death).
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for si in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(si)
+			if m and m.resource_name == "Visor_Emissive":
+				_visor_mat = (m as StandardMaterial3D).duplicate()
+				_visor_mat.emission_energy_multiplier = visor_glow
+				_visor_mat.emission = Color(1.0, 0.07, 0.04)
+				_visor_mat.albedo_color = Color(1.0, 0.2, 0.15)
+				_visor_albedo = _visor_mat.albedo_color
+				mi.set_surface_override_material(si, _visor_mat)
+	# A missile loaded in the silo (the shared missile model).
+	loaded_missile = BossMissileModel.create(1.0)
+	loaded_missile.name = "LoadedMissile"
+	missile_socket.add_child(loaded_missile)
+	core_fx = BossCoreFx.new()
+	core_fx.name = "CoreFx"
+	core_fx.points = arc_points
+	add_child(core_fx)
+	launch_fx = LauncherBlast.new()
+	launch_fx.name = "LaunchFx"
+	add_child(launch_fx)
 
 
 ## The model's clips split over three players: body (root motion removed
@@ -323,7 +399,10 @@ static func _in_place(a: Animation) -> void:
 
 func _physics_process(delta: float) -> void:
 	if not alive:
+		_update_death(delta)
 		return
+	_update_reload(delta)
+	core_fx.instability = clampf(1.0 - health / max_health, 0.0, 1.0)
 	_find_target()
 	_update_chest(delta)
 	match state:
@@ -516,15 +595,73 @@ func fire_missile(at: Vector3) -> BossMissile:
 	last_missile_target = point
 	last_marker = MissileTargetMarker.spawn(get_parent(), point, missile_blast_radius)
 	var from := missile_socket.global_transform
-	last_missile = BossMissile.launch(get_parent(), from, point, self, last_marker, missile_visual_scale)
+	last_missile = BossMissile.launch(get_parent(), from, point, self, last_marker, missile_length)
 	last_missile.speed = missile_speed
+	last_missile.dive_speed = missile_dive_speed
+	last_missile.climb_height = missile_climb_height
 	last_missile.damage = missile_damage
 	last_missile.blast_radius = missile_blast_radius
+	# The loaded round is the one that left; fire and smoke out of the silo.
+	loaded_missile.visible = false
+	_reload_t = missile_reload_time
+	launch_fx.fire(silo_mouth(), SILO_RADIUS * 2.0 * model_scale)
 	missiles_fired += 1
 	Sfx.play_at(get_parent(), Sfx.BH_FIRE, from.origin, -6.0, 5.0, 60.0)
 	missile_launched.emit(point)
 	_chest_open_t = chest_open_delay
 	return last_missile
+
+
+## The launcher's nozzle mouth: +Z out of the silo.
+func silo_mouth() -> Transform3D:
+	var m := missile_socket.global_transform
+	return Transform3D(m.basis.orthonormalized(), m.origin + m.basis.z * SILO_MOUTH)
+
+
+## Reloading: the next missile appears in the silo and slides home.
+func _update_reload(delta: float) -> void:
+	if _reload_t > 0.0:
+		_reload_t -= delta
+		if _reload_t <= 0.0:
+			loaded_missile.visible = true
+			_load_slide = 1.0
+	if _load_slide > 0.0:
+		_load_slide = maxf(_load_slide - delta / 0.35, 0.0)
+		loaded_missile.position = Vector3(0, 0, -0.06 * _load_slide * _load_slide)
+
+
+func is_loaded() -> bool:
+	return loaded_missile.visible
+
+
+## Points on the robot's surface (over its joints and weapons) the death
+## arcs jump between: each joint pushed out from the hips-neck axis to the
+## armour, so the arcs run over the body, not inside it.
+func arc_points() -> Array:
+	var out := []
+	if _sk == null:
+		return out
+	var g := _sk.global_transform
+	var hips := g * _sk.get_bone_global_pose(_sk.find_bone("mixamorig_Hips")).origin
+	var neck := g * _sk.get_bone_global_pose(_sk.find_bone("mixamorig_Neck")).origin
+	var axis := (neck - hips).normalized()
+	var skin := 0.16 * model_scale
+	for b in _arc_bones:
+		var p := g * _sk.get_bone_global_pose(b).origin
+		var on_axis := hips + axis * (p - hips).dot(axis)
+		var out_dir := p - on_axis
+		if out_dir.length_squared() < 0.01:
+			out_dir = _visual.global_basis.z
+		out.append(p + out_dir.normalized() * skin)
+	out.append(chaingun_muzzle.global_position)
+	out.append(silo_mouth().origin)
+	return out
+
+
+func _process(_delta: float) -> void:
+	if core_fx and core:
+		core_fx.core_pos = core.global_position
+		core_fx.forward = _visual.global_basis.z.normalized()
 
 
 ## The floor under a point (where the player stands, even mid-jump).
@@ -607,6 +744,12 @@ func apply_damage(info: DamageInfo) -> void:
 		core_hits += 1
 		core_hit.emit(amount)
 		_core_mat.emission_energy_multiplier = core_glow_energy * 2.5
+		# Red sparks / arcs, and a jerk of the upper body: small for a
+		# bullet, stronger for heavy hits.
+		var strength := clampf(amount / 1.5, 0.1, 1.0)
+		core_fx.core_pos = core.global_position
+		core_fx.hit(strength, info.impact_direction)
+		hit_react.kick(strength, info.impact_direction)
 	if health <= 0.0:
 		die(info)
 
@@ -625,6 +768,8 @@ func hits_core(info: DamageInfo) -> bool:
 	return (info.impact_position + d * t).distance_to(c) <= core_hit_radius
 
 
+## Killed: the core overloads, blows, the failure spreads over the robot,
+## the visor dies, then it collapses (Heavy_Death). See _update_death.
 func die(_info: DamageInfo = null) -> void:
 	if not alive:
 		return
@@ -632,13 +777,65 @@ func die(_info: DamageInfo = null) -> void:
 	state = State.DEAD
 	exposed = false
 	_chest_open_t = -1.0
-	_core_glow.visible = false
 	set_spin(0.0)
 	gun_aim.target_weight = 0.0
 	_speed = 0.0
-	close_chest()
+	_collapsed = false
+	dying_t = 0.0
 	if _targetable:
 		_targetable.kill()
+	linear_velocity = Vector3.ZERO
+	anim.speed_scale = 1.0
+	if _move_anim != &"Idle":
+		anim.play(&"Idle", 0.3)
+		_move_anim = &"Idle"
+	core_fx.core_pos = core.global_position
+	core_fx.failure()
+	_core_glow.visible = true
+	died.emit()
+	if respawn_time >= 0.0:
+		get_tree().create_timer(respawn_time + death_collapse_time, false).timeout.connect(_respawn)
+
+
+## CORE DESTROYED -> INTERNAL FAILURE -> THE WHOLE ROBOT LOSES POWER.
+func _update_death(delta: float) -> void:
+	if dying_t < 0.0:
+		return
+	var t0 := dying_t
+	dying_t += delta
+	if not _collapsed:
+		linear_velocity = Vector3(0, linear_velocity.y, 0)
+	if dying_t < death_overload_time:
+		# Violently unstable: the core flares and the body shudders.
+		_core_mat.emission_energy_multiplier = core_glow_energy * randf_range(1.0, 4.0)
+		Vfx.set_alpha(_core_glow, randf_range(0.4, 1.0))
+		if randf() < delta * 10.0:
+			hit_react.kick(0.25, -_visual.global_basis.z)
+	elif t0 < death_overload_time:
+		# Internal explosion: the core blows, the chest is thrown back.
+		MissileBlast.spawn(get_parent(), core.global_position + _visual.global_basis.z * 0.15 * model_scale, 1.2, 0.7, false)
+		core_fx.blow()
+		hit_react.kick(1.4, -_visual.global_basis.z)
+		_core_glow.visible = false
+		_core_mat.emission_energy_multiplier = 0.0
+		_core_mat.albedo_color = Color(0.08, 0.05, 0.05)
+	# The visor (power) flickers and dies.
+	if _visor_mat:
+		var vk := (dying_t - death_overload_time) / (death_collapse_time + 0.4 - death_overload_time)
+		if vk < 0.0:
+			_visor_mat.emission_energy_multiplier = visor_glow * randf_range(0.8, 1.6)
+		elif vk < 1.0:
+			_visor_mat.emission_energy_multiplier = visor_glow * (1.2 if randf() < 0.45 * (1.0 - vk) else 0.05)
+		else:
+			_visor_mat.emission_energy_multiplier = 0.0
+			_visor_mat.albedo_color = Color(0.25, 0.05, 0.05)
+	if not _collapsed and dying_t >= death_collapse_time:
+		_collapse()
+
+
+## Power gone: the existing death fall.
+func _collapse() -> void:
+	_collapsed = true
 	anim.speed_scale = 1.0
 	anim.play(DEATH_CLIP, 0.15)
 	_move_anim = DEATH_CLIP
@@ -648,9 +845,6 @@ func die(_info: DamageInfo = null) -> void:
 		_collision.transform = Transform3D(Basis(Vector3.RIGHT, PI / 2.0).rotated(Vector3.UP, _yaw), (Vector3(0, 0.4, 0) + Vector3(sin(_yaw), 0, cos(_yaw)) * 0.6) * model_scale)
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	set_deferred("freeze", true)
-	died.emit()
-	if respawn_time >= 0.0:
-		get_tree().create_timer(respawn_time, false).timeout.connect(_respawn)
 
 
 func _respawn() -> void:
@@ -664,7 +858,18 @@ func _respawn() -> void:
 	health = max_health
 	alive = true
 	state = State.COMBAT
+	dying_t = -1.0
+	_collapsed = false
 	_missile_t = missile_first_delay
+	core_fx.reset()
+	_core_mat.emission_energy_multiplier = _core_rest.emission_energy_multiplier
+	_core_mat.albedo_color = _core_rest.albedo_color
+	if _visor_mat:
+		_visor_mat.emission_energy_multiplier = visor_glow
+		_visor_mat.albedo_color = _visor_albedo
+	loaded_missile.visible = true
+	_reload_t = 0.0
+	exposed = false
 	chest_player.play(&"Chest_Closed")
 	anim.play(&"Idle")
 	_move_anim = &"Idle"

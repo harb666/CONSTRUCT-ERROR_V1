@@ -2232,7 +2232,7 @@ func _robot_boss_tests(main: Node) -> void:
 	_check(boss.core != null and boss.core.mesh.get_faces().size() / 3 <= 200 and (boss.core.get_active_material(0) as StandardMaterial3D).emission_enabled
 		and boss.core.get_active_material(0) != body.get_active_material(0), "boss: Reactor_Core is its own light node with its own emissive material")
 	_check(boss.missile_socket != null and boss.model.find_child("Chest_Plate_Carriage", true, false).get_class() == "Node3D"
-		and boss.model.find_children("*issile*", "MeshInstance3D", true, false).is_empty(), "boss: Missile_Spawn socket, no missile mesh, slide rails gone")
+		and boss.loaded_missile != null and boss.loaded_missile.get_parent() == boss.missile_socket, "boss: Missile_Spawn socket with a missile loaded in it, slide rails gone")
 	var bm := body.get_active_material(0) as StandardMaterial3D
 	_check(bm.albedo_texture != null and bm.normal_texture != null and bm.metallic_texture != null, "boss: body keeps its own colour / normal / metal-roughness textures")
 	var draws := 0
@@ -2240,7 +2240,7 @@ func _robot_boss_tests(main: Node) -> void:
 	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
 		draws += mi.mesh.get_surface_count()
 		tris += mi.mesh.get_faces().size() / 3
-	_check(draws <= 7 and tris < 120000, "boss: %d draw calls (6 + the core's glow), %d triangles" % [draws, tris])
+	_check(draws <= 9 and tris < 120000, "boss: %d draw calls (6 + visor + loaded missile + the core's glow), %d triangles" % [draws, tris])
 
 	# Rig: a body clip moves the skeleton (no rest-pose lock).
 	var leg := sk.find_bone("mixamorig_LeftUpLeg")
@@ -2289,6 +2289,7 @@ func _robot_boss_tests(main: Node) -> void:
 	var launch_frame := Engine.get_physics_frames()
 	var m := boss.fire_missile(p.global_position)
 	m.exploded.connect(func(at: Vector3) -> void: events.boom = at, CONNECT_ONE_SHOT)
+	var launch_y := boss.missile_socket.global_position.y
 	_check(m.global_position.distance_to(boss.missile_socket.global_position) < 0.05, "boss: missile appears at the launcher's Missile_Spawn")
 	_check(boss.last_missile_target.distance_to(stood) < 0.15, "boss: missile targets where the player stood at launch")
 	var marker := boss.last_marker
@@ -2298,12 +2299,21 @@ func _robot_boss_tests(main: Node) -> void:
 	p.reset_physics_interpolation()
 	var marker_moved := 0.0
 	var marker_at := marker.global_position
-	for i in 240:
+	var top_y := -INF
+	var always_seen := true
+	var engine_on := true
+	for i in 360:
 		await _ticks(1)
 		if is_instance_valid(marker):
 			marker_moved = maxf(marker_moved, marker.global_position.distance_to(marker_at))
 		if events.boom != Vector3.INF:
 			break
+		top_y = maxf(top_y, m.global_position.y)
+		always_seen = always_seen and m._model.is_visible_in_tree()
+		engine_on = engine_on and m._engine.is_visible_in_tree() and m._puffs.emitting and m._trail.emitting
+	_check(top_y > launch_y + boss.missile_climb_height * 0.8, "boss: missile climbs high before arcing over (%.1f m above the launcher)" % (top_y - launch_y))
+	_check(always_seen and engine_on, "boss: missile, engine flame and smoke trail visible the whole flight")
+	_check(m._trail._pts.size() > 10, "boss: smoke trail follows the curved path (%d points)" % m._trail._pts.size())
 	_check(events.boom != Vector3.INF and (events.boom as Vector3).distance_to(boss.last_missile_target) < 0.5, "boss: missile lands on the recorded point (%.2f m off)" % (events.boom as Vector3).distance_to(boss.last_missile_target))
 	_check((events.boom as Vector3).distance_to(p.global_position) > 3.0, "boss: missile doesn't chase the player who moved away")
 	_check(marker_moved < 0.01, "boss: marker stays fixed while the player moves")
@@ -2313,7 +2323,10 @@ func _robot_boss_tests(main: Node) -> void:
 	# Chest: opened by the launch, flap hinged downward, head untouched.
 	_check(events.exposed > 0.0 and events.exposed - launch_frame / 60.0 < 0.5, "boss: launching opens the chest and exposes the core (%.2f s)" % (events.exposed - launch_frame / 60.0))
 	var flap_up := boss.flap.global_basis.y.normalized()
-	_check(flap_up.y < -0.3 and flap_up.dot(boss.model.global_basis.z.normalized()) > 0.3, "boss: flap swung open downward (%s)" % flap_up.snapped(Vector3.ONE * 0.01))
+	_check(flap_up.y < -0.9, "boss: flap folds right down out of the way (%s)" % flap_up.snapped(Vector3.ONE * 0.01))
+	# From where the player stands (below and in front), the core is clear.
+	var eye := boss.global_position + boss._visual.global_basis.z * 14.0 + Vector3.UP * 1.6
+	_check(not _segment_hits_flap(boss, eye, boss.core.global_position), "boss: open flap doesn't block the player's shot at the core")
 	var chest_only := true
 	for c in boss.chest_player.get_animation_list():
 		var ca := boss.chest_player.get_animation(c)
@@ -2361,11 +2374,21 @@ func _robot_boss_tests(main: Node) -> void:
 	boss.anim.play(&"Idle")
 
 	await _robot_boss_v2_tests(main, boss, body)
+	await _robot_boss_v3_tests(main, boss)
 
 	# Death: collapses and lies flat, feet not planted, weapons attached.
 	var foot := sk.find_bone("mixamorig_LeftFoot")
 	var foot0 := sk.global_transform * sk.get_bone_global_pose(foot).origin
+	boss.health = 0.1
 	boss.die()
+	# Core destroyed -> internal failure -> the whole robot loses power.
+	var blew := false
+	var visor0 := boss._visor_mat.emission_energy_multiplier
+	for i in int(boss.death_collapse_time * 60.0) - 2:
+		await _ticks(1)
+		blew = blew or (boss.core_fx._blown and MissileBlast.busy_count() > 0)
+	_check(blew and boss.core_fx.body_arcs_shown > 8, "boss: core blows, red arcs spread over the robot (%d arcs)" % boss.core_fx.body_arcs_shown)
+	_check(boss.anim.assigned_animation != RobotBoss.DEATH_CLIP and boss._core_mat.emission_energy_multiplier < 0.1, "boss: core dark before it collapses")
 	var foot_move := 0.0
 	for i in 70:
 		await _ticks(1)
@@ -2388,6 +2411,10 @@ func _robot_boss_tests(main: Node) -> void:
 	var rel2 := (sk.global_transform * sk.get_bone_global_pose(fore)).affine_inverse() * boss.rotor.global_transform
 	_check(rel0.origin.distance_to(rel2.origin) < 0.001, "boss: weapons stay attached through the death")
 	_check(not boss.get_node("Targetable").is_valid_target(), "boss: dead boss can't be targeted")
+	_check(visor0 > 1.0 and boss._visor_mat.emission_energy_multiplier == 0.0, "boss: visor flickers out (power gone)")
+	var late := boss.core_fx.body_arcs_shown
+	await _ticks(120)
+	_check(boss.core_fx.body_arcs_shown > late, "boss: dead robot keeps crackling for a while")
 
 
 ## Does the segment a..b pass through the chest flap's box?
@@ -2553,6 +2580,71 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 	p.reset_physics_interpolation()
 	boss.anim.play(&"Idle")
 	await _ticks(10)
+
+
+## Mini-boss update: red visor, wide silo with a loaded missile, launch
+## burst, reload, explosion + shockwave, core-hit feedback and reactions.
+func _robot_boss_v3_tests(main: Node, boss: RobotBoss) -> void:
+	var p: PlayerController = main.players[1]
+	var sc := boss.model_scale
+	boss._missile_t = 999.0
+	# Visor: strong red glow.
+	var vm := boss._visor_mat
+	_check(vm != null and vm.emission_enabled and vm.emission_energy_multiplier >= 2.0 and vm.emission.r > 0.9 and vm.emission.g < 0.3,
+		"boss: visor glows strong red")
+	# The loaded missile sits centred in the silo without touching it.
+	var lm := boss.loaded_missile
+	var L := boss.missile_length
+	var r_world := BossMissileModel.RADIUS * L
+	var silo_r := RobotBoss.SILO_RADIUS * sc
+	var bore_half := (RobotBoss.SILO_MOUTH - 0.035) * sc
+	_check(lm.is_visible_in_tree() and lm.position.length() < 0.001 and r_world < silo_r * 0.8 and L * 0.5 < bore_half,
+		"boss: missile loaded in the silo, centred and clear of its walls (r %.2f in %.2f m bore)" % [r_world, silo_r])
+	# Launch: fire and smoke out of the nozzle, reload afterwards.
+	boss.health = boss.max_health
+	var m := boss.fire_missile(p.global_position + Vector3(4, 0, 4))
+	await _ticks(2)
+	_check(not boss.is_loaded() and boss.launch_fx.is_busy() and boss.launch_fx.global_position.distance_to(boss.silo_mouth().origin) < 1.5,
+		"boss: launch burst of fire and smoke out of the nozzle; silo empty")
+	var shock := false
+	for i in 360:
+		await _ticks(1)
+		for b in MissileBlast._pool:
+			shock = shock or (b.active and b._wave.visible and b._wave.scale.x > b.radius)
+		if m.done and shock:
+			break
+	_check(m.done and shock, "boss: missile explodes with an expanding shockwave")
+	await _ticks(int(boss.missile_reload_time * 60.0) + 30)
+	_check(boss.is_loaded(), "boss: next missile loaded after the reload")
+	# Pooled: repeated launches reuse the same few missiles and blasts.
+	for k in 5:
+		boss.fire_missile(p.global_position + Vector3(4, 0, 4 + k))
+		await _ticks(200)
+	_check(BossMissile._pool.size() <= BossMissile.POOL_SIZE and MissileBlast._pool.size() <= MissileBlast.POOL_SIZE,
+		"boss: missiles and explosions pooled (%d / %d)" % [BossMissile._pool.size(), MissileBlast._pool.size()])
+	# Core hits: red sparks/arcs and a small jerk; bigger hits jerk harder.
+	boss.open_chest()
+	await _ticks(40)
+	var c := boss.core.global_position
+	var fwd := boss._visual.global_basis.z.normalized()
+	var h0 := boss.core_fx.hits
+	boss.apply_damage(DamageInfo.make(0.2, DamageInfo.Type.ENERGY, c + fwd * 0.8, -fwd, 2.0))
+	await _ticks(3)
+	var small := boss.hit_react.amount()
+	await _ticks(60)
+	boss.apply_damage(DamageInfo.make(2.0, DamageInfo.Type.ENERGY, c + fwd * 0.8, -fwd, 2.0))
+	await _ticks(3)
+	var big := boss.hit_react.amount()
+	_check(boss.core_fx.hits == h0 + 2 and boss.core_fx._sparks.emitting, "boss: core hits throw red sparks and arcs")
+	_check(small > 0.0 and big > small * 2.0 and big < 3.0, "boss: reacts slightly to core hits, more to big ones (%.2f / %.2f)" % [small, big])
+	# Low health: unstable, smoking core.
+	boss.health = boss.max_health * 0.1
+	await _ticks(10)
+	_check(boss.core_fx.instability > 0.85 and boss.core_fx._smoke.emitting, "boss: badly damaged core is unstable and smokes")
+	boss.health = boss.max_health
+	await _ticks(5)
+	boss.close_chest()
+	await _ticks(40)
 
 
 ## Rounds per second while the chaingun fires at full spin (1 s sample).

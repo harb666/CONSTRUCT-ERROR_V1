@@ -49,6 +49,10 @@ GUNMETAL_DARK = (0.17504883, 0.65942383)   # albedo ~0.105 (core pocket inside)
 GUNMETAL_LIGHT = (0.60864258, 0.62036133)  # albedo ~0.158 (chaingun bearings)
 ARMOUR_GREY = (0.76538086, 0.80639648)     # albedo ~0.214 (the robot's grey armour)
 RED_ARMOUR = (0.48706055, 0.68334961)      # the robot's red armour
+# Visor: the face slit (bind-space box) - its red/pink texels get their own
+# emissive red material.
+VISOR_BOX = ((-0.3, 1.41, 0.06), (0.0, 1.50, 1.0))
+VISOR_MIN_RED = 0.5
 
 # Rocket arm: an armoured launcher housing around the old missile tube,
 # built on the launch axis (Missile_Spawn's +Z), bind space.
@@ -61,9 +65,12 @@ HOUSING_CENTRE = (-0.01, 0.0)  # cross-section centre (side, up) off the axis
 HOUSING_HALF = (0.2, 0.19)    # half width (sideways) / height
 HOUSING_CHAMFER = 0.065
 HOUSING_REAR_SCALE = 0.8      # tapers into the elbow
-PORT_RADIUS = 0.08
-PORT_DEPTH = 0.3
-MISSILE_SPAWN_FORWARD = HOUSING_Z[1] - PORT_DEPTH + 0.05  # into the bore
+PORT_RADIUS = 0.135           # wide missile silo (housing size unchanged)
+PORT_DEPTH = 0.5
+PORT_FRAME = 0.022            # red ring round the opening
+NOZZLE_LIP = 0.035            # the ring stands this far proud of the face
+# Missile_Spawn = where the loaded missile's centre sits: middle of the bore.
+MISSILE_SPAWN_FORWARD = HOUSING_Z[1] - PORT_DEPTH * 0.5
 
 # Chaingun muzzle: on the rotor's spin axis, at the barrel tips.
 ROTOR_AXIS = np.array([-0.0200661844, 0.9543148349, 0.2981284935])
@@ -78,8 +85,8 @@ CORE_RADIUS = 0.052
 
 # Flap hinge (in the flap's parent space): its front-bottom edge.
 HINGE_PIVOT = np.array([-0.002, -0.239, -0.018])
-OPEN_DEG = 130.0
-UNLATCH = 0.02                # pops out this far before swinging
+OPEN_DEG = 172.0              # folds right down against the belly: core fully clear
+UNLATCH = 0.03                # pops out this far before swinging
 
 
 # ---------------------------------------------------------------- glTF io
@@ -295,6 +302,24 @@ def icosphere(r, subdiv=1):
     return P * r, P.copy(), np.array(f).reshape(-1)
 
 
+_BASE_CACHE = {}
+
+
+def sample_base(g, B, uv):
+    """Base-colour texel (0..1 RGB) at each UV of the source atlas."""
+    if "img" not in _BASE_CACHE:
+        ti = g["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"]
+        im = g["images"][g["textures"][ti]["source"]]
+        v = g["bufferViews"][im["bufferView"]]
+        data = B[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]
+        _BASE_CACHE["img"] = np.asarray(Image.open(io.BytesIO(data)).convert("RGB"), np.float32) / 255.0
+    img = _BASE_CACHE["img"]
+    h, w = img.shape[:2]
+    x = np.clip((uv[:, 0] * w).astype(int), 0, w - 1)
+    y = np.clip((uv[:, 1] * h).astype(int), 0, h - 1)
+    return img[y, x]
+
+
 # ---------------------------------------------------------------- rocket arm
 def launch_frame():
     a = LAUNCH_AXIS / np.linalg.norm(LAUNCH_AXIS)
@@ -359,25 +384,36 @@ def launcher_housing():
     prism(rear, z0, front, zm, ARMOUR_GREY, (cx, cy))
     prism(front, zm, front, z1, ARMOUR_GREY, (cx, cy))
     face([P(*p, z0) for p in rear], ARMOUR_GREY, -a)
-    # Front face: ring around the port (the port's corners in the same
-    # angular order as the shell's), a red frame round the port.
-    base_oct = octagon(hw, hh, ch)
-    port = [tuple(np.array(q) / np.linalg.norm(q) * PORT_RADIUS) for q in base_oct]
-    frame = [tuple(np.array(q) / np.linalg.norm(q) * (PORT_RADIUS + 0.035)) for q in base_oct]
+    # Front face: a wide round silo opening. 16 points round the front
+    # octagon (its corners and edge midpoints), the round port / its red
+    # nozzle ring at the same angles, so the ring of quads between them
+    # closes exactly.
+    ring_xy = []
     for i in range(8):
         j = (i + 1) % 8
-        face([P(*front[i], z1), P(*front[j], z1), P(*frame[j], z1), P(*frame[i], z1)], ARMOUR_GREY, a)
-        face([P(*frame[i], z1 + 0.012), P(*frame[j], z1 + 0.012), P(*port[j], z1 + 0.012), P(*port[i], z1 + 0.012)], RED_ARMOUR, a)
+        ring_xy.append(front[i])
+        ring_xy.append(((front[i][0] + front[j][0]) / 2, (front[i][1] + front[j][1]) / 2))
+    angs = [math.atan2(y, x) for x, y in ring_xy]
+    port = [(PORT_RADIUS * math.cos(t), PORT_RADIUS * math.sin(t)) for t in angs]
+    frame = [((PORT_RADIUS + PORT_FRAME) * math.cos(t), (PORT_RADIUS + PORT_FRAME) * math.sin(t)) for t in angs]
+    n16 = len(ring_xy)
+    zl = z1 + NOZZLE_LIP
+    for i in range(n16):
+        j = (i + 1) % n16
+        face([P(*ring_xy[i], z1), P(*ring_xy[j], z1), P(*frame[j], z1), P(*frame[i], z1)], ARMOUR_GREY, a)
         mid = (np.array(frame[i]) + np.array(frame[j])) / 2
-        face([P(*frame[i], z1), P(*frame[j], z1), P(*frame[j], z1 + 0.012), P(*frame[i], z1 + 0.012)], RED_ARMOUR, sd * mid[0] + u * mid[1])
-        mid = (np.array(port[i]) + np.array(port[j])) / 2
-        face([P(*port[i], z1 + 0.012), P(*port[j], z1 + 0.012), P(*port[j], z1), P(*port[i], z1)], GUNMETAL_DARK, -(sd * mid[0] + u * mid[1]))
-    # Port: dark tube going back into the housing, closed at its end.
-    for i in range(8):
-        j = (i + 1) % 8
-        mid = (np.array(port[i]) + np.array(port[j])) / 2
-        face([P(*port[i], z1), P(*port[j], z1), P(*port[j], z1 - PORT_DEPTH), P(*port[i], z1 - PORT_DEPTH)],
-             GUNMETAL_DARK, -(sd * mid[0] + u * mid[1]))
+        out = sd * mid[0] + u * mid[1]
+        # nozzle ring: outer wall, front annulus
+        face([P(*frame[i], z1 - 0.01), P(*frame[j], z1 - 0.01), P(*frame[j], zl), P(*frame[i], zl)], RED_ARMOUR, out)
+        face([P(*frame[i], zl), P(*frame[j], zl), P(*port[j], zl), P(*port[i], zl)], RED_ARMOUR, a)
+        # bore wall (dark) from the lip back to the bottom, two lighter
+        # guide rings inside
+        face([P(*port[i], zl), P(*port[j], zl), P(*port[j], z1 - PORT_DEPTH), P(*port[i], z1 - PORT_DEPTH)], GUNMETAL_DARK, -out)
+        for zr in (z1 - 0.12, z1 - 0.3):
+            pin = [(x * 0.94, y * 0.94) for x, y in (port[i], port[j])]
+            face([P(*port[i], zr), P(*port[j], zr), P(*pin[1], zr), P(*pin[0], zr)], GUNMETAL_LIGHT, a)
+            face([P(*pin[0], zr), P(*pin[1], zr), P(*pin[1], zr - 0.02), P(*pin[0], zr - 0.02)], GUNMETAL_LIGHT, -out)
+            face([P(*port[i], zr - 0.02), P(*port[j], zr - 0.02), P(*pin[1], zr - 0.02), P(*pin[0], zr - 0.02)], GUNMETAL_LIGHT, -a)
     face([P(*p, z1 - PORT_DEPTH) for p in port], GUNMETAL_DARK, a)
     # Red front collar (slightly proud of the shell).
     col_o = C([(x * 1.08, y * 1.08) for x, y in octagon(hw, hh, ch)])
@@ -437,9 +473,7 @@ def inside_housing(p, margin=0.012):
     inside = (z > z0 + margin) & (z < z1 - margin)
     inside &= (np.abs(x) < hw * sc - margin) & (np.abs(y) < hh * sc - margin)
     inside &= (np.abs(x) + np.abs(y) < (hw + hh - HOUSING_CHAMFER) * sc - margin)
-    # ... but not the launch port's bore.
-    r = np.hypot(x + HOUSING_CENTRE[0], y + HOUSING_CENTRE[1])
-    inside &= ~((r < PORT_RADIUS + margin) & (z > z1 - PORT_DEPTH - margin))
+    # (the old launch tube's bore included: the silo is the housing's own)
     return inside
 
 
@@ -516,6 +550,8 @@ def main():
     mesh_map = {}
     removed_tris = 0
     housing_hidden = 0
+    visor_tris = 0
+    visor_prim = None
     remapped = 0
     back_xy = np.zeros((0, 3, 2))
     for mi, m in enumerate(g["meshes"]):
@@ -560,9 +596,22 @@ def main():
             fix = 255 - wb.sum(1)
             wb[np.arange(len(wb)), w.argmax(1)] += fix
             prim["attributes"]["WEIGHTS_0"] = W.acc(wb.astype(np.uint8), 5121, "VEC4", normalized=True, target=34962)
+        prims = [prim]
+        if m["name"] == "Robot_Body":
+            # Visor slit: its own (red emissive) primitive, same vertices.
+            P = read_acc(g, B, at["POSITION"])
+            c = P[idx].mean(1)
+            col = sample_base(g, B, uv[idx].mean(1))
+            lo, hi = np.array(VISOR_BOX[0]), np.array(VISOR_BOX[1])
+            vis = np.all((c > lo) & (c < hi), axis=1) & (col[:, 0] > VISOR_MIN_RED)
+            visor_tris = int(vis.sum())
+            visor_prim = {"attributes": prim["attributes"], "material": None,
+                          "indices": W.acc(idx[vis].reshape(-1), 5125, "SCALAR", target=34963)}
+            idx = idx[~vis]
+            prims.append(visor_prim)
         prim["indices"] = W.acc(idx.reshape(-1), 5125, "SCALAR", target=34963)
         mesh_map[mi] = len(out_meshes)
-        out_meshes.append({"name": m["name"], "primitives": [prim]})
+        out_meshes.append({"name": m["name"], "primitives": prims})
 
     nodes = json.loads(json.dumps(g["nodes"]))
     for n in nodes:
@@ -601,6 +650,14 @@ def main():
                                                "metallicFactor": 0.0, "roughnessFactor": 0.35},
                       "emissiveFactor": [1.0, 0.03, 0.01],
                       "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 1.0}}})
+    # Visor: strong red glow (the slit's own texture tinted red, emissive).
+    base_tex = g["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]
+    materials.append({"name": "Visor_Emissive",
+                      "pbrMetallicRoughness": {"baseColorTexture": dict(base_tex), "baseColorFactor": [1.0, 0.15, 0.12, 1.0],
+                                               "metallicFactor": 0.0, "roughnessFactor": 0.4},
+                      "emissiveTexture": dict(base_tex), "emissiveFactor": [1.0, 0.1, 0.06],
+                      "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 2.5}}})
+    visor_prim["material"] = len(materials) - 1
     cp, cn, ci = icosphere(CORE_RADIUS, 1)
     core_mesh = {"name": "Reactor_Core", "primitives": [{"attributes": {
         "POSITION": W.acc(cp, 5126, "VEC3", target=34962, minmax=True),
@@ -728,7 +785,7 @@ def main():
         f.write(struct.pack("<II", len(W.buf), 0x004E4942) + bytes(W.buf))
     print(f"{OUT}: {total:,} bytes (source {os.path.getsize(SRC):,}); "
           f"{remapped} void-texel vertices remapped, {removed_tris} recess-back triangles replaced, "
-          f"{housing_hidden} enclosed tube triangles removed, "
+          f"{housing_hidden} enclosed tube triangles removed, {visor_tris} visor triangles, "
           f"{len(anims)} clips")
 
 
