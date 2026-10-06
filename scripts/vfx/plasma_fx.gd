@@ -28,6 +28,7 @@ var _life := 0.1
 var _size := 1.0
 var _normal := Vector3.UP
 var _scorch_on := false
+var _crackle := true
 var _flash: MeshInstance3D
 var _ring: MeshInstance3D
 var _scorch: MeshInstance3D
@@ -52,12 +53,15 @@ static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3, col := GREE
 	_flash_light(tree, at + dir * 0.1, col)
 
 
-## Plasma hits something at `at` with surface `normal`.
-static func impact(tree: SceneTree, at: Vector3, normal: Vector3, leave_mark: bool, col := GREEN, hot := HOT) -> void:
+## Plasma hits something at `at` with surface `normal`. `mark_life`: how
+## long the scorch mark glows; `crackle`: tiny electrical arcs on it.
+static func impact(tree: SceneTree, at: Vector3, normal: Vector3, leave_mark: bool, col := GREEN, hot := HOT,
+		mark_life := 1.3, crackle := true) -> void:
 	var f := _take(tree, Kind.IMPACT)
 	if f:
 		f._recolor(col, hot)
-		f._start_impact(at, normal, leave_mark)
+		f._crackle = crackle
+		f._start_impact(at, normal, leave_mark, mark_life)
 
 
 static func busy_count() -> int:
@@ -198,12 +202,12 @@ func _start_flash(at: Vector3, dir: Vector3) -> void:
 	_process(0.0)
 
 
-func _start_impact(at: Vector3, normal: Vector3, leave_mark: bool) -> void:
+func _start_impact(at: Vector3, normal: Vector3, leave_mark: bool, mark_life := 1.3) -> void:
 	_normal = normal.normalized() if normal.length_squared() > 0.01 else Vector3.UP
 	global_position = at + _normal * 0.02
 	_t = 0.0
 	_scorch_on = leave_mark
-	_life = 1.3 if leave_mark else 0.25
+	_life = maxf(mark_life, 0.2) if leave_mark else 0.25
 	_roll = randf() * TAU
 	_size = randf_range(0.85, 1.15)
 	visible = true
@@ -256,6 +260,8 @@ func _process(delta: float) -> void:
 	# Glowing scorch mark: bright, then quickly fades away.
 	var sk := clampf((_t - 0.05) / (_life - 0.05), 0.0, 1.0)
 	Vfx.set_alpha(_scorch, (1.0 - sk) * (1.0 - sk) * 0.9)
+	if not _crackle:
+		return
 	# Tiny electrical crackle from the mark, dying down.
 	_arc_t -= delta
 	if _arc_t <= 0.0:

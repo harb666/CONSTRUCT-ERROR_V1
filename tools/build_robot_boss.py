@@ -48,6 +48,26 @@ VOID_UV = np.array([0.7019043, 0.00317383], dtype=np.float32)
 GUNMETAL_DARK = (0.17504883, 0.65942383)   # albedo ~0.105 (core pocket inside)
 GUNMETAL_LIGHT = (0.60864258, 0.62036133)  # albedo ~0.158 (chaingun bearings)
 ARMOUR_GREY = (0.76538086, 0.80639648)     # albedo ~0.214 (the robot's grey armour)
+RED_ARMOUR = (0.48706055, 0.68334961)      # the robot's red armour
+
+# Rocket arm: an armoured launcher housing around the old missile tube,
+# built on the launch axis (Missile_Spawn's +Z), bind space.
+LAUNCH_BASE = np.array([-0.7083123163, 0.9828118265, 0.2427060883])
+LAUNCH_AXIS = np.array([-0.0781280614, 0.2864695583, 0.9548985277])
+# Fitted to the forearm block (which runs about -0.4..0.4 m along the axis
+# and reaches down into the fist), so the launcher IS the forearm.
+HOUSING_Z = (-0.22, 0.43)     # rear / front along the axis
+HOUSING_CENTRE = (-0.01, 0.0)  # cross-section centre (side, up) off the axis
+HOUSING_HALF = (0.2, 0.19)    # half width (sideways) / height
+HOUSING_CHAMFER = 0.065
+HOUSING_REAR_SCALE = 0.8      # tapers into the elbow
+PORT_RADIUS = 0.08
+PORT_DEPTH = 0.3
+MISSILE_SPAWN_FORWARD = HOUSING_Z[1] - PORT_DEPTH + 0.05  # into the bore
+
+# Chaingun muzzle: on the rotor's spin axis, at the barrel tips.
+ROTOR_AXIS = np.array([-0.0200661844, 0.9543148349, 0.2981284935])
+MUZZLE_ALONG = 0.285
 
 # Chest (model/bind space, metres). The recess back wall is flat at z 0.015.
 CHAMBER_BACK_Z = 0.015
@@ -275,6 +295,154 @@ def icosphere(r, subdiv=1):
     return P * r, P.copy(), np.array(f).reshape(-1)
 
 
+# ---------------------------------------------------------------- rocket arm
+def launch_frame():
+    a = LAUNCH_AXIS / np.linalg.norm(LAUNCH_AXIS)
+    up = np.array([0.0, 1.0, 0.0])
+    u = up - a * up.dot(a)
+    u /= np.linalg.norm(u)
+    side = np.cross(u, a)  # +side = the robot's left (inwards for the right arm)
+    return a, u, side
+
+
+def octagon(hw, hh, ch):
+    return [(-hw + ch, hh), (hw - ch, hh), (hw, hh - ch), (hw, -hh + ch),
+            (hw - ch, -hh), (-hw + ch, -hh), (-hw, -hh + ch), (-hw, hh - ch)]
+
+
+def launcher_housing():
+    """Faceted armour housing (bind space): chamfered octagonal shell along
+    the launch axis tapering into the forearm, dark launch port at the
+    front, red armour plates on top and outside and a red front collar."""
+    a, u, sd = launch_frame()
+    pos, nor, uvc, idx = [], [], [], []
+
+    cx, cy = HOUSING_CENTRE
+
+    def P(x, y, z):
+        return LAUNCH_BASE + sd * x + u * y + a * z
+
+    def C(points):
+        return [(x + cx, y + cy) for x, y in points]
+
+    def face(points, uv, out_hint=None):
+        pts = [np.asarray(p, float) for p in points]
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+        if np.linalg.norm(n) < 1e-9:
+            return
+        n /= np.linalg.norm(n)
+        if out_hint is not None and n.dot(out_hint) < 0:
+            pts = pts[::-1]
+            n = -n
+        base = len(pos)
+        for p in pts:
+            pos.append(p)
+            nor.append(n)
+            uvc.append(uv)
+        for i in range(1, len(pts) - 1):
+            idx.extend([base, base + i, base + i + 1])
+
+    def prism(oct_a, za, oct_b, zb, uv, centre_xy=(0.0, 0.0)):
+        # side quads between two octagons, normals pointing away from the axis
+        for i in range(8):
+            j = (i + 1) % 8
+            q = [P(*oct_a[i], za), P(*oct_a[j], za), P(*oct_b[j], zb), P(*oct_b[i], zb)]
+            mid = (np.array(oct_a[i]) + np.array(oct_a[j])) / 2 - np.array(centre_xy)
+            face(q, uv, sd * mid[0] + u * mid[1])
+
+    hw, hh = HOUSING_HALF
+    ch = HOUSING_CHAMFER
+    z0, z1 = HOUSING_Z
+    front = C(octagon(hw, hh, ch))
+    rear = C([(x * HOUSING_REAR_SCALE, y * HOUSING_REAR_SCALE) for x, y in octagon(hw, hh, ch)])
+    zm = z0 + 0.16
+    prism(rear, z0, front, zm, ARMOUR_GREY, (cx, cy))
+    prism(front, zm, front, z1, ARMOUR_GREY, (cx, cy))
+    face([P(*p, z0) for p in rear], ARMOUR_GREY, -a)
+    # Front face: ring around the port (the port's corners in the same
+    # angular order as the shell's), a red frame round the port.
+    base_oct = octagon(hw, hh, ch)
+    port = [tuple(np.array(q) / np.linalg.norm(q) * PORT_RADIUS) for q in base_oct]
+    frame = [tuple(np.array(q) / np.linalg.norm(q) * (PORT_RADIUS + 0.035)) for q in base_oct]
+    for i in range(8):
+        j = (i + 1) % 8
+        face([P(*front[i], z1), P(*front[j], z1), P(*frame[j], z1), P(*frame[i], z1)], ARMOUR_GREY, a)
+        face([P(*frame[i], z1 + 0.012), P(*frame[j], z1 + 0.012), P(*port[j], z1 + 0.012), P(*port[i], z1 + 0.012)], RED_ARMOUR, a)
+        mid = (np.array(frame[i]) + np.array(frame[j])) / 2
+        face([P(*frame[i], z1), P(*frame[j], z1), P(*frame[j], z1 + 0.012), P(*frame[i], z1 + 0.012)], RED_ARMOUR, sd * mid[0] + u * mid[1])
+        mid = (np.array(port[i]) + np.array(port[j])) / 2
+        face([P(*port[i], z1 + 0.012), P(*port[j], z1 + 0.012), P(*port[j], z1), P(*port[i], z1)], GUNMETAL_DARK, -(sd * mid[0] + u * mid[1]))
+    # Port: dark tube going back into the housing, closed at its end.
+    for i in range(8):
+        j = (i + 1) % 8
+        mid = (np.array(port[i]) + np.array(port[j])) / 2
+        face([P(*port[i], z1), P(*port[j], z1), P(*port[j], z1 - PORT_DEPTH), P(*port[i], z1 - PORT_DEPTH)],
+             GUNMETAL_DARK, -(sd * mid[0] + u * mid[1]))
+    face([P(*p, z1 - PORT_DEPTH) for p in port], GUNMETAL_DARK, a)
+    # Red front collar (slightly proud of the shell).
+    col_o = C([(x * 1.08, y * 1.08) for x, y in octagon(hw, hh, ch)])
+    cz0, cz1 = z1 - 0.1, z1 - 0.015
+    prism(col_o, cz0, col_o, cz1, RED_ARMOUR, (cx, cy))
+    for i in range(8):
+        j = (i + 1) % 8
+        face([P(*front[i], cz1), P(*front[j], cz1), P(*col_o[j], cz1), P(*col_o[i], cz1)], RED_ARMOUR, a)
+        face([P(*front[i], cz0), P(*front[j], cz0), P(*col_o[j], cz0), P(*col_o[i], cz0)], RED_ARMOUR, -a)
+
+    def plate(x0, x1, y0, y1, za, zb, outward):
+        # a box plate on the shell: corners (x, y) across, za..zb along
+        c = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        for i in range(4):
+            j = (i + 1) % 4
+            mid = (np.array(c[i]) + np.array(c[j])) / 2 - np.array([(x0 + x1) / 2, (y0 + y1) / 2])
+            face([P(*c[i], za), P(*c[j], za), P(*c[j], zb), P(*c[i], zb)], RED_ARMOUR, sd * mid[0] + u * mid[1])
+        face([P(*p, zb) for p in c], RED_ARMOUR, a)
+        face([P(*p, za) for p in c], RED_ARMOUR, -a)
+
+    plate(cx - 0.11, cx + 0.11, cy + hh - 0.01, cy + hh + 0.03, 0.0, 0.24, u)            # top
+    plate(cx - hw - 0.03, cx - hw + 0.01, cy - 0.1, cy + 0.08, -0.02, 0.26, -sd)       # outer side
+
+    def panel(x, y0, y1, za, zb, n, uv):
+        # thin inset panel / slot lying on a side face (x = const)
+        face([P(x, y0, za), P(x, y1, za), P(x, y1, zb), P(x, y0, zb)], uv, n)
+
+    def top_slot(x0, x1, za, zb, uv):
+        y = cy + hh + 0.031
+        face([P(x0, y, za), P(x1, y, za), P(x1, y, zb), P(x0, y, zb)], uv, u)
+
+    panel(cx + hw + 0.006, cy - 0.12, cy + 0.1, -0.06, 0.3, sd, GUNMETAL_LIGHT)         # inner side
+    panel(cx - hw - 0.031, cy - 0.06, cy + 0.04, 0.02, 0.22, -sd, GUNMETAL_LIGHT)       # on the red side plate
+    for k in range(3):                                                                  # vents on the top plate
+        top_slot(cx - 0.07, cx + 0.07, 0.03 + k * 0.07, 0.06 + k * 0.07, GUNMETAL_DARK)
+    pos = np.array(pos, float)
+    nor = np.array(nor, float)
+    uv = np.zeros((len(pos), 2), np.float32)
+    for centre in (ARMOUR_GREY, RED_ARMOUR, GUNMETAL_DARK, GUNMETAL_LIGHT):
+        sel = np.array([c == centre for c in uvc])
+        if sel.any():
+            uv[sel] = micro_uv(pos[sel], nor[sel], centre)
+    return pos, nor, uv, np.array(idx, np.uint32)
+
+
+def inside_housing(p, margin=0.012):
+    """Points (bind space) inside the launcher housing (shrunk by margin)."""
+    a, u, sd = launch_frame()
+    d = p - LAUNCH_BASE
+    x, y, z = d @ sd, d @ u, d @ a
+    hw, hh = HOUSING_HALF
+    z0, z1 = HOUSING_Z
+    x = x - HOUSING_CENTRE[0]
+    y = y - HOUSING_CENTRE[1]
+    k = np.clip((z - z0) / 0.16, 0.0, 1.0)
+    sc = HOUSING_REAR_SCALE + (1.0 - HOUSING_REAR_SCALE) * k
+    inside = (z > z0 + margin) & (z < z1 - margin)
+    inside &= (np.abs(x) < hw * sc - margin) & (np.abs(y) < hh * sc - margin)
+    inside &= (np.abs(x) + np.abs(y) < (hw + hh - HOUSING_CHAMFER) * sc - margin)
+    # ... but not the launch port's bore.
+    r = np.hypot(x + HOUSING_CENTRE[0], y + HOUSING_CENTRE[1])
+    inside &= ~((r < PORT_RADIUS + margin) & (z > z1 - PORT_DEPTH - margin))
+    return inside
+
+
 # ---------------------------------------------------------------- chest clips
 def chest_pose(theta, slide, axis):
     q = axis_angle_quat(axis, theta)
@@ -327,9 +495,9 @@ def close_keys():
 
 # ---------------------------------------------------------------- build
 def main():
-    death_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "tools/robot_boss_heavy_death.json")
-    if not os.path.exists(death_path):
-        death_path = None
+    # Authored clips (tools/author_boss_*.gd write these).
+    import glob
+    clip_paths = sys.argv[1:] or sorted(glob.glob(os.path.join(ROOT, "tools/robot_boss_*.json")))
     g, B = load(SRC)
     names = {n["name"]: i for i, n in enumerate(g["nodes"])}
     G = node_globals(g)
@@ -347,6 +515,7 @@ def main():
     out_meshes = []
     mesh_map = {}
     removed_tris = 0
+    housing_hidden = 0
     remapped = 0
     back_xy = np.zeros((0, 3, 2))
     for mi, m in enumerate(g["meshes"]):
@@ -374,6 +543,10 @@ def main():
             facing = back & (fn[:, 2] > 0.9)
             back_xy = P[idx[facing]][:, :, :2]
             idx = idx[~back]
+            # Old tube surfaces now enclosed by the launcher housing.
+            hidden = inside_housing(P)[idx].all(1)
+            housing_hidden = int(hidden.sum())
+            idx = idx[~hidden]
         prim = {"attributes": {}, "material": pr.get("material", 0)}
         prim["attributes"]["POSITION"] = keep(at["POSITION"], 34962)
         prim["attributes"]["NORMAL"] = keep(at["NORMAL"], 34962)
@@ -440,6 +613,40 @@ def main():
     nodes[sock]["extras"] = {"core": "Reactor_Core (separate node and material, for hit detection / glow)"}
     nodes.append({"name": "Reactor_Core", "mesh": len(out_meshes) - 1})
     nodes[sock].setdefault("children", []).append(len(nodes) - 1)
+    # Rocket arm housing, rigid on the right forearm (body material).
+    rfa = names["mixamorig:RightForeArm"]
+    inv_rf = np.linalg.inv(G[rfa])
+    lp, ln, luv, li = launcher_housing()
+    lp_local = (inv_rf[:3, :3] @ lp.T).T + inv_rf[:3, 3]
+    ln_local = (inv_rf[:3, :3] @ ln.T).T
+    ln_local /= np.linalg.norm(ln_local, axis=1, keepdims=True)
+    out_meshes.append({"name": "Rocket_Launcher_Housing", "primitives": [{"attributes": {
+        "POSITION": W.acc(lp_local, 5126, "VEC3", target=34962, minmax=True),
+        "NORMAL": W.acc(ln_local, 5126, "VEC3", target=34962),
+        "TEXCOORD_0": W.acc(luv, 5126, "VEC2", target=34962)},
+        "indices": W.acc(li, 5125, "SCALAR", target=34963), "material": 0}]})
+    nodes.append({"name": "Rocket_Launcher_Housing", "mesh": len(out_meshes) - 1})
+    nodes[rfa].setdefault("children", []).append(len(nodes) - 1)
+
+    # Missile_Spawn: same node and orientation, moved forward along its +Z
+    # into the launch port's bore (the missile appears in the bore and
+    # leaves through the port).
+    ms = nodes[names["Missile_Spawn"]]
+    ms_r = quat_mat(ms["rotation"])
+    ms["translation"] = [float(x) for x in np.array(ms["translation"]) + ms_r @ np.array([0.0, 0.0, MISSILE_SPAWN_FORWARD])]
+    ms["extras"] = dict(ms.get("extras", {}), note="in the launcher housing's bore; +Z out through the port")
+
+    # Chaingun muzzle: +Z along the barrel axis, at the barrel tips.
+    lfa = names["mixamorig:LeftForeArm"]
+    rotor_n = g["nodes"][names["Chaingun_Barrel_Rotor"]]
+    ax = ROTOR_AXIS / np.linalg.norm(ROTOR_AXIS)
+    rq = axis_angle_quat(np.cross([0.0, 0.0, 1.0], ax), math.acos(np.clip(ax[2], -1, 1)))
+    nodes.append({"name": "Chaingun_Muzzle",
+                  "translation": [float(x) for x in np.array(rotor_n["translation"]) + ax * MUZZLE_ALONG],
+                  "rotation": [float(x) for x in rq],
+                  "extras": {"forward_axis": "+Z", "note": "chaingun firing point: barrel tips, along the spin axis"}})
+    nodes[lfa].setdefault("children", []).append(len(nodes) - 1)
+
     nodes[names["Chest_Plate_Carriage"]]["extras"] = {"note": "parent of the hinged flap (slide rails removed)"}
     flap = names["Chest_Frown_Plate_Hinge"]
     axis = np.array(g["nodes"][flap]["extras"]["hinge_axis_local"], float)
@@ -473,17 +680,18 @@ def main():
             {"input": ti, "output": W.acc(trans, 5126, "VEC3"), "interpolation": "LINEAR"}],
             "channels": [{"sampler": 0, "target": {"node": flap, "path": "rotation"}},
                          {"sampler": 1, "target": {"node": flap, "path": "translation"}}]})
-    if death_path:
-        dc = json.load(open(death_path))
-        na = {"name": dc["name"], "samplers": [], "channels": []}
-        for tr in dc["tracks"]:
-            ti = W.acc(np.array(tr["times"], float).reshape(-1, 1), 5126, "SCALAR", minmax=True)
-            vals = np.array(tr["values"], float)
-            na["samplers"].append({"input": ti, "output": W.acc(vals, 5126, "VEC4" if vals.shape[1] == 4 else "VEC3"),
-                                   "interpolation": "LINEAR"})
-            na["channels"].append({"sampler": len(na["samplers"]) - 1,
-                                   "target": {"node": names[tr["node"]], "path": tr["path"]}})
-        anims.append(na)
+    for clip_path in clip_paths:
+        data = json.load(open(clip_path))
+        for dc in data.get("clips", [data]):
+            na = {"name": dc["name"], "samplers": [], "channels": []}
+            for tr in dc["tracks"]:
+                ti = W.acc(np.array(tr["times"], float).reshape(-1, 1), 5126, "SCALAR", minmax=True)
+                vals = np.array(tr["values"], float)
+                na["samplers"].append({"input": ti, "output": W.acc(vals, 5126, "VEC4" if vals.shape[1] == 4 else "VEC3"),
+                                       "interpolation": "LINEAR"})
+                na["channels"].append({"sampler": len(na["samplers"]) - 1,
+                                       "target": {"node": names[tr["node"]], "path": tr["path"]}})
+            anims.append(na)
 
     # Skin.
     skins = json.loads(json.dumps(g["skins"]))
@@ -520,6 +728,7 @@ def main():
         f.write(struct.pack("<II", len(W.buf), 0x004E4942) + bytes(W.buf))
     print(f"{OUT}: {total:,} bytes (source {os.path.getsize(SRC):,}); "
           f"{remapped} void-texel vertices remapped, {removed_tris} recess-back triangles replaced, "
+          f"{housing_hidden} enclosed tube triangles removed, "
           f"{len(anims)} clips")
 
 

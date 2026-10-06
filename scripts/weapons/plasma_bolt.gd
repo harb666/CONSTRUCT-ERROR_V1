@@ -23,6 +23,11 @@ var active := false
 var pass_group := &"enemies"
 var color := GREEN
 var hot := HOT
+## Impact scorch: how long it glows, and whether it crackles (set after fire()).
+var mark_life := 1.3
+var crackle := true
+## Visual size of the bolt and its trail (set after fire()).
+var size := 1.0
 
 var _core: MeshInstance3D
 var _glow: MeshInstance3D
@@ -99,6 +104,9 @@ func _set_colors(c: Color, h: Color) -> void:
 
 func _launch(from: Vector3, dir: Vector3, by: Node, bolt_speed: float, dmg: float) -> void:
 	shooter = by
+	mark_life = 1.3
+	crackle = true
+	size = 1.0
 	speed = bolt_speed
 	damage = dmg
 	velocity = dir * speed
@@ -146,7 +154,7 @@ func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
 	# Scorch marks only on solid level geometry (they don't follow movers).
-	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D, color, hot)
+	PlasmaFx.impact(get_tree(), at, normal, col is StaticBody3D, color, hot, mark_life, crackle)
 	_stop()
 
 
@@ -162,17 +170,17 @@ func _process(_delta: float) -> void:
 	if cam == null:
 		return
 	var head := global_position
-	Vfx.face_camera(_core, 0.3)
-	Vfx.face_camera(_glow, 0.85)
+	Vfx.face_camera(_core, 0.3 * size)
+	Vfx.face_camera(_glow, 0.85 * size)
 	_core.global_position = head
 	_glow.global_position = head
 	# Trail: a ribbon from the head back along the flight path.
 	var dir := velocity.normalized()
-	var length := minf(_travelled + 0.05, 1.6)
+	var length := minf(_travelled + 0.05, 1.6 * size)
 	var a := head
 	var b := head - dir * length
 	var axis := b - a
 	var y := axis / maxf(length, 0.001)
 	var x := y.cross((cam.global_position - (a + b) * 0.5).normalized()).normalized()
 	var z := x.cross(y)
-	_trail.global_transform = Transform3D(Basis(x * 0.3, y * length, z), (a + b) * 0.5)
+	_trail.global_transform = Transform3D(Basis(x * 0.3 * size, y * length, z), (a + b) * 0.5)

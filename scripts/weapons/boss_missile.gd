@@ -34,13 +34,15 @@ var _smoke: CPUParticles3D
 
 
 ## Launch from `from` (its +Z is the launch direction) towards `at`.
-static func launch(parent: Node, from: Transform3D, at: Vector3, by: Node, target_marker: MissileTargetMarker = null) -> BossMissile:
+static func launch(parent: Node, from: Transform3D, at: Vector3, by: Node, target_marker: MissileTargetMarker = null,
+		visual_scale := 1.0) -> BossMissile:
 	var m := BossMissile.new()
+	m.scale = Vector3.ONE * visual_scale
 	m.target = at
 	m.shooter = by
 	m.marker = target_marker
 	parent.add_child(m)
-	m.global_transform = Transform3D(from.basis.orthonormalized(), from.origin)
+	m.global_transform = Transform3D(from.basis.orthonormalized().scaled(Vector3.ONE * visual_scale), from.origin)
 	m.velocity = from.basis.z.normalized() * m.launch_speed
 	if by is CollisionObject3D:
 		m._exclude.append((by as CollisionObject3D).get_rid())

@@ -2032,7 +2032,7 @@ func _robot_boss_tests(main: Node) -> void:
 	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
 		draws += mi.mesh.get_surface_count()
 		tris += mi.mesh.get_faces().size() / 3
-	_check(draws <= 6 and tris < 120000, "boss: %d draw calls (5 + the core's glow), %d triangles" % [draws, tris])
+	_check(draws <= 7 and tris < 120000, "boss: %d draw calls (6 + the core's glow), %d triangles" % [draws, tris])
 
 	# Rig: a body clip moves the skeleton (no rest-pose lock).
 	var leg := sk.find_bone("mixamorig_LeftUpLeg")
@@ -2086,7 +2086,7 @@ func _robot_boss_tests(main: Node) -> void:
 	var marker := boss.last_marker
 	_check(is_instance_valid(marker) and marker.global_position.distance_to(boss.last_missile_target) < 0.1, "boss: warning marker on the ground at the impact point")
 	# The player runs away: the missile and marker don't follow.
-	p.global_position = stood + Vector3(-5.0, 0.0, 0.0)
+	p.global_position = stood + Vector3(0.0, 0.0, 6.0)
 	p.reset_physics_interpolation()
 	var marker_moved := 0.0
 	var marker_at := marker.global_position
@@ -2104,8 +2104,8 @@ func _robot_boss_tests(main: Node) -> void:
 
 	# Chest: opened by the launch, flap hinged downward, head untouched.
 	_check(events.exposed > 0.0 and events.exposed - launch_frame / 60.0 < 0.5, "boss: launching opens the chest and exposes the core (%.2f s)" % (events.exposed - launch_frame / 60.0))
-	var flap_up := boss.flap.global_basis.y
-	_check(flap_up.y < -0.3 and flap_up.dot(boss.model.global_basis.z) > 0.3, "boss: flap swung open downward (%s)" % flap_up.snapped(Vector3.ONE * 0.01))
+	var flap_up := boss.flap.global_basis.y.normalized()
+	_check(flap_up.y < -0.3 and flap_up.dot(boss.model.global_basis.z.normalized()) > 0.3, "boss: flap swung open downward (%s)" % flap_up.snapped(Vector3.ONE * 0.01))
 	var chest_only := true
 	for c in boss.chest_player.get_animation_list():
 		var ca := boss.chest_player.get_animation(c)
@@ -2152,6 +2152,8 @@ func _robot_boss_tests(main: Node) -> void:
 	boss.chest_player.play(&"Chest_Closed")
 	boss.anim.play(&"Idle")
 
+	await _robot_boss_v2_tests(main, boss, body)
+
 	# Death: collapses and lies flat, feet not planted, weapons attached.
 	var foot := sk.find_bone("mixamorig_LeftFoot")
 	var foot0 := sk.global_transform * sk.get_bone_global_pose(foot).origin
@@ -2167,13 +2169,14 @@ func _robot_boss_tests(main: Node) -> void:
 	for q in pts:
 		lo = minf(lo, q.y)
 	var ground := boss.global_position.y
-	_check(lo > ground - 0.03 and lo < ground + 0.06, "boss: corpse rests on the floor, nothing through it (lowest %.3f m)" % (lo - ground))
+	var sc := boss.model_scale
+	_check(lo > ground - 0.03 * sc and lo < ground + 0.06 * sc, "boss: corpse rests on the floor, nothing through it (lowest %.3f m)" % (lo - ground))
 	var hips_at := sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Hips")).origin
 	var head_at := sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Head")).origin
 	var torso := head_at - hips_at
-	_check(hips_at.y - ground < 0.5 and head_at.y - ground < 0.8 and Vector2(torso.x, torso.z).length() > absf(torso.y) * 2.0,
+	_check(hips_at.y - ground < 0.5 * sc and head_at.y - ground < 0.8 * sc and Vector2(torso.x, torso.z).length() > absf(torso.y) * 2.0,
 		"boss: lies flat on its chest, not kneeling or upright (hips %.2f m, head %.2f m up)" % [hips_at.y - ground, head_at.y - ground])
-	_check(foot_move > 0.2, "boss: feet don't stay planted while it falls (%.2f m)" % foot_move)
+	_check(foot_move > 0.2 * sc, "boss: feet don't stay planted while it falls (%.2f m)" % foot_move)
 	var rel2 := (sk.global_transform * sk.get_bone_global_pose(fore)).affine_inverse() * boss.rotor.global_transform
 	_check(rel0.origin.distance_to(rel2.origin) < 0.001, "boss: weapons stay attached through the death")
 	_check(not boss.get_node("Targetable").is_valid_target(), "boss: dead boss can't be targeted")
@@ -2199,4 +2202,159 @@ func _points_in_flap(boss: RobotBoss, pts: PackedVector3Array) -> int:
 	for q in pts:
 		if box.has_point(inv * q):
 			n += 1
+	return n
+
+
+## Robot boss, round 2: 4x size, heavy walk, aimed chaingun with a synced
+## fire rate, quick orange impacts, the integrated rocket arm.
+func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> void:
+	var p: PlayerController = main.players[1]
+	var sk: Skeleton3D = boss.model.find_child("Skeleton3D", true, false)
+	var sc := boss.model_scale
+	var ground := boss.global_position.y
+	# Size: scaled at the root, collider and aim point with it, feet on the floor.
+	var cap := boss.get_node("Collision").shape as CapsuleShape3D
+	_check(absf(sc - 4.0) < 0.01 and boss.model.global_basis.get_scale().is_equal_approx(Vector3.ONE * sc)
+		and absf(cap.radius - 0.55 * sc) < 0.01 and absf(cap.height - 1.75 * sc) < 0.01, "boss: 4x size; collider scaled with it (r %.2f, h %.2f m)" % [cap.radius, cap.height])
+	boss.anim.play(&"Idle")
+	await _ticks(3)
+	var lo := INF
+	var hi := -INF
+	for q in _skinned_points(body, 9):
+		lo = minf(lo, q.y)
+		hi = maxf(hi, q.y)
+	_check(absf(lo - ground) < 0.05 * sc and hi - ground > 1.5 * sc, "boss: standing on the floor (lowest %.2f m), %.1f m tall" % [lo - ground, hi - ground])
+	_check(boss.get_node("Targetable").position.y > 1.0 * sc - 0.01 and absf(boss.get_node("Targetable").select_radius - 1.2 * sc) < 0.01, "boss: aim point and tap area follow the size")
+	_check(boss.chaingun_muzzle.global_position.distance_to(boss.rotor.global_position) > 0.25 * sc, "boss: chaingun muzzle at the barrel tips")
+	# Rocket arm: housing on the forearm, launch line out through its port.
+	var housing := boss.model.find_child("Rocket_Launcher_Housing", true, false) as MeshInstance3D
+	var ms := boss.missile_socket.global_transform
+	_check(housing != null and housing.get_parent() is BoneAttachment3D and housing.get_parent().bone_name == "mixamorig_RightForeArm", "boss: rocket launcher housing built onto the right forearm")
+	# The launch line runs from inside the housing straight out of its port.
+	var crossings := -1
+	var inside := false
+	if housing:
+		var faces := housing.mesh.get_faces()
+		var xf := housing.global_transform
+		var a := ms.origin
+		var b := ms.origin + ms.basis.z.normalized() * 1.5 * sc
+		crossings = 0
+		for i in range(0, faces.size(), 3):
+			if Geometry3D.segment_intersects_triangle(a, b, xf * faces[i], xf * faces[i + 1], xf * faces[i + 2]) != null:
+				crossings += 1
+		var box := housing.mesh.get_aabb()
+		inside = box.has_point(xf.affine_inverse() * a)
+	_check(inside and crossings == 0, "boss: Missile_Spawn sits in the launcher's bore and its path out is clear (%d faces crossed)" % crossings)
+
+	# Walk: walks at the speed its feet show, feet planted don't slide.
+	boss.always_active = true
+	boss._missile_t = 999.0  # no missile attacks during these checks
+	var home := boss.home_radius
+	boss.home_radius = 40.0
+	var fwd := Vector3(sin(boss._yaw), 0, cos(boss._yaw))
+	p.global_position = boss.global_position + fwd * (boss.preferred_range.y + 8.0) + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	var feet := [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
+	var walked := {"frames": 0, "speed_err": 0.0}
+	var tracks := [[], []]
+	for i in 150:
+		await _ticks(1)
+		if i < 60 or boss.anim.current_animation != RobotBoss.WALK_CLIP:
+			continue
+		walked.frames += 1
+		var v := Vector2(boss.linear_velocity.x, boss.linear_velocity.z).length()
+		walked.speed_err = maxf(walked.speed_err, absf(v - boss.walk_anim_ground_speed()))
+		for k in 2:
+			tracks[k].append(sk.global_transform * sk.get_bone_global_pose(feet[k]).origin)
+	_check(walked.frames > 60, "boss: walks with its heavy walk (%d frames)" % walked.frames)
+	_check(walked.speed_err < 0.05, "boss: walk animation speed matches the ground speed (worst %.3f m/s off)" % walked.speed_err)
+	# Planted foot: lowest stretch of each foot's track.
+	var worst_slide := 0.0
+	for k in 2:
+		var tr: Array = tracks[k]
+		if tr.is_empty():
+			continue
+		var floor_y := INF
+		for q: Vector3 in tr:
+			floor_y = minf(floor_y, q.y)
+		var start := Vector3.INF
+		for q: Vector3 in tr:
+			if q.y < floor_y + 0.01 * sc:
+				if start == Vector3.INF:
+					start = q
+				worst_slide = maxf(worst_slide, Vector2(q.x - start.x, q.z - start.z).length())
+			else:
+				start = Vector3.INF
+	_check(worst_slide < 0.06 * sc, "boss: planted feet don't slide while walking (%.3f m)" % worst_slide)
+	# Stop: the player comes closer, it halts and settles into idle.
+	p.global_position = boss.global_position + fwd * (boss.preferred_range.x + 2.0) + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	for i in 120:
+		await _ticks(1)
+	_check(boss.anim.current_animation == &"Idle" and absf(boss._speed) < 0.01, "boss: stops walking and settles into idle (%s)" % boss.anim.current_animation)
+
+	# Chaingun: aimed where it fires, rate synced with the barrels.
+	p.global_position = boss.global_position + fwd.rotated(Vector3.UP, 0.35) * 16.0 + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	boss._gun_phase = 0
+	boss._gun_t = 0.0
+	var shots0 := boss.bullets_fired
+	var err := {"max": 0.0, "dir": 0.0}
+	var t_fire := {"first": -1, "count": 0}
+	for i in 150:
+		await _ticks(1)
+		if boss.bullets_fired > shots0:
+			var m := boss.chaingun_muzzle.global_transform
+			err.max = maxf(err.max, rad_to_deg(boss.last_shot_dir.angle_to(m.basis.z.normalized())))
+			err.dir = maxf(err.dir, rad_to_deg(boss.last_shot_dir.angle_to((p.global_position + Vector3.UP - m.origin).normalized())))
+			if t_fire.first < 0:
+				t_fire.first = i
+			shots0 = boss.bullets_fired
+			t_fire.count += 1
+	_check(boss.gun_aim.aim_error_deg < 4.0, "boss: chaingun arm aims at the player (%.1f deg off)" % boss.gun_aim.aim_error_deg)
+	_check(t_fire.count > 0 and err.max <= boss.chaingun_spread_deg * 1.5 + 0.1, "boss: rounds fly the way the barrels point (%.1f deg)" % err.max)
+	_check(err.dir < boss.chaingun_fire_cone_deg + 2.0, "boss: and towards the player (%.1f deg)" % err.dir)
+	# Rate: rounds per second = chaingun_fire_rate, barrels spin to match.
+	boss.set_spin(1.0)
+	_check(absf(boss.gun_player.speed_scale - boss.chaingun_fire_rate / RobotBoss.FULL_CLIP_RATE) < 0.001, "boss: barrel spin set by the fire rate")
+	var rate := await _boss_fire_rate(boss)
+	_check(absf(rate - boss.chaingun_fire_rate) <= 1.5, "boss: fires %.1f rounds/s (fire rate %.0f)" % [rate, boss.chaingun_fire_rate])
+	var old_rate := boss.chaingun_fire_rate
+	boss.chaingun_fire_rate = 15.0
+	rate = await _boss_fire_rate(boss)
+	_check(absf(rate - 15.0) <= 2.0 and absf(boss.gun_player.speed_scale - 1.5) < 0.05, "boss: retuned to 15/s, fires %.1f/s with the barrels spinning faster" % rate)
+	boss.chaingun_fire_rate = old_rate
+
+	# Orange impact: brief, no crackle, then gone (with the gun quiet).
+	boss.always_active = false
+	boss._gun_phase = 0
+	boss.set_spin(0.0)
+	await _ticks(120)
+	var fx_t0 := PlasmaFx.busy_count()
+	PlasmaFx.impact(self, boss.global_position + Vector3(0, 0.02, 3), Vector3.UP, true, RobotBoss.BULLET_COLOR, RobotBoss.BULLET_HOT, boss.chaingun_impact_lifetime, false)
+	await _ticks(int(boss.chaingun_impact_lifetime * 30.0))
+	var mid := PlasmaFx.busy_count()
+	await _ticks(int(boss.chaingun_impact_lifetime * 60.0) + 6)
+	_check(mid > fx_t0 and PlasmaFx.busy_count() <= fx_t0, "boss: orange impact mark glows briefly and is gone after %.2f s" % boss.chaingun_impact_lifetime)
+
+	boss.always_active = false
+	boss.home_radius = home
+	boss.set_spin(0.0)
+	boss._gun_phase = 0
+	p.global_position = Vector3(0, 6.05, 8.5)
+	p.reset_physics_interpolation()
+	boss.anim.play(&"Idle")
+	await _ticks(10)
+
+
+## Rounds per second while the chaingun fires at full spin (1 s sample).
+func _boss_fire_rate(boss: RobotBoss) -> float:
+	boss._gun_phase = 2
+	boss._gun_t = 99.0
+	boss.set_spin(1.0)
+	await _ticks(20)
+	var n0 := boss.bullets_fired
+	await _ticks(60)
+	var n := boss.bullets_fired - n0
+	boss._gun_t = 0.0
 	return n

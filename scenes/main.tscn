@@ -125,28 +125,28 @@ size = Vector3(0.6, 0.6, 0.6)
 color = Color(0.78, 0.56, 0.3, 1)
 
 [node name="Crate3" parent="Props" instance=ExtResource("9")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.6, 6.3, -21.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.0, 4.3, -14.0)
 mass = 6.0
 shape = 0
 size = Vector3(0.6, 0.6, 0.6)
 color = Color(0.7, 0.5, 0.28, 1)
 
 [node name="Crate4" parent="Props" instance=ExtResource("9")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.6, 6.25, -21.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.0, 4.25, -14.0)
 mass = 4.0
 shape = 0
 size = Vector3(0.5, 0.5, 0.5)
 color = Color(0.7, 0.5, 0.28, 1)
 
 [node name="Barrel1" parent="Props" instance=ExtResource("9")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.8, 6.5, -30.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.5, 4.5, -13.5)
 mass = 20.0
 shape = 1
 size = Vector3(0.6, 1.0, 0.6)
 color = Color(0.3, 0.45, 0.75, 1)
 
 [node name="Barrel2" parent="Props" instance=ExtResource("9")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.8, 6.5, -30.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.5, 4.5, -13.5)
 mass = 20.0
 shape = 1
 size = Vector3(0.6, 1.0, 0.6)

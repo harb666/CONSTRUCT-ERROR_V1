@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scripts/targeting/targetable.gd" id="2"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
+resource_local_to_scene = true
 radius = 0.55
 height = 1.75
 
