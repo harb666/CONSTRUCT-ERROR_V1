@@ -419,7 +419,7 @@ func _think() -> void:
 	# Keep a little space from other robots.
 	_sep = Vector3.ZERO
 	for e in get_tree().get_nodes_in_group(&"enemies"):
-		if e == self or not (e as RobotEnemy).alive:
+		if e == self or not (e is RobotEnemy and (e as RobotEnemy).alive):
 			continue
 		var off: Vector3 = global_position - (e as Node3D).global_position
 		off.y = 0.0

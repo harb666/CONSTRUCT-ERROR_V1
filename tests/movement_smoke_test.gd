@@ -537,7 +537,15 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	Input.action_press("move_back")
 	Input.action_press("sprint")
 	var z0 := p.global_position.z
-	await _ticks(40)
+	var dbg := []  # what the player touched (only reported on failure)
+	for i in 40:
+		await _ticks(1)
+		for k in p.get_slide_collision_count():
+			var c := p.get_slide_collision(k).get_collider()
+			if c and not dbg.has(c.name): dbg.append(c.name)
+	if p.global_position.z <= z0 + 2.0:
+		# Rare; say what held the player back if it ever happens.
+		print("escape blocked: well at ", spot, ", player ", p.global_position, ", pull ", p.external_velocity, ", velocity ", p.velocity, ", touching ", dbg, ", sprinting ", p.is_sprinting)
 	Input.action_release("move_back")
 	Input.action_release("sprint")
 	_check(p.global_position.z > z0 + 2.0, "player can still sprint out of the pull (%.1f m)" % (p.global_position.z - z0))
@@ -1953,6 +1961,8 @@ func _toxic_arena_tests() -> void:
 	_check(target.hits > hits0, "toxic: weapons fire at and hit a locked robot")
 	sel.clear()
 
+	await _robot_boss_tests(main)
+
 	# Stress test robots stand on platforms.
 	StressTest.populate(main, 30)
 	await _ticks(60)
@@ -1963,3 +1973,230 @@ func _toxic_arena_tests() -> void:
 	_check(standing == 30, "toxic: stress test robots all stand on the arena's platforms (%d/30)" % standing)
 	main.queue_free()
 	await _ticks(2)
+
+
+## World positions of (a sample of) a skinned mesh's vertices, optionally
+## only those mostly bound to one of `bones`.
+func _skinned_points(mi: MeshInstance3D, stride: int, bones: Array = []) -> PackedVector3Array:
+	var sk := mi.get_node(mi.skeleton) as Skeleton3D
+	var arrays := mi.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bi: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var bw: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var per := bi.size() / verts.size()
+	var bone_of := {}
+	for i in mi.skin.get_bind_count():
+		bone_of[i] = sk.find_bone(mi.skin.get_bind_name(i))
+	var out := PackedVector3Array()
+	for v in range(0, verts.size(), stride):
+		var p := Vector3.ZERO
+		var keep := bones.is_empty()
+		for k in per:
+			var w := bw[v * per + k]
+			if w <= 0.0:
+				continue
+			var b: int = bone_of[bi[v * per + k]]
+			if w > 0.5 and b in bones:
+				keep = true
+			p += (sk.get_bone_global_pose(b) * mi.skin.get_bind_pose(bi[v * per + k]) * verts[v]) * w
+		if keep:
+			out.append(sk.global_transform * p)
+	return out
+
+
+## Robot boss: asset, chaingun, missile + marker, chest core loop, death.
+func _robot_boss_tests(main: Node) -> void:
+	var boss: RobotBoss = main.get_node_or_null("Targets/RobotBoss")
+	_check(boss != null and boss.alive, "boss: the robot boss stands in Toxic Arena")
+	if boss == null:
+		return
+	var p: PlayerController = main.players[1]
+	var sk: Skeleton3D = boss.model.find_child("Skeleton3D", true, false)
+	var body: MeshInstance3D = null
+	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
+		if mi.skin:
+			body = mi
+	# Asset.
+	var clips := [&"Idle", &"Walking", &"Running", &"Walk_Fight_Back", &"Heavy_Death"]
+	_check(sk.get_bone_count() == 28 and clips.all(func(c: StringName) -> bool: return boss.anim.has_animation(c))
+		and [&"Chest_Open", &"Chest_Close", &"Chest_Open_Hold", &"Chest_Closed"].all(func(c: StringName) -> bool: return boss.chest_player.has_animation(c))
+		and boss.gun_player.has_animation(RobotBoss.GUN_CLIP), "boss: 28-bone rig, body clips, chest and chaingun clips on their own layers")
+	_check(boss.core != null and boss.core.mesh.get_faces().size() / 3 <= 200 and (boss.core.get_active_material(0) as StandardMaterial3D).emission_enabled
+		and boss.core.get_active_material(0) != body.get_active_material(0), "boss: Reactor_Core is its own light node with its own emissive material")
+	_check(boss.missile_socket != null and boss.model.find_child("Chest_Plate_Carriage", true, false).get_class() == "Node3D"
+		and boss.model.find_children("*issile*", "MeshInstance3D", true, false).is_empty(), "boss: Missile_Spawn socket, no missile mesh, slide rails gone")
+	var bm := body.get_active_material(0) as StandardMaterial3D
+	_check(bm.albedo_texture != null and bm.normal_texture != null and bm.metallic_texture != null, "boss: body keeps its own colour / normal / metal-roughness textures")
+	var draws := 0
+	var tris := 0
+	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
+		draws += mi.mesh.get_surface_count()
+		tris += mi.mesh.get_faces().size() / 3
+	_check(draws <= 6 and tris < 120000, "boss: %d draw calls (5 + the core's glow), %d triangles" % [draws, tris])
+
+	# Rig: a body clip moves the skeleton (no rest-pose lock).
+	var leg := sk.find_bone("mixamorig_LeftUpLeg")
+	boss.anim.play(&"Walking")
+	var swing := 0.0
+	var q1 := Quaternion()
+	for k in 12:
+		boss.anim.seek(boss.anim.current_animation_length * k / 12.0, true)
+		boss.anim.advance(0.0)
+		if k == 0:
+			q1 = sk.get_bone_pose_rotation(leg)
+		swing = maxf(swing, q1.angle_to(sk.get_bone_pose_rotation(leg)))
+	_check(swing > 0.15, "boss: body animations drive the rig (thigh swings %.0f deg)" % rad_to_deg(swing))
+	boss.anim.play(&"Idle")
+	await _ticks(3)  # bone attachments follow a frame later
+
+	# Chaingun: spins about its own fixed axis on demand, stops on demand,
+	# stays on the arm.
+	var fore := sk.find_bone("mixamorig_LeftForeArm")
+	var rel0 := (sk.global_transform * sk.get_bone_global_pose(fore)).affine_inverse() * boss.rotor.global_transform
+	boss.set_spin(1.0)
+	await _ticks(2)
+	var r0 := boss.rotor.quaternion
+	await _ticks(6)
+	var r1 := boss.rotor.quaternion
+	var axis := (r0.inverse() * r1).get_axis()
+	_check(r0.angle_to(r1) > 0.3 and absf(absf(axis.dot(RobotBoss.ROTOR_AXIS.normalized())) - 1.0) < 0.02, "boss: chaingun barrel spins about its own axis (%.0f deg in 0.1 s)" % rad_to_deg(r0.angle_to(r1)))
+	var rel1 := (sk.global_transform * sk.get_bone_global_pose(fore)).affine_inverse() * boss.rotor.global_transform
+	_check(rel0.origin.distance_to(rel1.origin) < 0.001, "boss: barrel stays mounted on the forearm while spinning")
+	boss.set_spin(0.0)
+	await _ticks(2)
+	var s0 := boss.rotor.quaternion
+	await _ticks(6)
+	_check(s0.angle_to(boss.rotor.quaternion) < 0.001, "boss: chaingun stops spinning on demand")
+
+	# Missile: from the launcher socket, at the spot where the player stood.
+	p.global_position = boss.global_position + Vector3(1.0, 0.05, 11.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	var stood := p.global_position
+	var events := {"exposed": -1.0, "protected": -1.0, "boom": Vector3.INF}
+	var t_ms := func() -> float: return Time.get_ticks_msec() / 1000.0
+	boss.core_exposed.connect(func() -> void: events.exposed = Engine.get_physics_frames() / 60.0, CONNECT_ONE_SHOT)
+	boss.core_protected.connect(func() -> void: events.protected = Engine.get_physics_frames() / 60.0, CONNECT_ONE_SHOT)
+	var launch_frame := Engine.get_physics_frames()
+	var m := boss.fire_missile(p.global_position)
+	m.exploded.connect(func(at: Vector3) -> void: events.boom = at, CONNECT_ONE_SHOT)
+	_check(m.global_position.distance_to(boss.missile_socket.global_position) < 0.05, "boss: missile appears at the launcher's Missile_Spawn")
+	_check(boss.last_missile_target.distance_to(stood) < 0.15, "boss: missile targets where the player stood at launch")
+	var marker := boss.last_marker
+	_check(is_instance_valid(marker) and marker.global_position.distance_to(boss.last_missile_target) < 0.1, "boss: warning marker on the ground at the impact point")
+	# The player runs away: the missile and marker don't follow.
+	p.global_position = stood + Vector3(-5.0, 0.0, 0.0)
+	p.reset_physics_interpolation()
+	var marker_moved := 0.0
+	var marker_at := marker.global_position
+	for i in 240:
+		await _ticks(1)
+		if is_instance_valid(marker):
+			marker_moved = maxf(marker_moved, marker.global_position.distance_to(marker_at))
+		if events.boom != Vector3.INF:
+			break
+	_check(events.boom != Vector3.INF and (events.boom as Vector3).distance_to(boss.last_missile_target) < 0.5, "boss: missile lands on the recorded point (%.2f m off)" % (events.boom as Vector3).distance_to(boss.last_missile_target))
+	_check((events.boom as Vector3).distance_to(p.global_position) > 3.0, "boss: missile doesn't chase the player who moved away")
+	_check(marker_moved < 0.01, "boss: marker stays fixed while the player moves")
+	await _ticks(12)
+	_check(not is_instance_valid(marker), "boss: marker removed once the missile lands")
+
+	# Chest: opened by the launch, flap hinged downward, head untouched.
+	_check(events.exposed > 0.0 and events.exposed - launch_frame / 60.0 < 0.5, "boss: launching opens the chest and exposes the core (%.2f s)" % (events.exposed - launch_frame / 60.0))
+	var flap_up := boss.flap.global_basis.y
+	_check(flap_up.y < -0.3 and flap_up.dot(boss.model.global_basis.z) > 0.3, "boss: flap swung open downward (%s)" % flap_up.snapped(Vector3.ONE * 0.01))
+	var chest_only := true
+	for c in boss.chest_player.get_animation_list():
+		var ca := boss.chest_player.get_animation(c)
+		for t in ca.get_track_count():
+			chest_only = chest_only and String(ca.track_get_path(t)).ends_with("Chest_Frown_Plate_Hinge")
+	_check(chest_only, "boss: chest clips move only the flap (head and face untouched)")
+	# Core visible from the front while open, hidden behind the flap when closed.
+	var front := boss.core.global_position + boss.model.global_basis.z * 2.0 + Vector3.UP * 0.2
+	_check(not _segment_hits_flap(boss, front, boss.core.global_position), "boss: core clearly visible with the flap open")
+	# Core-only damage while open.
+	var h0 := boss.health
+	var aim := boss.core.global_position
+	boss.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, aim + boss.model.global_basis.z * 0.6, -boss.model.global_basis.z, 2.0))
+	var core_dmg := h0 - boss.health
+	h0 = boss.health
+	var leg_at := sk.global_transform * sk.get_bone_global_pose(leg).origin
+	boss.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, leg_at + boss.model.global_basis.z * 0.3, -boss.model.global_basis.z, 2.0))
+	var leg_dmg := h0 - boss.health
+	_check(absf(core_dmg - 1.0) < 0.01 and absf(leg_dmg - boss.armour_damage_scale) < 0.01 and boss.core_hits == 1, "boss: open core takes full damage (%.2f), armour only %.2f" % [core_dmg, leg_dmg])
+	# Stays open ~3 s, then closes.
+	for i in 300:
+		await _ticks(1)
+		if events.protected > 0.0:
+			break
+	var window: float = events.protected - events.exposed
+	_check(absf(window - boss.core_exposed_time) < 0.1, "boss: core vulnerable for %.2f s (~3 s)" % window)
+	await _ticks(40)
+	_check(boss.flap.quaternion.is_equal_approx(Quaternion()) and boss.flap.position.length() < 0.001, "boss: chest closes back exactly")
+	_check(_segment_hits_flap(boss, front, boss.core.global_position), "boss: closed flap hides and protects the core")
+	h0 = boss.health
+	boss.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, aim + boss.model.global_basis.z * 0.6, -boss.model.global_basis.z, 2.0))
+	_check(absf(h0 - boss.health - boss.armour_damage_scale) < 0.01, "boss: closed core takes only armour damage")
+
+	# The open flap never cuts into the arms, weapons or body while it moves.
+	boss.chest_player.play(&"Chest_Open_Hold")
+	var worst := 0
+	for clip in [&"Idle", &"Walking", &"Walk_Fight_Back", &"Running"]:
+		boss.anim.play(clip)
+		for k in 6:
+			boss.anim.seek(boss.anim.current_animation_length * k / 6.0, true)
+			boss.chest_player.advance(0.0)
+			worst = maxi(worst, _points_in_flap(boss, _skinned_points(body, 7)))
+	_check(worst == 0, "boss: open flap clear of arms, weapons and torso in every move (%d points inside)" % worst)
+	boss.chest_player.play(&"Chest_Closed")
+	boss.anim.play(&"Idle")
+
+	# Death: collapses and lies flat, feet not planted, weapons attached.
+	var foot := sk.find_bone("mixamorig_LeftFoot")
+	var foot0 := sk.global_transform * sk.get_bone_global_pose(foot).origin
+	boss.die()
+	var foot_move := 0.0
+	for i in 70:
+		await _ticks(1)
+		foot_move = maxf(foot_move, (sk.global_transform * sk.get_bone_global_pose(foot).origin).distance_to(foot0))
+	await _ticks(60)
+	_check(boss.anim.assigned_animation == RobotBoss.DEATH_CLIP and not boss.alive, "boss: dies with its heavy death animation")
+	var pts := _skinned_points(body, 9)
+	var lo := INF
+	for q in pts:
+		lo = minf(lo, q.y)
+	var ground := boss.global_position.y
+	_check(lo > ground - 0.03 and lo < ground + 0.06, "boss: corpse rests on the floor, nothing through it (lowest %.3f m)" % (lo - ground))
+	var hips_at := sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Hips")).origin
+	var head_at := sk.global_transform * sk.get_bone_global_pose(sk.find_bone("mixamorig_Head")).origin
+	var torso := head_at - hips_at
+	_check(hips_at.y - ground < 0.5 and head_at.y - ground < 0.8 and Vector2(torso.x, torso.z).length() > absf(torso.y) * 2.0,
+		"boss: lies flat on its chest, not kneeling or upright (hips %.2f m, head %.2f m up)" % [hips_at.y - ground, head_at.y - ground])
+	_check(foot_move > 0.2, "boss: feet don't stay planted while it falls (%.2f m)" % foot_move)
+	var rel2 := (sk.global_transform * sk.get_bone_global_pose(fore)).affine_inverse() * boss.rotor.global_transform
+	_check(rel0.origin.distance_to(rel2.origin) < 0.001, "boss: weapons stay attached through the death")
+	_check(not boss.get_node("Targetable").is_valid_target(), "boss: dead boss can't be targeted")
+
+
+## Does the segment a..b pass through the chest flap's box?
+func _segment_hits_flap(boss: RobotBoss, a: Vector3, b: Vector3) -> bool:
+	var box: AABB = boss.flap.mesh.get_aabb() if boss.flap is MeshInstance3D else AABB()
+	var inv := boss.flap.global_transform.affine_inverse()
+	var la := inv * a
+	var lb := inv * b
+	for i in 41:
+		if box.has_point(la.lerp(lb, i / 40.0)):
+			return true
+	return false
+
+
+## How many points lie inside the flap's box (shrunk 1 cm)?
+func _points_in_flap(boss: RobotBoss, pts: PackedVector3Array) -> int:
+	var box: AABB = (boss.flap as MeshInstance3D).mesh.get_aabb().grow(-0.01)
+	var inv := boss.flap.global_transform.affine_inverse()
+	var n := 0
+	for q in pts:
+		if box.has_point(inv * q):
+			n += 1
+	return n

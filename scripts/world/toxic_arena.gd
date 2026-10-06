@@ -168,9 +168,10 @@ func _add_kill_volume(n: String, box: AABB) -> Area3D:
 	return a
 
 
-## A player is sent back to their spawn; a robot dies (and respawns as usual).
+## A player is sent back to their spawn; a robot or the boss dies (and
+## respawns as usual).
 func _on_kill_volume(body: Node3D) -> void:
 	if body is PlayerController:
 		(body as PlayerController).respawn()
-	elif body is RobotEnemy and (body as RobotEnemy).alive:
+	elif (body is RobotEnemy or body is RobotBoss) and body.alive:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
