@@ -1357,13 +1357,15 @@ func _robot_death_variety_tests(main: Node) -> void:
 	var seen := {}
 	var prev := ""
 	var repeats := 0
-	seed(20261006)  # the picks are random: a fixed seed keeps this check stable
 	for k in 12:
 		var r := _spawn_robot(main, base + Vector3(3 * (k % 4), 0, 3 * (k / 4)))
 		r._breaker.reference_force = 1000.0  # keep it whole: no debris pile-up
 		await _ticks(3)
 		var fwd: Vector3 = r._visual.global_basis.z
 		var dirs := [-fwd, fwd, fwd.cross(Vector3.UP)]
+		# The picks are random: seed right before each kill so this check
+		# doesn't depend on whatever else used random numbers in between.
+		seed(20261006 + k)
 		r.apply_damage(DamageInfo.make(5, DamageInfo.Type.ENERGY, r.global_position + Vector3.UP, dirs[k % 3], [2.0, 9.0][k % 2]))
 		var key := r.last_death_style + ":" + String(r.last_death_anim)
 		seen[key] = true
