@@ -164,6 +164,7 @@ func _run() -> void:
 	await _ticks(10)
 	_check(Vector2(p.velocity.x, p.velocity.z).length() > 3.0, "touch stick moves player")
 	_check(not p.is_on_floor(), "touch JUMP (second finger) jumps")
+	_check(TouchControls.BUTTONS.all(func(b: Dictionary) -> bool: return b.action != "sprint"), "no SPRINT touch button (the stick sprints)")
 	tap.pressed = false
 	Input.parse_input_event(tap)
 	down.pressed = false
@@ -1325,6 +1326,7 @@ func _robot_death_variety_tests(main: Node) -> void:
 	var seen := {}
 	var prev := ""
 	var repeats := 0
+	seed(20261006)  # the picks are random: a fixed seed keeps this check stable
 	for k in 12:
 		var r := _spawn_robot(main, base + Vector3(3 * (k % 4), 0, 3 * (k / 4)))
 		r._breaker.reference_force = 1000.0  # keep it whole: no debris pile-up

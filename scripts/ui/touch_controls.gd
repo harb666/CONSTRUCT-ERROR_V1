@@ -26,7 +26,6 @@ signal wheel_released(position: Vector2)
 const BUTTONS := [
 	{"action": "jump", "label": "JUMP", "radius": 70.0, "offset": Vector2(-120, -120)},
 	{"action": "dodge", "label": "DODGE", "radius": 54.0, "offset": Vector2(-280, -90)},
-	{"action": "sprint", "label": "SPRINT", "radius": 48.0, "offset": Vector2(-110, -290), "toggle": true},
 	# Drawn by the WeaponWheel (shows the equipped weapons).
 	{"action": "weapon_wheel", "label": "", "radius": 44.0, "offset": Vector2(-262, -238), "wheel": true},
 ]
@@ -37,7 +36,6 @@ var _stick_knob := Vector2.ZERO
 var _look_finger := -1
 var _look_last := Vector2.ZERO
 var _button_fingers: Array[int] = []
-var _sprint_toggled := false
 var _button_last: Array[Vector2] = []
 ## Actions whose buttons are currently hidden.
 var _hidden := {}
@@ -161,9 +159,6 @@ func _on_touch_up(index: int) -> void:
 	if index == _move_finger:
 		_move_finger = -1
 		_apply_stick(Vector2.ZERO)
-		if _sprint_toggled:
-			_sprint_toggled = false
-			Input.action_release("sprint")
 	elif index == _look_finger:
 		_look_finger = -1
 	for i in BUTTONS.size():
@@ -171,7 +166,7 @@ func _on_touch_up(index: int) -> void:
 			_button_fingers[i] = -1
 			if BUTTONS[i].get("wheel", false):
 				wheel_released.emit(_button_last[i])
-			elif not BUTTONS[i].get("toggle", false):
+			else:
 				Input.action_release(BUTTONS[i].action)
 	queue_redraw()
 
@@ -196,14 +191,7 @@ func _press_button(i: int) -> void:
 	if b.get("wheel", false):
 		wheel_pressed.emit(_button_last[i])
 		return
-	if b.get("toggle", false):
-		_sprint_toggled = not _sprint_toggled
-		if _sprint_toggled:
-			Input.action_press(b.action)
-		else:
-			Input.action_release(b.action)
-	else:
-		Input.action_press(b.action)
+	Input.action_press(b.action)
 
 
 func _apply_stick(v: Vector2) -> void:
@@ -241,7 +229,7 @@ func _draw() -> void:
 		if _hidden.has(b.action) or b.get("wheel", false):
 			continue
 		var c := _button_center(i)
-		var active: bool = _button_fingers[i] != -1 or (b.get("toggle", false) and _sprint_toggled)
+		var active: bool = _button_fingers[i] != -1
 		draw_circle(c, b.radius, Color(1, 0.75, 0.2, 0.45) if active else base_col)
 		draw_arc(c, b.radius, 0, TAU, 48, edge_col, 2.0, true)
 		_draw_label(c, b.label, Color(1, 1, 1, 0.9))

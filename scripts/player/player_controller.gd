@@ -17,7 +17,7 @@ signal command_processed(cmd: PlayerCommand, delta: float)
 ## a light push walks (up to `walk_speed`), a firmer push runs (`run_min_speed`
 ## .. `run_speed`) and pushing it (nearly) all the way sprints, for as long as
 ## it is held there (from `sprint_zone`, until it drops below `sprint_exit`).
-## The SPRINT button / key also sprints.
+## The sprint key (Shift / RT, desktop) also sprints.
 @export var walk_speed := 4.0
 @export var run_min_speed := 6.2
 @export var run_speed := 8.5

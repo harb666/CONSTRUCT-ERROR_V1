@@ -17,7 +17,7 @@ The HUD shows the branch/commit of the running build.
 | Right side: drag to look | mouse drag / right stick |
 | JUMP (tap again in air = double jump) | Space / A |
 | DODGE (direction = stick, else facing) | Q or Ctrl / B |
-| SPRINT (toggle; turns off when you let go of the stick) - optional, the stick sprints by itself | Shift (hold) / RT |
+| (no button: push the stick all the way to sprint) | Shift (hold) / RT also sprints |
 | Weapon button (hold, drag to a weapon, release) | Tab (hold) + mouse |
 
 Gaits from the stick (`PlayerController`): pushed up to `walk_zone` (0.5) it walks (up to `walk_speed` 4 m/s), further it blends into a run (`run_min_speed` 6.2 .. `run_speed` 8.5 m/s), and from `sprint_zone` (0.9) it sprints at `sprint_speed` 11.5 m/s until the push drops below `sprint_exit` (0.82; no flicker at the edge). Speeds line up with the Walking / Running / RunFast clips.
