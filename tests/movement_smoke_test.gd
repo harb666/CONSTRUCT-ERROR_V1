@@ -39,7 +39,9 @@ func _run() -> void:
 	# Robots stand still for the deterministic checks; the combat test
 	# turns their AI on.
 	RobotEnemy.ai_enabled = false
-	var main: Node = load("res://scenes/main.tscn").instantiate()
+	# The old test arena: these checks rely on its known layout. The game
+	# itself (scenes/main.tscn) runs in Toxic Arena, checked at the end.
+	var main: Node = load("res://scenes/test_arena.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(30)
 	var p: PlayerController = main.players[1]
@@ -454,6 +456,9 @@ func _run() -> void:
 	_check(t.get_child_count() == 30, "stress test spawns 30 robots")
 	fake.queue_free()
 	await _ticks(2)
+	main.queue_free()
+	await _ticks(5)
+	await _toxic_arena_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -1770,4 +1775,189 @@ func _mesh_cap_tests(main: Node) -> void:
 		if is_instance_valid(pc):
 			pc.queue_free()
 	r.queue_free()
+	await _ticks(2)
+
+
+## The game's level: Toxic Arena (image-to-level's level.glb) in main.tscn.
+func _toxic_arena_tests() -> void:
+	var main: Node = load("res://scenes/main.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(30)
+	var arena: ToxicArena = main.get_node_or_null("ToxicArena")
+	_check(arena != null and main.get_node_or_null("TestArena") == null, "toxic: Toxic Arena is the active level (old test arena gone)")
+	var fluid := arena.level.find_child("HazardFluid", true, false) as MeshInstance3D
+	_check(fluid != null and arena.level.find_children("*", "MeshInstance3D", true, false).size() > 130, "toxic: level.glb loaded with its named objects and HazardFluid")
+	var p: PlayerController = main.players[1]
+	var rig: CameraRig = main.get_node("CameraRig")
+	var spawn := p.spawn_transform.origin
+	_check(p.is_on_floor() and absf(p.global_position.y - 6.0) < 0.05 and Vector2(spawn.x, spawn.z).length() < 11.0, "toxic: player spawns standing on the central platform (y %.2f)" % p.global_position.y)
+	_check(p.get_node("Visual/GrinchVisual").current_state == "Locomotion", "toxic: player animations run")
+
+	# Materials: the level's own, emissive where authored.
+	var fm := fluid.get_active_material(0) as StandardMaterial3D
+	_check(fm != null and fm.resource_name == "toxic" and fm.emission_enabled and fm.emission.g > 0.8, "toxic: HazardFluid keeps its bright emissive green (%s)" % (fm.emission if fm else Color()))
+	var red := arena.level.find_child("Central_Tower_Banner_01", true, false) as MeshInstance3D
+	var rm := red.get_active_material(0) as StandardMaterial3D
+	_check(rm.resource_name == "red_panel" and rm.emission_enabled and rm.emission.r > 0.6, "toxic: red panels stay emissive")
+	var glow := arena.level.find_child("Central_Tower_Glow_01_L", true, false) as MeshInstance3D
+	var gm := glow.get_active_material(0) as StandardMaterial3D
+	_check(gm.resource_name == "glow_strip" and gm.emission_enabled, "toxic: green glow strips stay emissive")
+	var floor_mi := arena.level.find_child("Central_Platform_Floor", true, false) as MeshInstance3D
+	_check((floor_mi.get_active_material(0) as StandardMaterial3D).albedo_texture != null, "toxic: floors keep their textures")
+	var ab := fluid.global_transform * fluid.mesh.get_aabb()
+	_check(absf(arena.level.scale.x - 1.0) < 0.001 and ab.size.x > 70.0, "toxic: level at its authored 1:1 scale (metres)")
+
+	# Collision: simple shapes only, nothing on decoration or the fluid.
+	var boxes := 0
+	var hulls := 0
+	var other := 0
+	for c: CollisionShape3D in arena.collision.get_children():
+		if c.shape is BoxShape3D:
+			boxes += 1
+		elif c.shape is ConvexPolygonShape3D:
+			hulls += 1
+		else:
+			other += 1
+	_check(other == 0 and boxes > 40 and hulls == 10 and arena.collision.get_node_or_null("HazardFluid") == null, "toxic: collision is %d boxes + %d convex hulls, no mesh collision" % [boxes, hulls])
+
+	# Run across the central platform and the south bridge onto the south platform.
+	var minys := {"y": INF}
+	var watch := func() -> void: minys.y = minf(minys.y, p.global_position.y)
+	rig.yaw = 0.0
+	p.global_position = Vector3(0, 6.05, 8.5)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	Input.action_press("move_back", 0.8)
+	for i in 110:
+		await _ticks(1)
+		watch.call()
+	Input.action_release("move_back")
+	await _ticks(20)
+	_check(p.global_position.z > 21.0 and p.is_on_floor() and minys.y > 5.9, "toxic: walks across the bridge onto the south platform (z %.1f, lowest y %.2f)" % [p.global_position.z, minys.y])
+
+	# Jump on the platform.
+	Input.action_press("jump")
+	await _ticks(2)
+	Input.action_release("jump")
+	await _ticks(10)
+	var up := p.global_position.y
+	await _ticks(60)
+	_check(up > 6.8 and p.is_on_floor() and absf(p.global_position.y - 6.0) < 0.05, "toxic: jumps and lands back on the platform")
+
+	# Down a ramp from the central platform onto a corner platform.
+	p.global_position = Vector3(7.5, 6.05, 7.5)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	minys.y = INF
+	Input.action_press("move_back", 0.6)
+	Input.action_press("move_right", 0.6)
+	for i in 120:
+		await _ticks(1)
+		watch.call()
+		if p.global_position.x > 15.0:
+			break
+	Input.action_release("move_back")
+	Input.action_release("move_right")
+	await _ticks(20)
+	_check(p.is_on_floor() and absf(p.global_position.y - 4.0) < 0.1 and p.global_position.x > 12.0 and minys.y > 3.9, "toxic: walks down a ramp onto a corner platform (%s)" % p.global_position)
+
+	# Up a staircase from a corner platform (y 4) to its top (y 6).
+	p.global_position = Vector3(17.0, 4.05, -16.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	Input.action_press("move_forward", 0.7)
+	var top := {"y": -INF}
+	for i in 140:
+		await _ticks(1)
+		if p.global_position.z < -27.0:
+			top.y = maxf(top.y, p.global_position.y)
+		if p.global_position.z < -29.0:
+			break
+	Input.action_release("move_forward")
+	_check(top.y > 5.6, "toxic: climbs the stairs from a corner platform (top y %.2f)" % top.y)
+
+	# Major structures block: the central tower and the outer wall.
+	p.global_position = Vector3(0, 6.05, 7.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	Input.action_press("move_forward")
+	await _ticks(90)
+	Input.action_release("move_forward")
+	_check(p.global_position.z > 3.5 and p.global_position.z < 4.6, "toxic: can't walk through the central tower (z %.2f)" % p.global_position.z)
+	p.global_position = Vector3(-20, 6.05, 33.5)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	Input.action_press("move_back")
+	await _ticks(60)
+	Input.action_release("move_back")
+	_check(p.global_position.z < 36.0 and p.is_on_floor(), "toxic: can't walk through the outer wall (z %.2f)" % p.global_position.z)
+
+	# Camera behind the player with the tower in the way: stays out of it.
+	p.global_position = Vector3(0, 6.05, -5.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	rig.yaw = 0.0
+	await _ticks(30)
+	var cz := rig.camera.global_position.z
+	_check(cz < -3.4, "toxic: camera never goes inside the tower (z %.2f)" % cz)
+
+	# HazardFluid: not walkable, falling in sends the player back to spawn.
+	p.global_position = Vector3(8.0, 5.0, 16.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var low := {"y": INF}
+	for i in 90:
+		await _ticks(1)
+		low.y = minf(low.y, p.global_position.y)
+		if p.global_position.distance_to(spawn) < 0.5:
+			break
+	_check(p.global_position.distance_to(spawn) < 0.5 and low.y > 0.5, "toxic: falling into HazardFluid respawns the player (lowest y %.2f)" % low.y)
+	# Robots die in it.
+	var r: RobotEnemy = main.get_node("Targets/Robot4")
+	r.global_position = Vector3(-8.0, 3.0, 16.0)
+	for i in 90:
+		await _ticks(1)
+		if not r.alive:
+			break
+	_check(not r.alive, "toxic: a robot that falls into HazardFluid dies")
+	# Out of bounds (below the level).
+	p.global_position = Vector3(60.0, -4.0, 60.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	for i in 60:
+		await _ticks(1)
+		if p.global_position.distance_to(spawn) < 0.5:
+			break
+	_check(p.global_position.distance_to(spawn) < 0.5, "toxic: falling out of the level respawns the player")
+
+	# Combat: lock a robot across the south bridge; the cannons hit it.
+	await _ticks(30)
+	var target: RobotEnemy = main.get_node("Targets/LoneRobot2")
+	target.global_position = Vector3(1.0, 6.0, 24.0)
+	await _ticks(10)
+	var hits0 := target.hits
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	sel.clear()
+	sel.tap_target(target.get_node("Targetable"))
+	for i in 240:
+		await _ticks(1)
+		if target.hits > hits0:
+			break
+	_check(target.hits > hits0, "toxic: weapons fire at and hit a locked robot")
+	sel.clear()
+
+	# Stress test robots stand on platforms.
+	StressTest.populate(main, 30)
+	await _ticks(60)
+	var standing := 0
+	for sr: RobotEnemy in main.get_node("Targets").get_children():
+		if sr.name.begins_with("StressRobot") and sr.alive and sr.global_position.y > 3.9:
+			standing += 1
+	_check(standing == 30, "toxic: stress test robots all stand on the arena's platforms (%d/30)" % standing)
+	main.queue_free()
 	await _ticks(2)

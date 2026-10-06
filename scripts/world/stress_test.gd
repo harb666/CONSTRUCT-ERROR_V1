@@ -34,6 +34,11 @@ static func populate(main: Node, n: int) -> void:
 		return
 	for c in targets.get_children():
 		c.queue_free()
+	# A level can say where robots can stand (Toxic Arena: its platforms).
+	var level := main.get_node_or_null("ToxicArena")
+	var spots: Array[Vector3] = []
+	if level and level.has_method("stress_spawn_points"):
+		spots = level.stress_spawn_points(n)
 	var cols := [-15.0, -9.0, -3.6, 3.6, 9.0, 15.0]
 	var i := 0
 	var row := 0
@@ -47,6 +52,6 @@ static func populate(main: Node, n: int) -> void:
 			r.patrol_distance = 3.0
 			r.patrol_axis = Vector3.RIGHT if (i % 2 == 0) else Vector3.BACK
 			targets.add_child(r)
-			r.global_position = Vector3(x + (row % 2) * 1.5, 0, -12.0 - row * 5.0)
+			r.global_position = spots[i] if i < spots.size() else Vector3(x + (row % 2) * 1.5, 0, -12.0 - row * 5.0)
 			i += 1
 		row += 1
