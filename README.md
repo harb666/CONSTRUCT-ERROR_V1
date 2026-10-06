@@ -16,7 +16,7 @@ The HUD shows the branch/commit of the running build.
 | Left side: floating move stick - light push walks, firmer push runs, all the way sprints (for as long as it's held there) | WASD (full = sprint) / left stick |
 | Right side: drag to look | mouse drag / right stick |
 | JUMP (tap again in air = double jump) | Space / A |
-| DODGE (direction = stick, else facing) | Q or Ctrl / B |
+| DODGE (direction = stick, else facing; a ~0.34 s slide that ends in a small kick of dust) | Q or Ctrl / B |
 | (no button: push the stick all the way to sprint) | Shift (hold) / RT also sprints |
 | Weapon button (hold, drag to a weapon, release) | Tab (hold) + mouse |
 

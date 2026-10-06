@@ -5,6 +5,9 @@ extends CharacterBody3D
 
 signal jumped(is_air_jump: bool)
 signal dodged(direction: Vector3)
+## The dodge / slide finished (not cancelled by a jump). on_floor: it ended
+## on the ground (feet kick up dust).
+signal dodge_ended(direction: Vector3, on_floor: bool)
 ## impact_speed: downward speed (m/s) just before touching the ground.
 signal landed(impact_speed: float)
 ## Emitted after each movement tick with the command used (weapons etc. hook here).
@@ -50,8 +53,8 @@ signal command_processed(cmd: PlayerCommand, delta: float)
 @export var jump_buffer_time := 0.12
 
 @export_group("Dodge")
-@export var dodge_speed := 19.0
-@export var dodge_duration := 0.24
+@export var dodge_speed := 17.0
+@export var dodge_duration := 0.34
 @export var dodge_cooldown := 0.45
 @export var max_air_dodges := 1
 
@@ -180,6 +183,7 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 		horiz = Vector2(_dodge_dir.x, _dodge_dir.z) * dodge_speed
 		if _dodge_timer <= 0.0:
 			is_dodging = false
+			dodge_ended.emit(_dodge_dir, on_floor)
 	else:
 		var target := Vector2(wish_dir.x, wish_dir.z) * gait_speed(wish_amount, is_sprinting)
 		var rate: float

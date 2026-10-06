@@ -65,7 +65,7 @@ const ONE_SHOTS := {
 	"Jump": {"anim": "Regular Jump", "a": 0.50, "speed": 1.15, "lock_yaw": true, "xfade": 0.08},
 	"AirJump": {"anim": "Regular Jump", "a": 0.52, "speed": 1.4, "lock_yaw": true, "xfade": 0.1},
 	"Land": {"anim": "Regular Jump", "a": 1.06, "speed": 1.5, "lock_yaw": true, "xfade": 0.06, "min": 0.22},
-	"Dodge": {"anim": "slide right", "a": 0.22, "speed": 2.2, "strip_xz": true, "xfade": 0.05},
+	"Dodge": {"anim": "slide right", "a": 0.22, "speed": 1.6, "strip_xz": true, "xfade": 0.05},
 	"TurnLeft": {"anim": "Idle Turn Left", "a": 0.08, "speed": 1.7, "strip_xz": true, "lock_yaw": true, "xfade": 0.12, "min": 0.3},
 	"TurnRight": {"anim": "Idle Turn Right", "a": 0.08, "speed": 1.7, "strip_xz": true, "lock_yaw": true, "xfade": 0.12, "min": 0.3},
 	"SharpTurnRight": {"anim": "Run Sharp Turn Right", "a": 0.78, "speed": 1.5, "strip_xz": true, "lock_yaw": true, "xfade": 0.08, "min": 0.25},
@@ -136,6 +136,7 @@ func _ready() -> void:
 	if controller:
 		controller.jumped.connect(_on_jumped)
 		controller.landed.connect(_on_landed)
+		controller.dodge_ended.connect(_on_dodge_ended)
 		_prev_yaw = controller.global_rotation.y
 
 
@@ -225,6 +226,12 @@ func _xfade_into(to: String, from: String) -> float:
 
 func _on_jumped(is_air_jump: bool) -> void:
 	_pending_jump = "AirJump" if is_air_jump else "Jump"
+
+
+## A slide that ends on the ground kicks up a little dust at the feet.
+func _on_dodge_ended(direction: Vector3, on_floor: bool) -> void:
+	if on_floor and not is_dead:
+		DodgeDust.spawn(controller.get_parent(), controller.global_position, direction)
 
 
 func _on_landed(impact_speed: float) -> void:

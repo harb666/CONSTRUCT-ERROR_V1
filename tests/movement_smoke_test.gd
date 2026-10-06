@@ -138,9 +138,21 @@ func _run() -> void:
 	_check(anim.current_state == "Dodge", "anim Dodge (%s)" % anim.current_state)
 	Input.action_release("dodge")
 	Input.action_release("move_right")
-	await _ticks(20)
+	var slide_end := {}
+	p.dodge_ended.connect(func(_d: Vector3, _f: bool) -> void: slide_end.pos = p.global_position, CONNECT_ONE_SHOT)
+	await _ticks(17)
+	_check(p.is_dodging, "dodge still sliding after 0.3 s (longer slide)")
+	await _ticks(10)
 	_check(not p.is_dodging, "dodge ends")
-	_check(p.global_position.x > x0 + 3.0, "dodge moved right %.2f m" % (p.global_position.x - x0))
+	_check(p.global_position.x > x0 + 4.5, "dodge moved right %.2f m" % (p.global_position.x - x0))
+	var dust: Array = p.get_parent().get_children().filter(func(n: Node) -> bool: return n is DodgeDust)
+	_check(dust.size() == 1, "slide end kicks up one dust puff (%d)" % dust.size())
+	if dust.size() == 1:
+		var dp: Vector3 = dust[0].global_position
+		var feet: Vector3 = slide_end.get("pos", Vector3.INF)
+		_check(dp.distance_to(feet) < 0.8, "dust at the feet where the slide ended (%s vs %s)" % [dp, feet])
+		await _ticks(60)
+		_check(not is_instance_valid(dust[0]), "dust puff fades and frees itself")
 
 	# Touch controls: simulate a finger on the left stick and a tap on JUMP.
 	await _ticks(40)
