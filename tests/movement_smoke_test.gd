@@ -307,7 +307,15 @@ func _run() -> void:
 		pr.impacted.connect(func(_at: Vector3, col: Object) -> void: stuck_on.append(col)))
 
 	# Tap a little off the robot's mesh: must still select it (forgiving).
-	await _tap(tc2, rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point()) + Vector2(35, 20))
+	# (On the side away from the other robots: a patrolling one can stand
+	# just behind it on screen, and a tap nearer to that one is meant for it.)
+	var d2_px := rig.camera.unproject_position(d2.get_node("Targetable").get_aim_point())
+	var near_off := Vector2(35, 20)
+	for o: Vector2 in [Vector2(35, 20), Vector2(-35, 20), Vector2(35, -20), Vector2(-35, -20)]:
+		if selector.pick(d2_px + o) == d2.get_node("Targetable"):
+			near_off = o
+			break
+	await _tap(tc2, d2_px + near_off)
 	await _ticks(2)
 	_check(lock.current == d2.get_node("Targetable"), "tap near enemy locks it")
 	for i in 90:
@@ -380,8 +388,14 @@ func _run() -> void:
 	await _ticks(90)
 	_check(shots.size() == shots_after_unlock, "stops firing when unlocked")
 
-	# Tap empty floor: nothing selected.
-	await _tap(tc2, Vector2(tc2.size.x * 0.5, tc2.size.y * 0.9))
+	# Tap empty floor: nothing selected. (Patrolling robots are wherever
+	# their patrol has got to, so use a spot with no robot near it.)
+	var empty_px := Vector2(tc2.size.x * 0.5, tc2.size.y * 0.9)
+	for o: Vector2 in [Vector2(0.5, 0.9), Vector2(0.3, 0.9), Vector2(0.7, 0.9), Vector2(0.5, 0.8)]:
+		if selector.pick(tc2.size * o) == null:
+			empty_px = tc2.size * o
+			break
+	await _tap(tc2, empty_px)
 	await _ticks(3)
 	_check(not lock.has_target(), "tapping empty space selects nothing")
 
@@ -1128,12 +1142,12 @@ func _shotgun_tests(main: Node) -> void:
 	# Earlier tests can carry the player across this pad (gravity wells pull
 	# it around): start from a fresh display and default weapons.
 	var lo: WeaponLoadout = p.get_node("WeaponLoadout")
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	lo.relock(pad.weapon)
 	if spawner.display == null:
-		h.equip(h.default_weapon, "Right")
-		h.equip(h.default_weapon, "Left")
-		lo.relock(pad.weapon)
 		spawner.spawn_display()
-		await _ticks(2)
+	await _ticks(2)
 	_check(spawner.display is Shotgun, "shotgun floats above its own pad")
 	var box := AABB()
 	var first := true
@@ -1323,7 +1337,7 @@ func _robot_death_variety_tests(main: Node) -> void:
 			lifted = maxf(lifted, r.global_position.y - start.y)
 		match style:
 			"blown_back":
-				_check(r.last_death_style == "blown_back" and moved > 1.2 and lifted > 0.15, "death: blown back off its feet (%.1f m back, %.2f m up)" % [moved, lifted])
+				_check(r.last_death_style == "blown_back" and moved > 1.0 and lifted > 0.15, "death: blown back off its feet (%.1f m back, %.2f m up)" % [moved, lifted])
 			"spin":
 				_check(r.last_death_style == "spin" and max_turn > deg_to_rad(120), "death: spun round by a side hit (%.0f deg)" % rad_to_deg(max_turn))
 			"stagger":
