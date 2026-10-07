@@ -23,7 +23,7 @@ const SKIRMISHER_MODEL := preload("res://assets/enemies/robot_skirmisher/robot_s
 const SKIRMISHER_FAR := preload("res://assets/enemies/robot_skirmisher/robot_skirmisher_far.glb")
 const SKIRMISHER_SECTIONS := preload("res://resources/enemies/robot_skirmisher_sections.tres")
 ## Cannon muzzles (the open barrel ends of the forearm cannons), hand space.
-const SKIRMISHER_MUZZLES := {"Left": Vector3(0.0639, 0.2989, 0.0226), "Right": Vector3(-0.0098, 0.4991, 0.0349)}
+const SKIRMISHER_MUZZLES := {"Left": Vector3(0.0554, 0.3019, 0.0656), "Right": Vector3(0.0631, 0.4998, 0.0862)}
 ## The player's machine-gun plasma.
 const PLASMA_YELLOW := Color(1.0, 0.82, 0.06)
 const PLASMA_HOT := Color(1.0, 0.97, 0.62)
@@ -134,8 +134,10 @@ func _init() -> void:
 	max_health = 1.4
 	section_set = SKIRMISHER_SECTIONS
 	walk_speed = 1.4
-	walk_anim_speed = 1.22
-	run_anim_speed = 4.0
+	# Ground speeds (m/s) the walk/run clips match at 1x (the stance foot's
+	# speed on the re-fitted rig), so the feet don't slide.
+	walk_anim_speed = 0.92
+	run_anim_speed = 3.0
 	combat_speed = 4.6
 	detect_range = 30.0
 	lose_range = 42.0
@@ -177,6 +179,11 @@ func _far_scene() -> PackedScene:
 	return SKIRMISHER_FAR
 
 
+## The far model has its own small baked texture (its own UV layout).
+func _far_own_material() -> bool:
+	return true
+
+
 ## Its sections carry their own sealed caps (build tool).
 func _mesh_caps() -> MeshCaps:
 	return null
@@ -187,8 +194,9 @@ func _muzzle_offsets() -> Dictionary:
 
 
 func _model_offset() -> Vector3:
-	# Centre the hips (rest at x 0.02, z -0.036) over the body.
-	return Vector3(-0.02, 0, 0.036)
+	# Centre the hips (rest at x -0.009, z -0.303 on the re-fitted rig) over
+	# the body.
+	return Vector3(0.0091, 0, 0.3031)
 
 
 ## The cut caps are only seen once a section is gone.
@@ -475,7 +483,7 @@ func _start_sidestep(dir: Vector3) -> void:
 	_evade_cd = randf_range(evade_cooldown.x, evade_cooldown.y)
 	# Robotic: legs snap to the new direction, a burst of speed.
 	_yaw = atan2(dir.x, dir.z)
-	_anim.play(&"Running", 0.08, 1.8)
+	_anim.play(&"Running", 0.08, 2.4)
 	var v := linear_velocity
 	linear_velocity = Vector3(dir.x * sidestep_speed, v.y, dir.z * sidestep_speed)
 	_lean = Vector2(0.1, 0.0)

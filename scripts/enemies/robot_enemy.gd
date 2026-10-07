@@ -222,6 +222,12 @@ func _model_offset() -> Vector3:
 	return Vector3(0, 0, 0.245)
 
 
+## True when the far model carries its own textured material (its own UV
+## layout); otherwise it is drawn with the main model's material.
+func _far_own_material() -> bool:
+	return false
+
+
 ## Surfaces of this material are left out of the merged living mesh (e.g.
 ## cut caps that are only ever seen once a section has broken off).
 func _whole_mesh_skips(_mat: Material) -> bool:
@@ -279,7 +285,7 @@ func _build_whole_mesh(skel: Skeleton3D) -> void:
 	# and the part that would otherwise visibly vanish).
 	_far_mesh = ArrayMesh.new()
 	_far_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, simple.surface_get_arrays(0))
-	_far_mesh.surface_set_material(0, _whole_mesh.surface_get_material(0))
+	_far_mesh.surface_set_material(0, simple.surface_get_material(0) if _far_own_material() else _whole_mesh.surface_get_material(0))
 	for k in range(1, _whole_mesh.get_surface_count()):
 		_far_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _whole_mesh.surface_get_arrays(k))
 		_far_mesh.surface_set_material(k, _whole_mesh.surface_get_material(k))

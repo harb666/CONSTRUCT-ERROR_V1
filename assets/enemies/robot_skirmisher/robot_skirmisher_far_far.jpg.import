@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d08sbq3fr55hu"
-path.s3tc="res://.godot/imported/robot_skirmisher_texture_0_metallic_roughness.jpg-f52a2fcecacec2a51a68a6073cbf2c14.s3tc.ctex"
-path.etc2="res://.godot/imported/robot_skirmisher_texture_0_metallic_roughness.jpg-f52a2fcecacec2a51a68a6073cbf2c14.etc2.ctex"
+uid="uid://d0yplexcwn7pj"
+path.s3tc="res://.godot/imported/robot_skirmisher_far_far.jpg-b2c6132ceb5567625660b8d37496fbd8.s3tc.ctex"
+path.etc2="res://.godot/imported/robot_skirmisher_far_far.jpg-b2c6132ceb5567625660b8d37496fbd8.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "622e1f5e03c0780ed3889907c704dc05"
+"md5": "ba95b27c19888fdec90f73bed141e28f"
 }
 
 [deps]
 
-source_file="res://assets/enemies/robot_skirmisher/robot_skirmisher_texture_0_metallic_roughness.jpg"
-dest_files=["res://.godot/imported/robot_skirmisher_texture_0_metallic_roughness.jpg-f52a2fcecacec2a51a68a6073cbf2c14.s3tc.ctex", "res://.godot/imported/robot_skirmisher_texture_0_metallic_roughness.jpg-f52a2fcecacec2a51a68a6073cbf2c14.etc2.ctex"]
+source_file="res://assets/enemies/robot_skirmisher/robot_skirmisher_far_far.jpg"
+dest_files=["res://.godot/imported/robot_skirmisher_far_far.jpg-b2c6132ceb5567625660b8d37496fbd8.s3tc.ctex", "res://.godot/imported/robot_skirmisher_far_far.jpg-b2c6132ceb5567625660b8d37496fbd8.etc2.ctex"]
 
 [params]
 
@@ -41,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=1024
+process/size_limit=0
 detect_3d/compress_to=0

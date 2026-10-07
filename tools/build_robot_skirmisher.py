@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Builds the game-ready agile skirmisher robot (third enemy) from the untouched source:
 
-    python3 tools/build_robot_skirmisher.py      (needs numpy, Pillow, pymeshlab)
+    python3 tools/build_robot_skirmisher.py      (needs numpy, scipy, Pillow,
+                                                    meshoptimizer, xatlas)
 
   in:  assets/enemies/robot_skirmisher/source/robot_skirmisher_source.glb
        (never modified; the folder is .gdignore'd, so it isn't imported or
@@ -12,13 +13,29 @@
 The source is one 62k-triangle skinned mesh on a Mixamo rig with a baked
 2048 px texture set. What changes (all reproducible from here):
 
-  * Geometry: texture-aware quadric decimation (MeshLab) to ~16k triangles,
-    run per bone group with the group borders locked (no collapse joins
-    vertices driven by different bones, so nothing stretches or spikes when
-    joints bend). Vertices are never moved (only collapsed onto existing
-    ones), so every kept vertex keeps its exact source position, normal, UV
-    and skin weights. The skeleton, bind poses and skin weights are the
-    source's.
+  * Geometry: reduced to ~16k triangles (meshoptimizer) on the welded
+    source, vertices only ever collapsed onto existing ones (each kept
+    vertex keeps its exact source position and skin weights), with every
+    vertex on a border between bone groups locked and coincident shells of
+    different parts kept apart (no collapse joins vertices driven by
+    different bones, so nothing stretches or spikes when joints bend).
+    Normals smooth up to CREASE_DEG, hard beyond. Skin weights are the
+    source's (every part is rigidly bound to one bone).
+  * Skeleton re-fit: the source's auto-rig put the joints up to 0.3 m off
+    the parts they move (hips in front of the pelvis, spine at the chest
+    plate, hip joints off-centre), so every rigid part swung about the
+    wrong point and the parts drifted apart whenever a joint bent - legs
+    detached from the pelvis, the torso floating (worst under the game's
+    aim twist). Each joint is moved to where its part meets its parent part
+    (JOINT_FIT); joint orientations and the mesh are unchanged and the bind
+    poses follow.
+  * Textures: the source's UVs are fragmented almost per triangle (84k UV
+    vertices on 30k positions), so no reduction can keep them. The reduced
+    mesh gets a new UV layout (xatlas) and the source's base colour,
+    metal/roughness and normal maps are re-baked onto it (tools/mesh_bake.py:
+    every texel takes the colour of the matching point on the source
+    surface; the normal map carries the source's shading normal, normal map
+    included, in the new tangent frames, exported with the mesh).
   * Break-apart sections, prepared here (nothing is cut at runtime): every
     triangle goes to the body section its bones belong to - Head, Torso,
     Left_Arm, Right_Arm, Left_Leg, Right_Leg - each its own mesh node
@@ -27,8 +44,13 @@ The source is one 62k-triangle skinned mesh on a Mixamo rig with a baked
     neighbouring parts hide) is sealed by a shallow, recessed dark cap (own
     "Interior" material, double-sided, skinned like its rim), so no detached
     part is ever hollow.
-  * Animations: copied from the source byte for byte, except where the
-    clips would fight gameplay (the game moves and turns the body):
+  * Animations: the clips' joint rotations are the source's. The hips
+    track is re-based on the moved hips pivot (the pelvis moves exactly as
+    before) and re-grounded per frame so the body's lowest point follows
+    the clip's but never goes below the floor (the source clips sink the
+    planted foot up to 15 cm into it); the other joints' tracks are their
+    new rest offsets. Further changes where the clips would fight gameplay
+    (the game moves and turns the body):
       - turn clips: the hips' heading change and travel are taken out (the
         steps, lean and arm swing stay); the removed heading curve is
         written to scripts/enemies/robot_skirmisher_motion.gd so the game
@@ -37,19 +59,21 @@ The source is one 62k-triangle skinned mesh on a Mixamo rig with a baked
         and written to the same file (the game moves the body along it);
         its height (the leap) stays.
     The deaths keep their own short slides.
-  * Textures: 1024 px JPEG (the game imports them at 1024 anyway).
-  * Far LOD: the same decimation at ~4k triangles, one mesh, no textures or
-    clips (the game skins it to the main skeleton with the main material).
+  * Far LOD: the same reduction at ~4k triangles, one mesh, no clips, with
+    its own small baked colour texture (the game skins it to the main
+    skeleton).
 """
 import io
 import json
 import os
 import struct
 import sys
-import tempfile
 
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import mesh_bake  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DIR = os.path.join(ROOT, "assets/enemies/robot_skirmisher")
@@ -59,7 +83,19 @@ OUT_FAR = os.path.join(DIR, "robot_skirmisher_far.glb")
 
 TRIANGLES = 16000
 FAR_TRIANGLES = 4000
-TEXTURE_SIZE = 1024
+# Baked atlas: baked at ATLAS_BAKE px (charts padded for mip levels), then
+# filtered down to these sizes (colour at full size; the normal and
+# metal/roughness maps carry less fine detail).
+ATLAS_BAKE = 2048
+ATLAS_PADDING = 4
+TEXTURE_SIZE = {"texture_0": 2048, "normal": 1024, "texture_0_metallic_roughness": 1024}
+# Far LOD: its own small atlas (colour only).
+FAR_ATLAS_BAKE = 1024
+FAR_ATLAS_PADDING = 4
+FAR_TEXTURE_SIZE = 512
+JPEG_QUALITY = 94
+# Normals: smooth across edges up to this angle, hard beyond.
+CREASE_DEG = 40.0
 
 # Bone -> body section (the Mixamo names, without the "mixamorig:" prefix).
 SECTIONS = ["Torso", "Head", "Left_Arm", "Right_Arm", "Left_Leg", "Right_Leg"]
@@ -177,6 +213,7 @@ class Source:
         self.UV = read_acc(g, B, at["TEXCOORD_0"]).astype(np.float64)
         self.J = read_acc(g, B, at["JOINTS_0"]).astype(np.int64)
         self.W = read_acc(g, B, at["WEIGHTS_0"]).astype(np.float64)
+        self.TAN = read_acc(g, B, at["TANGENT"]).astype(np.float64)
         self.I = read_acc(g, B, pr["indices"]).reshape(-1, 3).astype(np.int64)
         # Weld UV/normal seam copies - but not vertices of different shells
         # that merely coincide (they follow different bones): the key is the
@@ -197,26 +234,8 @@ class Source:
         for i, k in enumerate(np.round(self.V * 1e5).astype(np.int64).tolist()):
             self.key.setdefault(tuple(k), []).append(i)
 
-    def welded_of(self, positions, hint=None):
-        """Welded source vertex for each position (exact, else nearest).
-        Where shells coincide, `hint` (the source vertex the decimator kept)
-        picks the right one."""
-        out = np.empty(len(positions), np.int64)
-        miss = []
-        for i, k in enumerate(np.round(positions * 1e5).astype(np.int64).tolist()):
-            w = self.key.get(tuple(k))
-            if w is None:
-                miss.append(i)
-            elif len(w) == 1 or hint is None:
-                out[i] = w[0]
-            else:
-                out[i] = hint[i] if hint[i] in w else w[0]
-        for i in miss:
-            out[i] = int(np.argmin(((self.V - positions[i]) ** 2).sum(1)))
-        return out, len(miss)
 
-
-# Bone groups the decimation never collapses across (a triangle joining two
+# Bone groups the reduction never collapses across (a triangle joining two
 # of them would stretch when the joint bends).
 BONE_GROUP = {
     "Hips": "Hips", "Spine": "Spine", "Spine1": "Spine1", "Spine2": "Spine2",
@@ -229,98 +248,69 @@ BONE_GROUP = {
 }
 
 
-def decimate(src, target, joint_group):
-    """[positions, triangles, wedge uvs (T*3, 2)] at about `target` triangles.
-    Each bone group's triangles are simplified on their own with their
-    borders locked, so no collapse ever joins vertices that different bones
-    drive (that is what makes decimated skinned meshes tear or spike when a
-    joint bends)."""
-    import pymeshlab as ml
-    # Dominant bone group per welded vertex, then per triangle (majority).
+def vertex_groups(src, joint_group):
+    """Dominant bone group per welded vertex, and per source triangle."""
     G = joint_group.max() + 1
     vg = np.zeros((len(src.V), G))
     for k in range(4):
         np.add.at(vg, (src.inv, joint_group[src.J[:, k]]), src.W[:, k])
     vgroup = vg.argmax(1)
     tg = vgroup[src.F]
-    tri_group = np.where(tg[:, 1] == tg[:, 2], tg[:, 1], tg[:, 0])
-    # Coincident vertices of different shells get a tiny offset each (tens of
-    # micrometres) so they stay apart through MeshLab and every output
-    # vertex maps back to exactly one source vertex.
+    return vgroup, np.where(tg[:, 1] == tg[:, 2], tg[:, 1], tg[:, 0])
+
+
+def lowpoly(src, target, joint_group, atlas_px, padding):
+    """The game mesh: the source's shape at about `target` triangles, with a
+    clean new UV layout (the source's own UVs are fragmented almost per
+    triangle, so no reduction can keep them).
+
+    Reduction (meshoptimizer) on the welded source: vertices are only ever
+    collapsed onto existing ones, so every kept vertex has its exact source
+    position and skin weights; vertices on a border between bone groups are
+    locked, so no collapse joins vertices different bones drive (nothing
+    stretches or spikes when a joint bends); coincident shells of different
+    parts are kept apart. Normals: smooth up to CREASE_DEG, hard beyond.
+    UVs: xatlas. The textures are then baked onto it (bake_textures)."""
+    vgroup, _ = vertex_groups(src, joint_group)
+    # Lock every position on a triangle spanning two groups.
+    tg = vgroup[src.F]
+    mixed = ~((tg[:, 0] == tg[:, 1]) & (tg[:, 1] == tg[:, 2]))
+    lock = np.zeros(len(src.V), np.uint8)
+    lock[src.F[mixed].ravel()] = 1
     rank = np.zeros(len(src.V), np.int64)
     for ids in src.key.values():
         for r, i in enumerate(ids):
             rank[i] = r
     Vo = src.V + np.outer(rank, [2e-5, 1e-5, 0.0])
-    lookup = {tuple(k): i for i, k in enumerate(np.round(Vo * 1e6).astype(np.int64).tolist())}
-    Vs, Fs, Ws, Ids = [], [], [], []
-    base = 0
-    with tempfile.TemporaryDirectory() as d:
-        open(os.path.join(d, "m.mtl"), "w").write("newmtl M\nmap_Kd t.png\n")
-        Image.new("RGB", (8, 8)).save(os.path.join(d, "t.png"))
-        for gi in range(G):
-            sel = np.nonzero(tri_group == gi)[0]
-            if len(sel) == 0:
-                continue
-            F = src.F[sel]
-            I = src.I[sel]
-            used, Fl = np.unique(F, return_inverse=True)
-            Fl = Fl.reshape(-1, 3) + 1
-            obj = os.path.join(d, "g%d.obj" % gi)
-            with open(obj, "w") as f:
-                f.write("mtllib m.mtl\n")
-                f.write("".join("v %.9f %.9f %.9f\n" % tuple(v) for v in Vo[used]))
-                f.write("".join("vt %.7f %.7f\n" % (src.UV[i][0], 1.0 - src.UV[i][1]) for i in I.reshape(-1)))
-                f.write("usemtl M\n")
-                f.write("".join("f %d/%d %d/%d %d/%d\n" % (Fl[t, 0], 3 * t + 1, Fl[t, 1], 3 * t + 2, Fl[t, 2], 3 * t + 3)
-                                for t in range(len(Fl))))
-            ms = ml.MeshSet()
-            ms.load_new_mesh(obj)
-            want = max(int(round(target * len(sel) / len(src.F))), min(len(sel), 24))
-            if want < ms.current_mesh().face_number():
-                ms.meshing_decimation_quadric_edge_collapse_with_texture(
-                    targetfacenum=want, optimalplacement=False, preserveboundary=True,
-                    boundaryweight=10.0, preservenormal=True, qualitythr=0.5)
-            m = ms.current_mesh()
-            uv = m.wedge_tex_coord_matrix().copy()
-            uv[:, 1] = 1.0 - uv[:, 1]
-            out_v = m.vertex_matrix()
-            ids = np.array([lookup.get(tuple(k), -1) for k in np.round(out_v * 1e6).astype(np.int64).tolist()])
-            Vs.append(np.where(ids[:, None] >= 0, src.V[np.maximum(ids, 0)], out_v))
-            Ids.append(ids)
-            Fs.append(m.face_matrix().astype(np.int64) + base)
-            Ws.append(uv)
-            base += len(out_v)
-    return np.concatenate(Vs), np.concatenate(Fs), np.concatenate(Ws), np.concatenate(Ids)
+    # Position-only metric (one dummy attribute with no weight).
+    T = mesh_bake.simplify(src.F, Vo, np.zeros((len(Vo), 1)), np.zeros(1), lock, target)
+    T = T[(T[:, 0] != T[:, 1]) & (T[:, 1] != T[:, 2]) & (T[:, 0] != T[:, 2])]
+    wid, cn, ct = mesh_bake.crease_split(src.V, T, CREASE_DEG)
+    vmap, tris, uv = mesh_bake.unwrap(src.V[wid], cn, ct, atlas_px, padding)
+    welded = wid[vmap]
+    one = np.array([src.copies[w][0] for w in welded])
+    nrm = cn[vmap]
+    m = {"pos": src.V[welded], "nrm": nrm, "uv": uv, "J": src.J[one], "W": src.W[one], "tris": tris,
+         "welded": welded, "locked": int(lock[np.unique(T)].sum())}
+    m["tan"] = mesh_bake.tangents(m["pos"], nrm, uv, tris)
+    gv = vgroup[welded]
+    m["group"] = np.where(gv[tris[:, 1]] == gv[tris[:, 2]], gv[tris[:, 1]], gv[tris[:, 0]])
+    return m
 
 
-def rebuild(src, V, F, WUV, ids):
-    """Final vertex arrays from a decimated mesh: each (position, uv) wedge
-    becomes one vertex with the source's normal and skin weights there."""
-    wv, missing = src.welded_of(V)
-    wv = np.where(ids >= 0, ids, wv)
-    missing = int((ids < 0).sum())
-    key = np.hstack([F.reshape(-1, 1), np.round(WUV * 1e5).astype(np.int64)])
-    uniq, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
-    inv = inv.ravel()
-    vi = uniq[:, 0]
-    uv = WUV[first]
-    pos = V[vi]
-    nrm = np.zeros((len(uniq), 3))
-    J = np.zeros((len(uniq), 4), np.int64)
-    W = np.zeros((len(uniq), 4))
-    for k in range(len(uniq)):
-        cands = src.copies[wv[vi[k]]]
-        # The source copy with the nearest UV carries this wedge's normal.
-        c = cands[np.argmin(((src.UV[cands] - uv[k]) ** 2).sum(1))]
-        nrm[k] = src.N[c]
-        J[k] = src.J[c]
-        W[k] = src.W[c]
-    tris = inv.reshape(-1, 3)
-    # Drop triangles that collapsed to a line.
-    good = (tris[:, 0] != tris[:, 1]) & (tris[:, 1] != tris[:, 2]) & (tris[:, 0] != tris[:, 2])
-    return {"pos": pos, "nrm": nrm, "uv": uv, "J": J, "W": W, "tris": tris[good], "welded": vi,
-            "missing": missing}
+def bake_textures(src, m, images, joint_group, atlas_px, only=None):
+    """The source's maps baked onto the lowpoly mesh's atlas: {image name:
+    PIL image}."""
+    _, tri_group = vertex_groups(src, joint_group)
+    names = [im["name"] for im in images]
+    hi = {"P": src.P, "N": src.N, "TAN": src.TAN, "UV": src.UV, "T": src.I, "group": tri_group,
+          "maps": {n: np.asarray(images[i]["img"], np.float32) / 255.0 for i, n in enumerate(names)
+                   if only is None or n in only},
+          "normal_map": "normal"}
+    lo = {"P": m["pos"], "N": m["nrm"], "TAN": m["tan"], "UV": m["uv"], "T": m["tris"], "group": m["group"]}
+    maps, filled = mesh_bake.bake(hi, lo, atlas_px)
+    print(f"baked {atlas_px} px atlas, {filled.mean() * 100:.0f}% of texels used")
+    return {n: Image.fromarray(np.clip(v * 255.0 + 0.5, 0, 255).astype(np.uint8)) for n, v in maps.items()}
 
 
 # ---------------------------------------------------------------- sections
@@ -365,7 +355,7 @@ def section_mesh(m, sec, s):
     used = np.unique(T)
     remap = -np.ones(len(m["pos"]), np.int64)
     remap[used] = np.arange(len(used))
-    out = {k: m[k][used] for k in ("pos", "nrm", "uv", "J", "W")}
+    out = {k: m[k][used] for k in ("pos", "nrm", "uv", "J", "W", "tan")}
     tris = remap[T]
     caps = cap_holes(m, sec, s)
     return out, tris, caps
@@ -462,7 +452,10 @@ def cap_arrays(m, caps):
         W.append(cw)
         for va, vb in cap["edges"]:
             tris.append((local[vb], local[va], ci))
-    return {"pos": np.array(pos), "nrm": np.array(nrm), "uv": np.array(uv),
+    nrm = np.array(nrm)
+    side = np.cross(nrm, np.where(np.abs(nrm[:, :1]) < 0.9, [[1.0, 0, 0]], [[0, 1.0, 0]]))
+    tan = np.hstack([side / np.linalg.norm(side, axis=1, keepdims=True), np.ones((len(nrm), 1))])
+    return {"pos": np.array(pos), "nrm": nrm, "uv": np.array(uv), "tan": tan,
             "J": np.array(J, np.int64), "W": np.array(W)}, np.array(tris, np.int64)
 
 
@@ -477,11 +470,201 @@ def primitive(W, arr, tris, material):
     return {"attributes": {
         "POSITION": W.acc(arr["pos"], 5126, "VEC3", target=34962, minmax=True),
         "NORMAL": W.acc(n, 5126, "VEC3", target=34962),
+        "TANGENT": W.acc(arr["tan"], 5126, "VEC4", target=34962),
         "TEXCOORD_0": W.acc(arr["uv"], 5126, "VEC2", target=34962),
         "JOINTS_0": W.acc(arr["J"], 5121, "VEC4", target=34962),
         "WEIGHTS_0": W.acc(wb, 5121, "VEC4", normalized=True, target=34962)},
         "indices": W.acc(tris.reshape(-1), 5125 if big_index else 5123, "SCALAR", target=34963),
         "material": material}
+
+
+# ---------------------------------------------------------------- skeleton re-fit
+# Each joint's new pivot: where the body part it moves meets its parent part
+# ([parent part bone, child part bone]); bones that carry no geometry move
+# with the joint named after "with:".
+JOINT_FIT = {
+    "Spine2": ("Hips", "Spine2"), "Spine1": "with:Spine2", "Spine": "with:Spine2",
+    "Head": ("Spine2", "Head"), "Neck": "with:Head", "HeadTop_End": "with:Head", "headfront": "with:Head",
+    "LeftArm": ("Spine2", "LeftArm"), "LeftShoulder": "with:LeftArm",
+    "LeftForeArm": ("LeftArm", "LeftForeArm"), "LeftHand": "with:LeftForeArm", "LeftHandMiddle4": "with:LeftForeArm",
+    "RightArm": ("Spine2", "RightArm"), "RightShoulder": "with:RightArm",
+    "RightForeArm": ("RightArm", "RightForeArm"), "RightHand": "with:RightForeArm",
+    "RightHandMiddle4": "with:RightForeArm",
+    "LeftUpLeg": ("Hips", "LeftUpLeg"), "LeftLeg": ("LeftUpLeg", "LeftLeg"), "LeftFoot": ("LeftLeg", "LeftFoot"),
+    "LeftToeBase": "with:LeftFoot", "LeftToe_End": "with:LeftFoot",
+    "RightUpLeg": ("Hips", "RightUpLeg"), "RightLeg": ("RightUpLeg", "RightLeg"),
+    "RightFoot": ("RightLeg", "RightFoot"), "RightToeBase": "with:RightFoot", "RightToe_End": "with:RightFoot",
+}
+# The game's cannon muzzles in hand space on the source rig (printed again
+# for the re-fitted rig, for RobotSkirmisher.SKIRMISHER_MUZZLES).
+MUZZLES_OLD = {"Left": np.array([0.0639, 0.2989, 0.0226]), "Right": np.array([-0.0098, 0.4991, 0.0349])}
+# Vertices within this distance (m) of the closest contact count as contact.
+CONTACT_BAND = 0.012
+
+
+def quat_mat(q):
+    x, y, z, w = q
+    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+
+def node_world(nodes, parent, i):
+    def local(k):
+        n = nodes[k]
+        M = np.eye(4)
+        M[:3, :3] = quat_mat(n.get("rotation", [0, 0, 0, 1])) * np.array(n.get("scale", [1, 1, 1]))
+        M[:3, 3] = n.get("translation", [0, 0, 0])
+        return M
+    M = local(i)
+    while i in parent:
+        i = parent[i]
+        M = local(i) @ M
+    return M
+
+
+def refit_skeleton(g, src):
+    """Moves the joints into the mesh. The source's auto-rig put them up to
+    a quarter metre off the parts they move (the hips in front of the
+    pelvis, the spine at the chest plate, knees and hips off-centre), so
+    every rigid part swung about the wrong point: the parts drifted apart
+    as soon as a joint bent (worst with the game's aim twist). Each joint
+    now sits where its part meets its parent part; joint orientations, the
+    mesh and its skin weights are unchanged (the bind poses follow the new
+    joints), and the clips keep their rotations. Updates g's nodes in place
+    and returns [new inverse bind matrices, {node: global pivot shift}]."""
+    from scipy.spatial import cKDTree
+    nodes = g["nodes"]
+    parent = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
+    skin = g["skins"][0]
+    jname = {j: nodes[j]["name"].split(":")[-1] for j in skin["joints"]}
+    by_name = {v: k for k, v in jname.items()}
+    # Each welded vertex's (rigid) bone.
+    dom = np.zeros(len(src.V), np.int64)
+    for i, c in enumerate(src.copies):
+        k = c[0]
+        dom[i] = src.J[k, src.W[k].argmax()]
+    part = {jname[j]: src.V[dom == k] for k, j in enumerate(skin["joints"])}
+    old = {j: node_world(nodes, parent, j)[:3, 3] for j in skin["joints"]}
+    new = dict(old)
+
+    def contact(a, b):
+        pa, pb = part[a], part[b]
+        da, _ = cKDTree(pb).query(pa)
+        db, _ = cKDTree(pa).query(pb)
+        lim = min(da.min(), db.min()) + CONTACT_BAND
+        return np.vstack([pa[da < lim], pb[db < lim]]).mean(0)
+    for name, rule in JOINT_FIT.items():
+        if isinstance(rule, tuple):
+            new[by_name[name]] = contact(*rule)
+    for name, rule in JOINT_FIT.items():
+        if isinstance(rule, str):
+            ref = by_name[rule[5:]]
+            new[by_name[name]] = old[by_name[name]] + new[ref] - old[ref]
+    # The hips: the middle of the two hip joints and the waist.
+    hips = by_name["Hips"]
+    new[hips] = np.mean([new[by_name["LeftUpLeg"]], new[by_name["RightUpLeg"]], new[by_name["Spine2"]]], 0)
+    # New local translations (orientations unchanged, so only translations).
+    world_rot = {j: node_world(nodes, parent, j)[:3, :3] for j in skin["joints"]}
+    for j in skin["joints"]:
+        pj = parent.get(j)
+        if pj in new:
+            local = world_rot[pj].T @ (new[j] - new[pj])
+        else:
+            M = node_world(nodes, parent, pj)[:3, :3] if pj is not None else np.eye(3)
+            base = node_world(nodes, parent, pj)[:3, 3] if pj is not None else np.zeros(3)
+            local = M.T @ (new[j] - base)
+        nodes[j]["translation"] = [float(x) for x in local]
+    ibm = []
+    for j in skin["joints"]:
+        ibm.append(np.linalg.inv(node_world(nodes, parent, j)).T.reshape(-1))
+    shift = {j: new[j] - old[j] for j in skin["joints"]}
+    print("joints moved (m): " + ", ".join(f"{jname[j]} {np.linalg.norm(shift[j]):.3f}" for j in skin["joints"]
+                                           if isinstance(JOINT_FIT.get(jname[j]), tuple) or jname[j] == "Hips"))
+    print(f"new hips rest {np.round(new[hips], 4).tolist()}")
+    # Cannon muzzles (game constant, hand space) after the hands moved.
+    for side, old_muzzle in MUZZLES_OLD.items():
+        h = by_name[side + "Hand"]
+        R = world_rot[h]
+        print(f"muzzle {side}: {np.round(old_muzzle - R.T @ shift[h], 4).tolist()}")
+    return np.array(ibm, np.float32), shift
+
+
+def sample_quat(t_keys, q_keys, t):
+    """Rotation track (linear, normalised) at times t."""
+    out = np.empty((len(t), 4))
+    for k in range(4):
+        out[:, k] = np.interp(t, t_keys, q_keys[:, k])
+    return out / np.linalg.norm(out, axis=1, keepdims=True)
+
+
+def clip_pose(an, g, B, nodes, hips, hips_rot, hips_t, times):
+    """Global 4x4 of every joint at each of `times` for clip `an` on the
+    skeleton `nodes` (the hips with the given rotation/translation tracks,
+    every other joint with the clip's rotations and its rest offset)."""
+    parent = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
+    rot = {}
+    for ch in an["channels"]:
+        if ch["target"]["path"] == "rotation":
+            smp = an["samplers"][ch["sampler"]]
+            rot[ch["target"]["node"]] = sample_quat(read_acc(g, B, smp["input"])[:, 0],
+                                                    read_acc(g, B, smp["output"]).astype(np.float64), times)
+    rot[hips] = sample_quat(*hips_rot, times)
+    tr_h = np.stack([np.interp(times, hips_t[0], hips_t[1][:, k]) for k in range(3)], 1)
+    joints = g["skins"][0]["joints"]
+    out = {}
+
+    def world(j):
+        if j in out:
+            return out[j]
+        n = nodes[j]
+        M = np.tile(np.eye(4), (len(times), 1, 1))
+        if j in rot:
+            M[:, :3, :3] = np.stack([quat_mat(q) for q in rot[j]])
+        else:
+            M[:, :3, :3] = quat_mat(n.get("rotation", [0, 0, 0, 1]))
+        M[:, :3, 3] = tr_h if j == hips else n.get("translation", [0, 0, 0])
+        pj = parent.get(j)
+        out[j] = M if pj not in joints else world(pj) @ M
+        return out[j]
+    for j in joints:
+        world(j)
+    return out
+
+
+def lowest_point(pose, rest_inv, parts):
+    """Height of the body's lowest point at each pose time."""
+    low = None
+    for j, pts in parts.items():
+        X = pose[j] @ rest_inv[j]  # part transform
+        y = (np.einsum("tij,pj->tpi", X[:, :3, :3], pts) + X[:, None, :3, 3])[:, :, 1].min(1)
+        low = y if low is None else np.minimum(low, y)
+    return low
+
+
+def ground_offsets(an, g, B, old_nodes, hips, hips_rot, hips_old, hips_new, parts):
+    """[times, dy]: how much to raise the re-fitted rig's hips so the body's
+    lowest point follows the clip's (on the source rig) but never goes
+    below the floor: the source clips sink the planted foot up to 15 cm
+    into the floor (and the fallen body further), so this puts stance feet
+    and fallen bodies exactly on the floor and keeps jumps and falls as high
+    above it as in the clip. The clip's
+    rotations stay as authored; with the joints in their right places the
+    limbs reach a little differently, which this evens out too."""
+    nodes = g["nodes"]
+    times = None
+    for ch in an["channels"]:
+        if ch["target"]["path"] == "rotation":
+            t = read_acc(g, B, an["samplers"][ch["sampler"]]["input"])[:, 0]
+            times = t if times is None else np.union1d(times, t)
+    times = np.union1d(times, hips_old[0])
+    parent_old = {c: i for i, n in enumerate(old_nodes) for c in n.get("children", [])}
+    parent_new = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
+    inv_old = {j: np.linalg.inv(node_world(old_nodes, parent_old, j)) for j in parts}
+    inv_new = {j: np.linalg.inv(node_world(nodes, parent_new, j)) for j in parts}
+    low_old = lowest_point(clip_pose(an, g, B, old_nodes, hips, hips_rot, hips_old, times), inv_old, parts)
+    low_new = lowest_point(clip_pose(an, g, B, nodes, hips, hips_rot, hips_new, times), inv_new, parts)
+    return times, np.maximum(low_old, 0.0) - low_new
 
 
 # ---------------------------------------------------------------- motion file
@@ -531,26 +714,44 @@ def write_motion(turns, travel):
 def main():
     g, B = load(SRC)
     src = Source(g, B)
+    hips_node = next(n for n in g["nodes"] if n["name"] == "mixamorig:Hips")
+    hips_rest_rot = quat_mat(hips_node.get("rotation", [0, 0, 0, 1]))
+    old_hips_t = list(hips_node["translation"])
+    old_nodes = json.loads(json.dumps(g["nodes"]))
+    ibm, shift = refit_skeleton(g, src)
     skin = g["skins"][0]
     joint_names = [g["nodes"][j]["name"].split(":")[-1] for j in skin["joints"]]
     joint_section = np.array([SECTIONS.index(BONE_SECTION[n]) for n in joint_names])
     groups = sorted(set(BONE_GROUP.values()))
     joint_group = np.array([groups.index(BONE_GROUP[n]) for n in joint_names])
 
-    # Textures: 1024 px JPEG.
-    images = []
+    # --- main model + baked textures
+    srcimg = []
     for im in g["images"]:
         v = g["bufferViews"][im["bufferView"]]
         data = B[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]
-        img = Image.open(io.BytesIO(data)).convert("RGB").resize((TEXTURE_SIZE, TEXTURE_SIZE), Image.LANCZOS)
+        srcimg.append({"name": im["name"], "img": Image.open(io.BytesIO(data)).convert("RGB")})
+    # SKIRMISHER_CACHE=<file>: reuse the meshes and bakes of an earlier run
+    # (they don't depend on the skeleton or clips) - for iterating on those.
+    cache_file = os.environ.get("SKIRMISHER_CACHE")
+    if cache_file and os.path.exists(cache_file):
+        import pickle
+        m, baked, f, far_tex = pickle.load(open(cache_file, "rb"))
+    else:
+        m = lowpoly(src, TRIANGLES, joint_group, ATLAS_BAKE, ATLAS_PADDING)
+        baked = bake_textures(src, m, srcimg, joint_group, ATLAS_BAKE)
+        f = lowpoly(src, FAR_TRIANGLES, joint_group, FAR_ATLAS_BAKE, FAR_ATLAS_PADDING)
+        far_tex = bake_textures(src, f, srcimg, joint_group, FAR_ATLAS_BAKE, ["texture_0"])["texture_0"]
+        if cache_file:
+            import pickle
+            pickle.dump((m, baked, f, far_tex), open(cache_file, "wb"))
+    images = []
+    for im in g["images"]:
+        size = TEXTURE_SIZE.get(im["name"], 1024)
+        img = baked[im["name"]].resize((size, size), Image.LANCZOS)
         out = io.BytesIO()
-        img.save(out, "JPEG", quality=94, subsampling=0)
-        images.append({"name": im["name"], "mimeType": "image/jpeg",
-                       "data": out.getvalue()})
-
-    # --- main model
-    V, F, WUV, ids = decimate(src, TRIANGLES, joint_group)
-    m = rebuild(src, V, F, WUV, ids)
+        img.save(out, "JPEG", quality=JPEG_QUALITY, subsampling=0)
+        images.append({"name": im["name"], "mimeType": "image/jpeg", "data": out.getvalue()})
     sec = assign_sections(m, joint_section)
     W = Writer()
     cache = {}
@@ -585,45 +786,90 @@ def main():
 
     names = {n["name"]: i for i, n in enumerate(g["nodes"])}
     hips = names["mixamorig:Hips"]
-    rest_t = g["nodes"][hips]["translation"]
     motion_turns, motion_travel = {}, {}
     anims = []
+    old_rest_t = old_hips_t
+    # A sample of each part's vertices (bind space), for the re-grounding.
+    rng = np.random.default_rng(1)
+    dom = np.array([src.J[c[0], src.W[c[0]].argmax()] for c in src.copies])
+    ground_parts = {}
+    for k, j in enumerate(skin["joints"]):
+        pts = src.V[dom == k]
+        if len(pts):
+            ground_parts[j] = pts[rng.choice(len(pts), min(len(pts), 300), replace=False)]
+    ground_fix = {}
     for an in g["animations"]:
         na = {"name": an["name"], "samplers": [], "channels": []}
+        name = an["name"]
+        # The hips rotation as the clip will play it (yaw taken out of the
+        # turn clips): moving the hips pivot needs it (see below).
+        hips_rot = None
+        for ch in an["channels"]:
+            if ch["target"]["node"] == hips and ch["target"]["path"] == "rotation":
+                smp = an["samplers"][ch["sampler"]]
+                t = read_acc(g, B, smp["input"])[:, 0]
+                q = read_acc(g, B, smp["output"]).astype(np.float64)
+                if name in TURNS:
+                    yaw = np.unwrap(2.0 * np.arctan2(q[:, 1], q[:, 3]))
+                    c, s_ = np.cos(-yaw / 2), np.sin(-yaw / 2)
+                    # q' = Ry(-yaw) * q
+                    x, y, z, w = q.T
+                    q2 = np.stack([c * x + s_ * z, c * y + s_ * w, c * z - s_ * x, c * w - s_ * y], 1)
+                    motion_turns[name] = resample(t, (yaw - yaw[0]).reshape(-1, 1))
+                else:
+                    q2 = q
+                hips_rot = (t, q2)
+        # The hips track as the clip will play it, on the source rig (old)
+        # and on the re-fitted one (new).
+        hips_tr = None
+        for ch in an["channels"]:
+            if ch["target"]["node"] == hips and ch["target"]["path"] == "translation":
+                smp = an["samplers"][ch["sampler"]]
+                t = read_acc(g, B, smp["input"])[:, 0]
+                vals = read_acc(g, B, smp["output"]).astype(np.float64)
+                if name in TURNS or name in TRAVEL:
+                    if name in TRAVEL:
+                        motion_travel[name] = resample(t, vals[:, [0, 2]] - vals[0, [0, 2]])
+                    # Hips stay over the body's centre, like the other clips.
+                    vals[:, 0] = old_rest_t[0]
+                    vals[:, 2] = old_rest_t[2]
+                # New pivot: p' = p + R(t) R0^-1 shift, so the pelvis moves
+                # exactly as before.
+                q = sample_quat(*hips_rot, t)
+                hips_tr = (t, vals, vals + np.stack([quat_mat(qq) @ hips_rest_rot.T @ shift[hips] for qq in q]))
+        # Re-ground: the hips track on the clip's full time base, raised so
+        # the body's lowest point matches the clip.
+        gt, dy = ground_offsets(an, g, B, old_nodes, hips, hips_rot, (hips_tr[0], hips_tr[1]),
+                                (hips_tr[0], hips_tr[2]), ground_parts)
+        new_t = np.stack([np.interp(gt, hips_tr[0], hips_tr[2][:, k]) for k in range(3)], 1)
+        new_t[:, 1] += dy
+        hips_tr = (gt, hips_tr[1], new_t)
+        ground_fix[name] = float(np.abs(dy).max())
         for ch in an["channels"]:
             smp = an["samplers"][ch["sampler"]]
             inp = keep(smp["input"])
-            on_hips = ch["target"]["node"] == hips
+            node = ch["target"]["node"]
+            on_hips = node == hips
             path = ch["target"]["path"]
-            name = an["name"]
-            if on_hips and path == "translation" and (name in TURNS or name in TRAVEL):
-                t = read_acc(g, B, smp["input"])[:, 0]
-                vals = read_acc(g, B, smp["output"]).copy()
-                if name in TRAVEL:
-                    motion_travel[name] = resample(t, vals[:, [0, 2]] - vals[0, [0, 2]])
-                # Hips stay over the body's centre, like the other clips.
-                vals[:, 0] = rest_t[0]
-                vals[:, 2] = rest_t[2]
-                out = W.acc(vals, 5126, "VEC3")
+            if on_hips and path == "translation":
+                inp = W.acc(hips_tr[0].reshape(-1, 1), 5126, "SCALAR", minmax=True)
+                out = W.acc(hips_tr[2], 5126, "VEC3")
             elif on_hips and path == "rotation" and name in TURNS:
-                t = read_acc(g, B, smp["input"])[:, 0]
-                q = read_acc(g, B, smp["output"]).astype(np.float64)
-                # Swing-twist: the twist about the vertical is the heading.
-                yaw = np.unwrap(2.0 * np.arctan2(q[:, 1], q[:, 3]))
-                c, s_ = np.cos(-yaw / 2), np.sin(-yaw / 2)
-                # q' = Ry(-yaw) * q
-                x, y, z, w = q.T
-                q2 = np.stack([c * x + s_ * z, c * y + s_ * w, c * z - s_ * x, c * w - s_ * y], 1)
-                motion_turns[name] = resample(t, (yaw - yaw[0]).reshape(-1, 1))
-                out = W.acc(q2, 5126, "VEC4")
+                out = W.acc(hips_rot[1], 5126, "VEC4")
+            elif path == "translation":
+                # Every other joint's track is its (constant) rest offset.
+                n = g["accessors"][smp["output"]]["count"]
+                out = W.acc(np.tile(np.array(g["nodes"][node]["translation"]), (n, 1)), 5126, "VEC3")
             else:
                 out = keep(smp["output"])
             na["samplers"].append({"input": inp, "output": out, "interpolation": smp.get("interpolation", "LINEAR")})
             na["channels"].append({"sampler": len(na["samplers"]) - 1, "target": ch["target"]})
         anims.append(na)
-    skins = [{"joints": skin["joints"], "inverseBindMatrices": keep(skin["inverseBindMatrices"]),
+    skins = [{"joints": skin["joints"], "inverseBindMatrices": W.acc(ibm, 5126, "MAT4"),
               **({"skeleton": skin["skeleton"]} if "skeleton" in skin else {})}]
 
+    print("re-grounding (max hips shift per clip, m): "
+          + ", ".join(f"{k} {v:.3f}" for k, v in ground_fix.items()))
     write_motion(motion_turns, motion_travel)
     for im in images:
         im["bufferView"] = W.blob(im.pop("data"))
@@ -637,22 +883,25 @@ def main():
           "samplers": g["samplers"]}
     total = W.save(OUT, gl)
     print(f"{os.path.relpath(OUT, ROOT)}: {total:,} bytes; {len(m['tris'])} triangles, {len(m['pos'])} vertices "
-          f"({m['missing']} snapped); sections: " + ", ".join(stats))
+          f"({m['locked']} locked); sections: " + ", ".join(stats))
 
     # --- far LOD: one mesh, no textures/clips.
-    V, F, WUV, ids = decimate(src, FAR_TRIANGLES, joint_group)
-    f = rebuild(src, V, F, WUV, ids)
     W = Writer()
     cache.clear()
     nodes = json.loads(json.dumps(g["nodes"]))
     nodes[mesh_node]["name"] = "Body"
     meshes = [{"name": "Body", "primitives": [primitive(W, f, f["tris"], 0)]}]
-    skins = [{"joints": skin["joints"], "inverseBindMatrices": keep(skin["inverseBindMatrices"]),
+    skins = [{"joints": skin["joints"], "inverseBindMatrices": W.acc(ibm, 5126, "MAT4"),
               **({"skeleton": skin["skeleton"]} if "skeleton" in skin else {})}]
-    mat = {"name": g["materials"][0]["name"], "pbrMetallicRoughness": {"metallicFactor": 0.5}}
+    out = io.BytesIO()
+    far_tex.resize((FAR_TEXTURE_SIZE, FAR_TEXTURE_SIZE), Image.LANCZOS).save(out, "JPEG", quality=JPEG_QUALITY)
+    mat = {"name": "FarMaterial", "pbrMetallicRoughness": {"baseColorTexture": {"index": 0},
+                                                           "metallicFactor": 0.6, "roughnessFactor": 0.5}}
     gl = {"asset": {"version": "2.0", "generator": "CONSTRUCT-ERROR tools/build_robot_skirmisher.py"},
           "scene": 0, "scenes": g["scenes"], "nodes": nodes, "meshes": meshes, "skins": skins,
-          "materials": [mat]}
+          "materials": [mat], "textures": [{"sampler": 0, "source": 0}],
+          "images": [{"name": "far", "mimeType": "image/jpeg", "bufferView": W.blob(out.getvalue())}],
+          "samplers": g["samplers"]}
     total = W.save(OUT_FAR, gl)
     print(f"{os.path.relpath(OUT_FAR, ROOT)}: {total:,} bytes; {len(f['tris'])} triangles, {len(f['pos'])} vertices")
 
