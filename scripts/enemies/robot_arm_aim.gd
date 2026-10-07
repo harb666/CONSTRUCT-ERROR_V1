@@ -23,7 +23,13 @@ var _sides: Array = []
 ## Muzzle positions (skeleton space) as last drawn, i.e. AFTER aiming (bone
 ## poses read outside this modifier don't include its changes).
 var _muzzles_local: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+var _elbows_local: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
 var _have_muzzles := false
+## Per cannon (0 = left, 1 = right): firing kick 0..1 that jerks the muzzle
+## up and the arm back (set by the robot, decays here). 0 = none.
+var kick: Array[float] = [0.0, 0.0]
+@export var kick_decay := 14.0
+@export var kick_climb := 0.16
 
 
 func setup(skel: Skeleton3D, muzzles: Dictionary) -> void:
@@ -53,10 +59,22 @@ func muzzle_position(i: int) -> Vector3:
 	return skel.global_transform * _muzzles_local[i]
 
 
+## Current world position of a cannon's elbow (forearm joint): with the
+## muzzle it gives the line a forearm-mounted cannon points along.
+func elbow_position(i: int) -> Vector3:
+	var skel := get_skeleton()
+	if skel == null or i >= _sides.size():
+		return Vector3.ZERO
+	if not _have_muzzles:
+		return skel.global_transform * skel.get_bone_global_pose((_sides[i] as Array)[1]).origin
+	return skel.global_transform * _elbows_local[i]
+
+
 func _store_muzzles(skel: Skeleton3D) -> void:
 	for i in _sides.size():
 		var s: Array = _sides[i]
 		_muzzles_local[i] = skel.get_bone_global_pose(s[2]) * (s[3] as Vector3)
+		_elbows_local[i] = skel.get_bone_global_pose(s[1]).origin
 	_have_muzzles = true
 
 
@@ -66,6 +84,8 @@ func _process_modification() -> void:
 		return
 	var dt := get_process_delta_time() if is_inside_tree() else 0.016
 	weight = move_toward(weight, target_weight, blend_speed * dt)
+	for i in kick.size():
+		kick[i] = maxf(kick[i] - kick_decay * dt * maxf(kick[i], 0.25), 0.0)
 	if weight <= 0.001:
 		_store_muzzles(skel)
 		return
@@ -76,7 +96,8 @@ func _process_modification() -> void:
 			var g := skel.get_bone_global_pose(b)
 			skel.set_bone_global_pose(b, Transform3D(Basis(Vector3.UP, part) * g.basis, g.origin))
 	var target_local := skel.global_transform.affine_inverse() * target_point
-	for s in _sides:
+	for si in _sides.size():
+		var s: Array = _sides[si]
 		var arm: int = s[0]
 		var fore: int = s[1]
 		var hand: int = s[2]
@@ -95,5 +116,11 @@ func _process_modification() -> void:
 		var rot := Quaternion(from.normalized(), to.normalized())
 		rot = Quaternion.IDENTITY.slerp(rot, weight)
 		var new_global := Transform3D(Basis(rot) * g_arm.basis, g_arm.origin)
+		# Firing kick: the shoulder jerks the muzzle up (rigid, no wobble).
+		var k: float = kick[si] if si < kick.size() else 0.0
+		if k > 0.001:
+			var axis := to.normalized().cross(Vector3.UP)
+			if axis.length_squared() > 1e-4:
+				new_global.basis = Basis(axis.normalized(), k * kick_climb) * new_global.basis
 		skel.set_bone_global_pose(arm, new_global)
 	_store_muzzles(skel)

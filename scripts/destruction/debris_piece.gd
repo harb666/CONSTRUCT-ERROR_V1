@@ -16,6 +16,8 @@ static var _active: Array[DebrisPiece] = []
 
 @export var max_linear_speed := 16.0
 @export var max_angular_speed := 14.0
+## Above this speed (m/s) the piece uses continuous collision detection.
+@export var ccd_speed := 5.0
 ## Seconds before freshly detached pieces collide with each other.
 @export var self_collision_delay := 0.4
 ## Settled for this long (slow) -> frozen solid, no further processing.
@@ -75,11 +77,16 @@ static func active_count() -> int:
 func launch(v: Vector3, w: Vector3) -> void:
 	linear_velocity = v.limit_length(max_linear_speed)
 	angular_velocity = w.limit_length(max_angular_speed)
+	# Fast pieces could tunnel into the floor between ticks: continuous
+	# collision only while it's fast (cheap: a few frames per piece).
+	continuous_cd = linear_velocity.length() > ccd_speed
 
 
 func _physics_process(delta: float) -> void:
 	_age += delta
 	if not freeze:
+		if continuous_cd and linear_velocity.length() < ccd_speed * 0.8:
+			continuous_cd = false
 		# Never let contacts pump energy in.
 		if linear_velocity.length_squared() > max_linear_speed * max_linear_speed:
 			linear_velocity = linear_velocity.limit_length(max_linear_speed)

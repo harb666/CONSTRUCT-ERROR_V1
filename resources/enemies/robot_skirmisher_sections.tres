@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="BreakSectionSet" format=3]
+
+[ext_resource type="Script" path="res://scripts/destruction/break_section_set.gd" id="1_set"]
+[ext_resource type="Script" path="res://scripts/destruction/break_section.gd" id="2_sec"]
+
+[sub_resource type="Resource" id="Resource_torso"]
+script = ExtResource("2_sec")
+section_name = &"Torso"
+mesh_names = PackedStringArray("Torso")
+bone = &"mixamorig_Spine1"
+joint_bone = &"mixamorig_Hips"
+tier = 2
+
+[sub_resource type="Resource" id="Resource_head"]
+script = ExtResource("2_sec")
+section_name = &"Head"
+mesh_names = PackedStringArray("Head")
+parent = &"Torso"
+bone = &"mixamorig_Head"
+joint_bone = &"mixamorig_Neck"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_larm"]
+script = ExtResource("2_sec")
+section_name = &"Left_Arm"
+mesh_names = PackedStringArray("Left_Arm")
+parent = &"Torso"
+bone = &"mixamorig_LeftForeArm"
+joint_bone = &"mixamorig_LeftArm"
+
+[sub_resource type="Resource" id="Resource_rarm"]
+script = ExtResource("2_sec")
+section_name = &"Right_Arm"
+mesh_names = PackedStringArray("Right_Arm")
+parent = &"Torso"
+bone = &"mixamorig_RightForeArm"
+joint_bone = &"mixamorig_RightArm"
+
+[sub_resource type="Resource" id="Resource_lleg"]
+script = ExtResource("2_sec")
+section_name = &"Left_Leg"
+mesh_names = PackedStringArray("Left_Leg")
+parent = &"Torso"
+bone = &"mixamorig_LeftLeg"
+joint_bone = &"mixamorig_LeftUpLeg"
+tier = 1
+
+[sub_resource type="Resource" id="Resource_rleg"]
+script = ExtResource("2_sec")
+section_name = &"Right_Leg"
+mesh_names = PackedStringArray("Right_Leg")
+parent = &"Torso"
+bone = &"mixamorig_RightLeg"
+joint_bone = &"mixamorig_RightUpLeg"
+tier = 1
+
+[resource]
+script = ExtResource("1_set")
+sections = Array[ExtResource("2_sec")]([SubResource("Resource_torso"), SubResource("Resource_head"), SubResource("Resource_larm"), SubResource("Resource_rarm"), SubResource("Resource_lleg"), SubResource("Resource_rleg")])

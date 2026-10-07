@@ -164,14 +164,15 @@ func _build_model() -> void:
 	_visual = Node3D.new()
 	_visual.name = "Visual"
 	add_child(_visual)
-	_model = MODEL.instantiate()
+	_model = _model_scene().instantiate()
 	_model.name = "Model"
 	_visual.add_child(_model)
-	# The model's hips sit 0.245 m behind its origin; centre them.
-	_model.position = Vector3(0, 0, 0.245)
+	_model.position = _model_offset()
 	_skeleton = _model.find_child("Skeleton3D", true, false) as Skeleton3D
 	_anim = _model.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	CAPS.apply(_model)
+	var caps := _mesh_caps()
+	if caps:
+		caps.apply(_model)
 	_use_whole_mesh()
 	for a in [&"Walking", &"Running"]:
 		if _anim.has_animation(a):
@@ -183,7 +184,7 @@ func _build_model() -> void:
 	_aim = RobotArmAim.new()
 	_aim.name = "ArmAim"
 	_skeleton.add_child(_aim)
-	_aim.setup(_skeleton, MUZZLES)
+	_aim.setup(_skeleton, _muzzle_offsets())
 	if _breaker:
 		_breaker.queue_free()
 	_breaker = BreakApart.new()
@@ -195,18 +196,53 @@ func _build_model() -> void:
 	_visual.rotation.y = _yaw
 
 
+# --- Model (a robot with another model overrides these) ---
+
+func _model_scene() -> PackedScene:
+	return MODEL
+
+
+## Simplified, untextured copy of the model for distant views.
+func _far_scene() -> PackedScene:
+	return FAR_MODEL
+
+
+## Seals cut sections (null = the model's sections are already sealed).
+func _mesh_caps() -> MeshCaps:
+	return CAPS
+
+
+## Cannon muzzles in each hand bone's space ({"Left": .., "Right": ..}).
+func _muzzle_offsets() -> Dictionary:
+	return MUZZLES
+
+
+func _model_offset() -> Vector3:
+	# The model's hips sit 0.245 m behind its origin; centre them.
+	return Vector3(0, 0, 0.245)
+
+
+## Surfaces of this material are left out of the merged living mesh (e.g.
+## cut caps that are only ever seen once a section has broken off).
+func _whole_mesh_skips(_mat: Material) -> bool:
+	return false
+
+
 # --- One mesh while alive (performance) ---
 #
 # The 15 body sections are only needed when the robot breaks apart. While
 # it's alive it draws ONE mesh made of all of them (identical geometry,
 # skin and materials on the same skeleton): 2 draw calls instead of ~28.
 
-static var _whole_mesh: ArrayMesh
-static var _whole_skin: Skin
 ## Much simpler copy for when it's far away (only a few pixels tall).
 const FAR_MODEL := preload("res://assets/characters/robot/robot_enemy_far.glb")
-static var _far_mesh: ArrayMesh
-static var _far_skin: Skin
+## Per model (scene path): [whole mesh, whole skin, far mesh, far skin],
+## built once and shared by every robot using that model.
+static var _mesh_cache := {}
+var _whole_mesh: ArrayMesh
+var _whole_skin: Skin
+var _far_mesh: ArrayMesh
+var _far_skin: Skin
 ## Camera distance (m) where it swaps to the far mesh, and the hysteresis.
 @export var far_distance := 30.0
 @export var far_margin := 2.0
@@ -218,14 +254,23 @@ var _shadow_proxy: MeshInstance3D
 var _sections: Array[MeshInstance3D] = []
 
 
-## All section surfaces merged per material (built once, shared by robots).
-static func _build_whole_mesh(skel: Skeleton3D) -> void:
-	var r := _merge_sections(skel)
+## All section surfaces merged per material (built once per model, shared
+## by the robots using it).
+func _build_whole_mesh(skel: Skeleton3D) -> void:
+	var key := _model_scene().resource_path
+	if _mesh_cache.has(key):
+		var c: Array = _mesh_cache[key]
+		_whole_mesh = c[0]
+		_whole_skin = c[1]
+		_far_mesh = c[2]
+		_far_skin = c[3]
+		return
+	var r := _merge_sections(skel, _whole_mesh_skips)
 	_whole_mesh = r[0]
 	_whole_skin = r[1]
 	# Distant version: same merge of the simplified model, using the main
 	# robot's materials (it carries no textures of its own).
-	var far: Node3D = FAR_MODEL.instantiate()
+	var far: Node3D = _far_scene().instantiate()
 	var far_skel := far.find_child("Skeleton3D", true, false) as Skeleton3D
 	var rf := _merge_sections(far_skel)
 	var simple: ArrayMesh = rf[0]
@@ -239,10 +284,11 @@ static func _build_whole_mesh(skel: Skeleton3D) -> void:
 		_far_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _whole_mesh.surface_get_arrays(k))
 		_far_mesh.surface_set_material(k, _whole_mesh.surface_get_material(k))
 	far.free()
+	_mesh_cache[key] = [_whole_mesh, _whole_skin, _far_mesh, _far_skin]
 
 
 ## [merged ArrayMesh, Skin] of every section mesh under `skel`.
-static func _merge_sections(skel: Skeleton3D) -> Array:
+static func _merge_sections(skel: Skeleton3D, skip := Callable()) -> Array:
 	var skin: Skin
 	var by_mat := {}  # material -> [arrays parts]
 	var order: Array = []
@@ -253,6 +299,8 @@ static func _merge_sections(skel: Skeleton3D) -> Array:
 		skin = (mi as MeshInstance3D).skin
 		for k in m.get_surface_count():
 			var mat := m.surface_get_material(k)
+			if skip.is_valid() and skip.call(mat):
+				continue
 			if not by_mat.has(mat):
 				by_mat[mat] = []
 				order.append(mat)
@@ -287,8 +335,7 @@ func _use_whole_mesh() -> void:
 	for c in _skeleton.get_children():
 		if c is MeshInstance3D:
 			_sections.append(c)
-	if _whole_mesh == null:
-		_build_whole_mesh(_skeleton)
+	_build_whole_mesh(_skeleton)
 	_whole = MeshInstance3D.new()
 	_whole.name = "WholeBody"
 	_whole.mesh = _whole_mesh

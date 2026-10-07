@@ -76,6 +76,15 @@ static func _take(tree: SceneTree) -> PlasmaBolt:
 	return _pool[_next]
 
 
+## Bolts in flight (e.g. for enemies that react to incoming fire).
+static func in_flight() -> Array[PlasmaBolt]:
+	var out: Array[PlasmaBolt] = []
+	for p in _pool:
+		if is_instance_valid(p) and p.active:
+			out.append(p)
+	return out
+
+
 static func active_count() -> int:
 	var n := 0
 	for p in _pool:
@@ -164,7 +173,9 @@ func _physics_process(delta: float) -> void:
 
 func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 	if col and col.has_method("apply_damage"):
-		col.apply_damage(DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, shooter))
+		# The shooter may be gone by the time the bolt lands.
+		var src: Node = shooter if is_instance_valid(shooter) else null
+		col.apply_damage(DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, src))
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
 	# Scorch marks only on solid level geometry (they don't follow movers).

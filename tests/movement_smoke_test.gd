@@ -442,6 +442,7 @@ func _run() -> void:
 	await _dual_wield_tests(main)
 	await _shotgun_tests(main)
 	await _robot_death_variety_tests(main)
+	await _skirmisher_tests(main)
 	await _weapon_fit_tests(main)
 	await _weapon_socket_tests(main)
 	await _weapon_switch_tests(main)
@@ -535,6 +536,14 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	await _ticks(20)
 	_check(p.external_velocity.length() > 1.0, "player feels the pull (%.1f m/s)" % p.external_velocity.length())
 	main.get_node("CameraRig").yaw = 0.0
+	# This checks the pull, not obstacles: a loose prop the well dragged into
+	# the escape lane is moved aside first.
+	for prop in main.find_children("*", "RigidBody3D", true, false):
+		var b := prop as RigidBody3D
+		var rel := b.global_position - p.global_position
+		if not (b is RobotEnemy) and rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
+			b.global_position += Vector3(4.0 * (1.0 if rel.x >= 0.0 else -1.0), 0, 0)
+			b.linear_velocity = Vector3.ZERO
 	Input.action_press("move_back")
 	Input.action_press("sprint")
 	var z0 := p.global_position.z
@@ -1390,6 +1399,300 @@ func _robot_death_variety_tests(main: Node) -> void:
 	await _ticks(2)
 
 
+func _spawn_skirmisher(main: Node, at: Vector3) -> RobotSkirmisher:
+	var r: RobotSkirmisher = load("res://scenes/enemies/robot_skirmisher.tscn").instantiate()
+	r.patrol_distance = 0.0
+	r.respawn_time = -1.0
+	main.add_child(r)
+	r.global_position = at
+	r.reset_physics_interpolation()
+	return r
+
+
+## Welded edges (rounded positions) of a mesh surface -> use count.
+func _edge_counts(arrays: Array, into: Dictionary) -> void:
+	var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var keys: Array[Vector3i] = []
+	for p in v:
+		keys.append(Vector3i(roundi(p.x * 1e4), roundi(p.y * 1e4), roundi(p.z * 1e4)))
+	for t in range(0, idx.size(), 3):
+		for e in 3:
+			var a := keys[idx[t + e]]
+			var b := keys[idx[t + (e + 1) % 3]]
+			if a == b:
+				continue
+			var k := [a, b] if (a.x < b.x or (a.x == b.x and (a.y < b.y or (a.y == b.y and a.z < b.z)))) else [b, a]
+			into[k] = into.get(k, 0) + 1
+
+
+## The agile skirmisher (RobotSkirmisher, built on RobotEnemy).
+func _skirmisher_tests(main: Node) -> void:
+	var base := Vector3(-14, 0, 33)
+	var r := _spawn_skirmisher(main, base + Vector3(0, 0, -12))
+	await _ticks(10)
+	# Model: its own sections and clips, one merged mesh while alive.
+	var names := r._sections.map(func(m: MeshInstance3D) -> String: return String(m.name))
+	names.sort()
+	_check(names == ["Head", "Left_Arm", "Left_Leg", "Right_Arm", "Right_Leg", "Torso"] and r.get_breaker().sections.size() == 6,
+		"skirmisher: 6 prepared sections (head, torso, arms, legs) %s" % [names])
+	var clips := ["Running", "Walking", "Jump_Run", "Jumping_Punch", "Run_Turn_Left", "Run_Turn_Right", "Idle_Turn_Left", "Idle_Turn_Right",
+		"Fall3", "Electrocuted_Fall", "Shot_and_Fall_Backward", "Shot_and_Fall_Forward", "Fall_Dead_from_Abdominal_Injury", "falling_down"]
+	_check(clips.all(func(c: String) -> bool: return r._anim.has_animation(c)), "skirmisher: all its movement/turn/jump/dive/death clips present")
+	var tris := 0
+	for m: MeshInstance3D in r._sections:
+		tris += (m.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+	_check(tris < 18000, "skirmisher: optimised mesh (%d triangles, source 62k)" % tris)
+	_check(r.is_whole_mesh() and r._whole.mesh.get_surface_count() == 1, "skirmisher: alive = one merged mesh, one draw surface (caps left out)")
+	_check(r._whole_far != null and r._whole_far.mesh.get_surface_count() == 1 and r._whole_far.mesh != r._whole.mesh, "skirmisher: own far LOD mesh")
+	var first := _spawn_robot(main, base + Vector3(6, 0, -14))
+	await _ticks(3)
+	_check(first._whole.mesh != r._whole.mesh and first._whole.mesh.get_surface_count() == 2, "first robot keeps its own merged mesh (cache per model)")
+	first.queue_free()
+	# No hollow sections: every cut edge between two sections is closed by
+	# that section's cap.
+	var per: Array = []
+	var all_main := {}
+	for m: MeshInstance3D in r._sections:
+		var main_e := {}
+		_edge_counts(m.mesh.surface_get_arrays(0), main_e)
+		var with_caps := main_e.duplicate()
+		if m.mesh.get_surface_count() > 1:
+			_edge_counts(m.mesh.surface_get_arrays(1), with_caps)
+		per.append([main_e, with_caps])
+		for k in main_e:
+			all_main[k] = all_main.get(k, 0) + 1
+	# A lone cut edge (not part of any ring) runs along one of the source
+	# model's own open borders: nothing to cap there.
+	var cut := 0
+	var closed := 0
+	var lone := 0
+	for pair in per:
+		var main_e: Dictionary = pair[0]
+		var with_caps: Dictionary = pair[1]
+		var edges: Array = []
+		var deg := {}
+		for k in main_e:
+			if main_e[k] == 1 and all_main[k] > 1:
+				edges.append(k)
+				deg[k[0]] = deg.get(k[0], 0) + 1
+				deg[k[1]] = deg.get(k[1], 0) + 1
+		for k in edges:
+			if deg[k[0]] == 1 and deg[k[1]] == 1:
+				lone += 1
+				continue
+			cut += 1
+			if with_caps[k] >= 2:
+				closed += 1
+	_check(cut > 100 and closed == cut, "skirmisher: every cut ring sealed by a dark cap (%d of %d cut edges closed; %d lone edges on the source's own open borders)" % [closed, cut, lone])
+	# Skinning intact after the optimisation: no triangle tears / spikes
+	# when the joints bend (posed edge vs rest edge).
+	r._anim.play(&"Jumping_Punch")
+	r._anim.seek(1.0, true)
+	await _ticks(1)
+	var torn := 0
+	var sk := r.get_skeleton()
+	for m: MeshInstance3D in r._sections:
+		var a := m.mesh.surface_get_arrays(0)
+		var v: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
+		var bn: PackedInt32Array = a[Mesh.ARRAY_BONES]
+		var wt: PackedFloat32Array = a[Mesh.ARRAY_WEIGHTS]
+		var per_v := bn.size() / v.size()
+		var bone_of := {}
+		var posed := PackedVector3Array()
+		for i in v.size():
+			var o := Vector3.ZERO
+			for k in per_v:
+				var w := wt[i * per_v + k]
+				if w > 0.0:
+					var bi := bn[i * per_v + k]
+					if not bone_of.has(bi):
+						bone_of[bi] = sk.find_bone(m.skin.get_bind_name(bi))
+					o += (sk.get_bone_global_pose(bone_of[bi]) * m.skin.get_bind_pose(bi) * v[i]) * w
+			posed.append(o)
+		var idx: PackedInt32Array = a[Mesh.ARRAY_INDEX]
+		for t in range(0, idx.size(), 3):
+			for e in 3:
+				var i0 := idx[t + e]
+				var i1 := idx[t + (e + 1) % 3]
+				var q := posed[i0].distance_to(posed[i1])
+				if q > 0.15 and q > v[i0].distance_to(v[i1]) * 2.5:
+					torn += 1
+					break
+	_check(torn <= 5, "skirmisher: optimised mesh still skins cleanly - no torn/spiky triangles in a big pose (%d)" % torn)
+	r._anim.play(&"Walking")
+	var cap_mat: Material = r._sections[0].mesh.surface_get_material(1)
+	_check(cap_mat != null and cap_mat.resource_name == "Interior" and (cap_mat as BaseMaterial3D).albedo_color.v < 0.3 and (cap_mat as BaseMaterial3D).albedo_texture == null, "skirmisher: caps are a cheap dark interior material (%s)" % [(cap_mat as BaseMaterial3D).albedo_color if cap_mat else null])
+
+	# Movement actions (AI off: driven directly).
+	r.target = main.players[1]
+	var p: PlayerController = main.players[1]
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(2)
+	var y0: float = r._yaw
+	r._start_turn(&"Run_Turn_Left", PI * 0.6, 0.45)
+	_check(r.action == RobotSkirmisher.Act.TURN, "skirmisher: run-turn clip starts")
+	var mid_yaw := 0.0
+	for i in 40:
+		await _ticks(1)
+		if i == 12:
+			mid_yaw = wrapf(r._yaw - y0, -PI, PI)
+	_check(r.action == RobotSkirmisher.Act.NONE and absf(wrapf(r._yaw - y0 - PI * 0.6, -PI, PI)) < 0.05 and mid_yaw > 0.1 and mid_yaw < PI * 0.6,
+		"skirmisher: turns with the clip, in step (mid %.0f deg, ends %.0f deg)" % [rad_to_deg(mid_yaw), rad_to_deg(wrapf(r._yaw - y0, -PI, PI))])
+	var side := Vector3.RIGHT
+	var start := r.global_position
+	r._start_sidestep(side)
+	var top := 0.0
+	for i in 30:
+		await _ticks(1)
+		top = maxf(top, Vector2(r.linear_velocity.x, r.linear_velocity.z).length())
+	_check(top > 6.0 and r.global_position.distance_to(start) > 1.3 and r.action == RobotSkirmisher.Act.NONE, "skirmisher: quick sidestep (%.1f m/s, %.1f m)" % [top, r.global_position.distance_to(start)])
+	start = r.global_position
+	r._start_jump(-side)
+	var lift := 0.0
+	var col_lift := 0.0
+	for i in 50:
+		await _ticks(1)
+		lift = maxf(lift, r._visual.position.y)
+		col_lift = maxf(col_lift, r._col.position.y - r._col_y)
+	_check(lift > 0.6 and col_lift > 0.6 and r.action == RobotSkirmisher.Act.NONE and r._col.position.y == r._col_y,
+		"skirmisher: jumps (%.2f m, hitbox follows) and lands" % lift)
+	start = r.global_position
+	r._start_dive(side)
+	var hips_up := 0.0
+	var aimed := 1.0
+	for i in 110:
+		await _ticks(1)
+		hips_up = maxf(hips_up, r._lift)
+		if r.action == RobotSkirmisher.Act.DIVE:
+			aimed = minf(aimed, 1.0 - r._aim.target_weight)
+	var dive_dist := Vector2(r.global_position.x - start.x, r.global_position.z - start.z).length()
+	_check(dive_dist > 1.8 and hips_up > 0.3 and aimed > 0.99 and r.action == RobotSkirmisher.Act.NONE,
+		"skirmisher: dives (leaping lunge %.1f m, %.2f m up, holds fire)" % [dive_dist, hips_up])
+	_check(r.dives == 1 and r._dive_cd > 3.0, "skirmisher: dives sparingly (long cooldown)")
+
+	# Combat: fast, keeps moving, fires the player's yellow plasma.
+	RobotEnemy.ai_enabled = true
+	for k in 3:
+		_spawn_skirmisher(main, base + Vector3(-5 + 5 * k, 0, -13))
+	var squad: Array = main.get_children().filter(func(n: Node) -> bool: return n is RobotSkirmisher and (n as RobotSkirmisher).alive)
+	var hits_before := p.damage_taken
+	var max_speed := 0.0
+	var still := 0
+	var samples := 0
+	var yellow := 0
+	var other := 0
+	var muzzle_ok := 0
+	var shots0 := 0
+	for q in squad:
+		shots0 += q.shots_fired
+	for i in Engine.physics_ticks_per_second * 9:
+		await _ticks(1)
+		# The player keeps firing at them (some evade).
+		if i % 15 == 0:
+			var t: RobotSkirmisher = squad[randi() % squad.size()]
+			var from := p.global_position + Vector3.UP * 1.3
+			PlasmaBolt.fire(self, from, (t.global_position + Vector3.UP - from).normalized(), p, 40.0, 0.0, Color.CYAN, Color.WHITE, &"players")
+		for q: RobotSkirmisher in squad:
+			if q.target and i > 90:
+				var sp := Vector2(q.linear_velocity.x, q.linear_velocity.z).length()
+				max_speed = maxf(max_speed, sp)
+				samples += 1
+				if sp < 0.5:
+					still += 1
+		for b in PlasmaBolt.in_flight():
+			if b.shooter is RobotSkirmisher and b._travelled < 0.5:
+				if b.color.is_equal_approx(RobotSkirmisher.PLASMA_YELLOW):
+					yellow += 1
+				else:
+					other += 1
+				var sh := b.shooter as RobotSkirmisher
+				var d := minf(b.global_position.distance_to(sh._aim.muzzle_position(0)), b.global_position.distance_to(sh._aim.muzzle_position(1)))
+				if d < 0.9:
+					muzzle_ok += 1
+	var shots := -shots0
+	var evades := 0
+	var jumps := 0
+	var turns := 0
+	for q: RobotSkirmisher in squad:
+		shots += q.shots_fired
+		evades += q.evades
+		jumps += q.jumps
+		turns += q.turns
+	_check(squad.all(func(q: RobotSkirmisher) -> bool: return q.target == p), "skirmishers engage the player")
+	_check(max_speed > 4.2, "skirmishers are fast (top %.1f m/s; first robot 2.6)" % max_speed)
+	_check(samples > 0 and float(still) / samples < 0.15, "skirmishers keep moving while fighting (%.0f%% of the time still)" % (100.0 * still / maxf(samples, 1)))
+	_check(shots >= 12 and shots < 160, "skirmishers fire bursts (%d shots, 4 robots, 9 s)" % shots)
+	_check(yellow > 0 and other == 0, "their rounds are the machine gun's yellow plasma (%d seen)" % yellow)
+	_check(muzzle_ok >= yellow * 0.9, "rounds leave from the cannon muzzles (%d of %d)" % [muzzle_ok, yellow])
+	_check(p.damage_taken > hits_before, "skirmisher plasma hits the player")
+	_check(evades >= 2 and evades <= 24, "they evade incoming fire, but not every shot (%d evasions in 9 s)" % evades)
+	RobotEnemy.ai_enabled = false
+	await _ticks(2)
+
+	# Deaths: varied clips, airborne death, electrical failure, partial
+	# break-apart with few pieces, debris settles.
+	var seen := {}
+	for q: RobotSkirmisher in squad:
+		q.target = null
+	var deaths: Array = squad.duplicate()
+	for k in 6:
+		deaths.append(_spawn_skirmisher(main, base + Vector3(-9 + 3 * k, 0, -20)))
+	await _ticks(5)
+	for k in deaths.size():
+		var q: RobotSkirmisher = deaths[k]
+		q._breaker.reference_force = 1000.0
+		var fwd: Vector3 = q._visual.global_basis.z
+		var dirs := [-fwd, fwd, fwd.cross(Vector3.UP)]
+		seed(20261007 + k)
+		q.apply_damage(DamageInfo.make(9, [DamageInfo.Type.BULLET, DamageInfo.Type.ENERGY][k % 2], q.global_position + Vector3.UP, dirs[k % 3], [3.0, 7.0][(k / 3) % 2]))
+		seen[q.last_death_style + ":" + String(q.last_death_anim)] = true
+		_check(not q.alive and q._anim.current_animation == String(q.last_death_anim) or q.last_death_style == "stagger", "skirmisher dies with one of its clips (%s, %s)" % [q.last_death_style, q.last_death_anim])
+	_check(seen.size() >= 5, "skirmisher deaths vary (%d kinds in 10: %s)" % [seen.size(), seen.keys()])
+	_check(RobotDeathSparks.active_count() > 0, "electrical death effects play (arcs, sparks, smoke)")
+	await _ticks(60)
+	_check(RobotDeathSparks.active_count() > 0 and JointSparks.active_count() > 0, "the electrical failure keeps crackling, dying away")
+	var air := _spawn_skirmisher(main, base + Vector3(-8, 0, -6))
+	await _ticks(5)
+	air._start_jump(Vector3.RIGHT)
+	await _ticks(18)
+	air.apply_damage(DamageInfo.make(9, DamageInfo.Type.BULLET, air.global_position + Vector3.UP, Vector3.FORWARD, 2.0))
+	_check(air.died_airborne and air.last_death_anim == &"Fall3", "killed mid-air: falls out of the air (Fall3)")
+	_check(air._col.position.y == air._col_y, "hitbox back on the body after an airborne death")
+	var counts := [0, 0, 0, 0, 0]
+	var big := _spawn_skirmisher(main, base + Vector3(8, 0, -6))
+	await _ticks(5)
+	var expl := DamageInfo.make(9, DamageInfo.Type.EXPLOSION, big.global_position + Vector3(0.4, 0.8, 0.6), Vector3(0, 0.2, -1), 0.0, 24.0)
+	for i in 200:
+		counts[big._breaker.choose_level(DamageInfo.make(9, DamageInfo.Type.BULLET, Vector3.ZERO, Vector3.FORWARD, 2.0))] += 1
+	_check(counts[0] > 180, "ordinary kills leave it whole (%s)" % [counts])
+	var debris0 := DebrisPiece.active_count()
+	big.apply_damage(expl)
+	await _ticks(45)
+	var pieces := DebrisPiece.active_count() - debris0
+	_check(big.last_destruction >= BreakApart.Level.MEDIUM and pieces >= 2 and pieces <= 6, "explosion breaks off several of its 6 large sections (%d pieces, level %d)" % [pieces, big.last_destruction])
+	var fastest := 0.0
+	var spin := 0.0
+	for n in root.get_children() + main.get_children():
+		if n is DebrisPiece:
+			fastest = maxf(fastest, (n as DebrisPiece).linear_velocity.length())
+			spin = maxf(spin, (n as DebrisPiece).angular_velocity.length())
+	_check(fastest <= 16.01 and spin <= 14.01, "debris speeds/spins clamped like the first robot's (%.1f m/s, %.1f rad/s)" % [fastest, spin])
+	await _ticks(240)
+	var settled := true
+	for n in root.get_children() + main.get_children():
+		if n is DebrisPiece and is_instance_valid(n) and (n as DebrisPiece).linear_velocity.length() > 0.5 and not (n as DebrisPiece).freeze:
+			settled = false
+	_check(settled, "skirmisher debris settles (no jitter, no endless bouncing)")
+	for n in main.get_children():
+		if n is RobotSkirmisher:
+			n.queue_free()
+	r.queue_free()
+	await _ticks(3)
+
+
 ## Held weapons never touch each other, the other arm or the body, and
 ## never stick out behind the elbow, for every weapon combination.
 func _weapon_fit_tests(main: Node) -> void:
@@ -1598,7 +1901,12 @@ func _machine_gun_tests(main: Node) -> void:
 		if R.shots_fired > before:
 			worst_from = maxf(worst_from, minf(R.last_from.distance_to(pre), R.last_from.distance_to(R.muzzle_position())))
 			if i > 60 and not R.overheated:
-				worst_dir = maxf(worst_dir, rad_to_deg(R.last_dir.angle_to(R.get_barrel_direction())))
+				# Along the barrel - or straight at the target when the barrel
+				# is within aim_snap_deg of it (the gun's rule) - plus spread.
+				var barrel := R.get_barrel_direction()
+				var to_t := (t1.get_aim_point() - R.last_from).normalized()
+				var base_dir := to_t if barrel.angle_to(to_t) <= deg_to_rad(R.aim_snap_deg) else barrel
+				worst_dir = maxf(worst_dir, rad_to_deg(R.last_dir.angle_to(base_dir)))
 				worst_aim = maxf(worst_aim, rad_to_deg(R.get_barrel_direction().angle_to(t1.get_aim_point() - R.muzzle_position())))
 		max_rec = maxf(max_rec, absf(anim.recoil_side.Right))
 		if R.overheated and oh_tick < 0:
@@ -1614,7 +1922,7 @@ func _machine_gun_tests(main: Node) -> void:
 	_check(counts.size() >= 4 and counts[3] >= 21 and counts[3] > counts[0] * 1.7, "keeps accelerating to a very high rate (%s per second)" % [counts])
 	_check(R.max_fire_rate > 2.0 * 4.0, "far faster than the default cannon (%.0f/s vs 4/s)" % R.max_fire_rate)
 	_check(worst_from < 0.03, "every round leaves from the muzzle (%.3f m)" % worst_from)
-	_check(worst_dir < R.max_spread_deg + 0.6, "rounds fly where the barrel points (worst %.2f deg)" % worst_dir)
+	_check(worst_dir < R.max_spread_deg + 0.6, "rounds fly where the barrel points, or at the target when on it (worst %.2f deg off, spread %.1f)" % [worst_dir, R.max_spread_deg])
 	_check(worst_aim < 2.5, "the barrel itself is kept on the target while firing (worst %.2f deg)" % worst_aim)
 	_check(R._flash.flashes - flash0 == R.shots_fired, "one muzzle flash per round (%d flashes, %d rounds)" % [R._flash.flashes - flash0, R.shots_fired])
 	_check(r1.health < 99999.0, "rounds hit and damage the enemy (%.1f)" % (99999.0 - r1.health))
