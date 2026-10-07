@@ -4,3 +4,6 @@
 *.tmp
 export_credentials.cfg
 build_info.txt
+
+# Python
+__pycache__/
