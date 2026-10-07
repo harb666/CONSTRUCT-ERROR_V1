@@ -25,6 +25,10 @@ const BODY_ARCS := 10
 var instability := 0.0
 ## World-space joint positions for the spreading arcs (set by the boss).
 var points: Callable
+## The core's severed connections: [[wall-side end, core stub end, is hose]]
+## (world), once snapped (BossCoreCables.broken_ends).
+var cable_ends: Callable
+var _end_burst := 0
 ## The core's world position (set by the boss each frame).
 var core_pos := Vector3.ZERO
 ## Out of the chest opening (world); core arcs and sparks favour it.
@@ -166,6 +170,7 @@ func failure() -> void:
 ## The core blows (internal explosion): smoke pours, arcs spread.
 func blow() -> void:
 	_blown = true
+	_end_burst = 0
 	_fail_t = maxf(_fail_t, 0.0)
 	_smoke.global_position = core_pos
 	_smoke.restart()
@@ -291,6 +296,7 @@ func _process(delta: float) -> void:
 			_machine_burst()
 		_smoke.emitting = after < 0.85
 		_smoke.global_position = core_pos
+		_severed(delta, after)
 	elif instability > 0.6 or failing:
 		# Smoke wisps from a badly damaged core.
 		_smoke.global_position = core_pos
@@ -317,6 +323,48 @@ func _process(delta: float) -> void:
 	_light.global_position = core_pos
 	_light.light_energy = glow
 	_light.visible = glow > 0.05
+
+
+## The snapped cables: a burst of sparks out of every severed end (one
+## after another), red arcs jumping between broken ends, smoke out of the
+## torn hoses (the core's smoke follows one of them).
+func _severed(delta: float, after: float) -> void:
+	if not cable_ends.is_valid():
+		return
+	var ends: Array = cable_ends.call()
+	if ends.is_empty():
+		return
+	if _end_burst < ends.size() * 2 and randf() < delta * 30.0:
+		var e: Array = ends[_end_burst % ends.size()]
+		_machine_sparks.global_position = e[0] if _end_burst < ends.size() else e[1]
+		_machine_sparks.restart()
+		_machine_sparks.emitting = true
+		_end_burst += 1
+	elif randf() < (1.0 - after) * delta * 3.0:
+		var e: Array = ends[randi() % ends.size()]
+		_machine_sparks.global_position = e[0]
+		_machine_sparks.restart()
+		_machine_sparks.emitting = true
+	# Arcs between a loose end and its stub (or two loose ends).
+	var cam := get_viewport().get_camera_3d()
+	for i in ARCS:
+		if _arc_life[i] > 0.0:
+			continue
+		if randf() < (1.0 - after) * delta * 6.0:
+			var e: Array = ends[randi() % ends.size()]
+			var b: Vector3 = e[1] if randf() < 0.7 else (ends[randi() % ends.size()] as Array)[0]
+			var a: Vector3 = e[0]
+			if a.distance_to(b) < 0.05:
+				continue
+			var off := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * a.distance_to(b) * 0.3
+			_arc_ab[i] = [a, (a + b) * 0.5 + off, b]
+			_arc_life[i] = randf_range(0.04, 0.1)
+			_show(_arcs[i], randf_range(0.7, 1.0))
+	# Smoke out of a torn hose.
+	for e: Array in ends:
+		if e[2]:
+			_smoke.global_position = e[0]
+			break
 
 
 ## A jagged two-segment arc a -> m -> b, `width` wide (its glow wider),

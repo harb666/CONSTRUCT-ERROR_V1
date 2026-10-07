@@ -404,7 +404,7 @@ def launcher_housing():
         mid = (np.array(frame[i]) + np.array(frame[j])) / 2
         out = sd * mid[0] + u * mid[1]
         # nozzle ring: outer wall, front annulus
-        face([P(*frame[i], z1 - 0.01), P(*frame[j], z1 - 0.01), P(*frame[j], zl), P(*frame[i], zl)], RED_ARMOUR, out)
+        face([P(*frame[i], z1 - 0.01), P(*frame[j], z1 - 0.01), P(*frame[j], zl), P(*frame[i], zl)], GUNMETAL_LIGHT, out)
         face([P(*frame[i], zl), P(*frame[j], zl), P(*port[j], zl), P(*port[i], zl)], RED_ARMOUR, a)
         # bore wall (dark) from the lip back to the bottom, two lighter
         # guide rings inside
@@ -424,18 +424,18 @@ def launcher_housing():
         face([P(*front[i], cz1), P(*front[j], cz1), P(*col_o[j], cz1), P(*col_o[i], cz1)], RED_ARMOUR, a)
         face([P(*front[i], cz0), P(*front[j], cz0), P(*col_o[j], cz0), P(*col_o[i], cz0)], RED_ARMOUR, -a)
 
-    def plate(x0, x1, y0, y1, za, zb, outward):
+    def plate(x0, x1, y0, y1, za, zb, outward, col=RED_ARMOUR):
         # a box plate on the shell: corners (x, y) across, za..zb along
         c = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
         for i in range(4):
             j = (i + 1) % 4
             mid = (np.array(c[i]) + np.array(c[j])) / 2 - np.array([(x0 + x1) / 2, (y0 + y1) / 2])
-            face([P(*c[i], za), P(*c[j], za), P(*c[j], zb), P(*c[i], zb)], RED_ARMOUR, sd * mid[0] + u * mid[1])
-        face([P(*p, zb) for p in c], RED_ARMOUR, a)
-        face([P(*p, za) for p in c], RED_ARMOUR, -a)
+            face([P(*c[i], za), P(*c[j], za), P(*c[j], zb), P(*c[i], zb)], col, sd * mid[0] + u * mid[1])
+        face([P(*p, zb) for p in c], col, a)
+        face([P(*p, za) for p in c], col, -a)
 
     plate(cx - 0.11, cx + 0.11, cy + hh - 0.01, cy + hh + 0.03, 0.0, 0.24, u)            # top
-    plate(cx - hw - 0.03, cx - hw + 0.01, cy - 0.1, cy + 0.08, -0.02, 0.26, -sd)       # outer side
+    plate(cx - hw - 0.03, cx - hw + 0.01, cy - 0.1, cy + 0.08, -0.02, 0.26, -sd, ARMOUR_GREY)  # outer side
 
     def panel(x, y0, y1, za, zb, n, uv):
         # thin inset panel / slot lying on a side face (x = const)

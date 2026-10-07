@@ -36,6 +36,12 @@ const GUN_CLIP := &"Chaingun_Fire"
 const DEATH_CLIP := &"Heavy_Death"
 const WALK_CLIP := &"Heavy_Walk"
 const STEP_CLIP := &"Heavy_Step"
+## Turning on the spot: heavy two-step turns of TURN_STEP_DEG each
+## (tools/author_boss_walk.gd), chained for bigger turns.
+const TURN_LEFT := &"Heavy_Turn_L"
+const TURN_RIGHT := &"Heavy_Turn_R"
+const TURN_STEP_DEG := 45.0
+const WORN_SHADER := preload("res://scripts/vfx/worn_armour.gdshader")
 ## Heavy_Walk's in-place speed at playback 1 (model units/s, at scale 1;
 ## from tools/author_boss_walk.gd: 2 * STEP / CYCLE).
 const WALK_CLIP_SPEED := 0.6 / 1.8
@@ -80,8 +86,18 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 @export var walk_speed := 1.6
 ## Speeding up / slowing down (m/s per s): heavy.
 @export var walk_accel := 2.2
-## Turning speed (rad/s).
+## Heading corrections while walking (rad/s; standing turns are steps).
 @export var turn_speed := 1.1
+## Standing: the legs step round once the player is this far off to the
+## side (deg); smaller corrections are the upper body twisting.
+@export var turn_start_deg := 30.0
+## Playback speed of the turn steps (1 = 45 deg per second).
+@export var turn_step_rate := 1.2
+## Footprint radius for ground support (m): it only stands on surfaces that
+## hold most of its footprint, never on small boxes / props.
+@export var footprint_radius := 0.8
+## Highest believable step up / down (m).
+@export var max_step := 0.5
 @export var detect_range := 45.0
 ## Tries to stay this far from the player (m).
 @export var preferred_range := Vector2(12.0, 26.0)
@@ -185,6 +201,15 @@ var hit_react: BossHitReact
 var launch_fx: LauncherBlast
 ## Seconds since the killing hit (-1 while alive).
 var dying_t := -1.0
+var torso_twist: BossTorsoTwist
+var cables: BossCoreCables
+var gun_flash: MachineGunFlash
+## Turn step in progress: +1 left, -1 right, 0 none; steps taken (tests).
+var turn_dir := 0
+var turn_steps := 0
+## Ground under its footprint, and whether the way ahead was blocked.
+var ground_y := 0.0
+var path_blocked := false
 
 var _visual: Node3D
 var _targetable: Targetable
@@ -214,6 +239,11 @@ var _visor_mat: StandardMaterial3D
 var _visor_albedo := Color.WHITE
 var _core_rest: StandardMaterial3D
 var _collapsed := false
+var _want_yaw := 0.0
+var _last_turn := 0
+var _detour_t := 0.0
+var _detour_yaw := 0.0
+var _flash_pivot: Node3D
 
 static var _lib_cache: AnimationLibrary
 static var _chest_lib: AnimationLibrary
@@ -234,10 +264,15 @@ func _ready() -> void:
 	if _collision:
 		_collision_rest = _collision.transform
 	_spawn_xf = global_transform
+	# Never lifted onto obstacles by its collider: height follows the ground
+	# under its footprint (_update_ground).
+	axis_lock_linear_y = true
+	ground_y = global_position.y
 	_build_model()
 	_apply_scale()
 	health = max_health
 	_yaw = _visual.rotation.y
+	_want_yaw = _yaw
 	_missile_t = missile_first_delay
 
 
@@ -257,6 +292,7 @@ func _apply_scale() -> void:
 		_targetable.position = _target_rest
 		_targetable.select_radius *= model_scale
 		_targetable.select_half_height *= model_scale
+	_flash_pivot.scale = Vector3.ONE / model_scale
 	# The loaded missile is `missile_length` long in the world.
 	loaded_missile.scale = Vector3.ONE * missile_length / model_scale
 	# Effects reach well beyond the small core so they read at range.
@@ -270,9 +306,10 @@ func _build_model() -> void:
 	model = MODEL.instantiate()
 	model.name = "Model"
 	_visual.add_child(model)
-	# Its hips sit 0.125 m to the side of and 0.2 m in front of the model's
-	# origin: put them over the body's origin (it turns about them).
-	model.position = Vector3(0.125, 0.0, -0.2)
+	# Its hips sit 0.125 m to the side of and 0.22 m in front of the model's
+	# origin: put them over the body's origin (it turns about them, as do
+	# the turn-step clips).
+	model.position = Vector3(0.12508, 0.0, -0.221)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	core = model.find_child("Reactor_Core", true, false) as MeshInstance3D
 	rotor = model.find_child("Chaingun_Barrel_Rotor", true, false) as Node3D
@@ -282,7 +319,12 @@ func _build_model() -> void:
 	_setup_animation()
 	var sk := model.find_child("Skeleton3D", true, false) as Skeleton3D
 	_sk = sk
-	# Hit reactions first, then the chaingun aim on top (keeps aiming true).
+	# Torso leads turns, hit reactions on top, then the chaingun aim (keeps
+	# aiming true).
+	torso_twist = BossTorsoTwist.new()
+	torso_twist.name = "TorsoTwist"
+	sk.add_child(torso_twist)
+	torso_twist.setup(sk)
 	hit_react = BossHitReact.new()
 	hit_react.name = "HitReact"
 	sk.add_child(hit_react)
@@ -327,6 +369,64 @@ func _build_model() -> void:
 	launch_fx = LauncherBlast.new()
 	launch_fx.name = "LaunchFx"
 	add_child(launch_fx)
+	_worn_materials()
+	# Core power cables (in the core socket's space).
+	var socket := core.get_parent() as Node3D
+	cables = BossCoreCables.new()
+	cables.name = "CoreCables"
+	var spine2 := sk.find_bone("mixamorig_Spine2")
+	var sk_in_model := model.global_transform.affine_inverse() * sk.global_transform
+	cables.socket_in_model = sk_in_model * sk.get_bone_global_rest(spine2) * socket.transform
+	cables.core_radius = CORE_RADIUS
+	socket.add_child(cables)
+	core_fx.cable_ends = cables.broken_ends
+	# Chaingun muzzle flash: big, orange, one per boss, restarted per round
+	# (+X of the flash = the muzzle's +Z, the way the rounds go).
+	_flash_pivot = Node3D.new()
+	_flash_pivot.name = "FlashPivot"
+	_flash_pivot.transform = Transform3D(Basis(Vector3(0, 0, 1), Vector3(0, 1, 0), Vector3(-1, 0, 0)), Vector3.ZERO)
+	chaingun_muzzle.add_child(_flash_pivot)
+	gun_flash = MachineGunFlash.new()
+	gun_flash.name = "MuzzleFlash"
+	gun_flash.length = 3.2
+	gun_flash.flash_life = 0.05
+	gun_flash.light_energy = 8.0
+	gun_flash.light_range = 11.0
+	gun_flash.flame_color = Color(1.0, 0.55, 0.12)
+	gun_flash.hot_color = Color(1.0, 0.93, 0.65)
+	gun_flash.spark_color = Color(1.0, 0.62, 0.18)
+	gun_flash.light_color = Color(1.0, 0.6, 0.25)
+	gun_flash.size = 5.5
+	gun_flash.smoke = true
+	_flash_pivot.add_child(gun_flash)
+
+
+## Worn, chipped armour (robot's own atlas + procedural wear) on the
+## launcher housing, the chest flap (plain back restyled as dark plate with
+## a red trim) and the core pocket.
+func _worn_materials() -> void:
+	var src: StandardMaterial3D = null
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi.mesh.surface_get_material(0) as StandardMaterial3D
+		if m and m.resource_name == "BakedMaterial" and m.albedo_texture:
+			src = m
+			break
+	for n in ["Rocket_Launcher_Housing", "Chest_Frown_Plate_Hinge", "Chest_Core_Housing"]:
+		var mi := model.find_child(n, true, false) as MeshInstance3D
+		if mi == null or src == null:
+			continue
+		var m := ShaderMaterial.new()
+		m.shader = WORN_SHADER
+		m.set_shader_parameter("albedo_tex", src.albedo_texture)
+		m.set_shader_parameter("normal_tex", src.normal_texture)
+		if n == "Chest_Frown_Plate_Hinge":
+			var box := mi.mesh.get_aabb()
+			m.set_shader_parameter("restyle", 1.0)
+			m.set_shader_parameter("box_min", box.position)
+			m.set_shader_parameter("box_size", box.size)
+		elif n == "Chest_Core_Housing":
+			m.set_shader_parameter("wear", 0.5)
+		mi.material_override = m
 
 
 ## The model's clips split over three players: body (root motion removed
@@ -402,6 +502,7 @@ func _physics_process(delta: float) -> void:
 		_update_death(delta)
 		return
 	_update_reload(delta)
+	_update_ground(delta)
 	core_fx.instability = clampf(1.0 - health / max_health, 0.0, 1.0)
 	_find_target()
 	_update_chest(delta)
@@ -411,6 +512,7 @@ func _physics_process(delta: float) -> void:
 		State.WINDUP:
 			_windup(delta)
 	_update_gun(delta)
+	_update_twist()
 	_update_targetable()
 
 
@@ -433,13 +535,27 @@ func _combat(delta: float) -> void:
 		var to := target.global_position - global_position
 		to.y = 0.0
 		var d := to.length()
-		_face(to, delta)
+		# Detour round an obstacle for a moment, then face the player again.
+		_detour_t = maxf(_detour_t - delta, 0.0)
+		var head := to.rotated(Vector3.UP, _detour_yaw) if _detour_t > 0.0 else to
+		_face(head, delta)
 		# Walks straight at / away from the player once it faces them.
-		var facing := fwd.dot(to / maxf(d, 0.01)) > 0.85
+		var facing := fwd.dot(head / maxf(head.length(), 0.01)) > 0.85
 		if d > preferred_range.y and facing:
 			want = walk_speed
 		elif d < preferred_range.x and facing:
 			want = -walk_speed
+		# Never walks into / onto an obstacle it can't step over: stops, and
+		# (going forward) picks the clearer side to go round.
+		path_blocked = want != 0.0 and _blocked(fwd * signf(want))
+		if path_blocked:
+			if want > 0.0 and _detour_t <= 0.0:
+				var l := not _blocked(fwd.rotated(Vector3.UP, deg_to_rad(50.0)))
+				var r := not _blocked(fwd.rotated(Vector3.UP, deg_to_rad(-50.0)))
+				if l or r:
+					_detour_yaw = deg_to_rad(50.0 if l else -50.0)
+					_detour_t = 3.0
+			want = 0.0
 		_missile_t -= delta
 		if _missile_t <= 0.0 and not exposed and _chest_open_t < 0.0:
 			_start_windup()
@@ -477,17 +593,20 @@ func _windup(delta: float) -> void:
 ## walk clip plays at exactly the ground speed (feet don't slide); it
 ## stamps round on the spot while turning; idles otherwise.
 func _move(want: float, delta: float) -> void:
+	_update_turn()
+	if turn_dir != 0:
+		want = 0.0
 	_speed = move_toward(_speed, want, walk_accel * delta)
 	var fwd := Vector3(sin(_yaw), 0, cos(_yaw))
 	var lv := linear_velocity
 	linear_velocity = Vector3(fwd.x * _speed, lv.y, fwd.z * _speed)
+	if turn_dir != 0:
+		return  # the turn step owns the legs
 	var clip := &"Idle"
 	var rate := 1.0
 	if absf(_speed) > 0.05:
 		clip = WALK_CLIP
 		rate = _speed / (WALK_CLIP_SPEED * model_scale)
-	elif _turning:
-		clip = STEP_CLIP
 	if clip != _move_anim:
 		_move_anim = clip
 		anim.play(clip, 0.4)
@@ -499,16 +618,143 @@ func walk_anim_ground_speed() -> float:
 	return anim.speed_scale * WALK_CLIP_SPEED * model_scale if _move_anim == WALK_CLIP else 0.0
 
 
-## Turns towards `dir` at `turn_speed`.
+## Faces `dir`. Walking: small heading corrections ride on its steps.
+## Standing: the upper body twists towards it (BossTorsoTwist); once it is
+## more than `turn_start_deg` off, the legs step round in heavy 45-degree
+## turn steps (chained for bigger turns: ~4 steps for 180 degrees).
 func _face(dir: Vector3, delta: float) -> void:
 	if dir.length_squared() < 0.01:
-		_turning = false
 		return
-	var diff := wrapf(atan2(dir.x, dir.z) - _yaw, -PI, PI)
-	var step := clampf(diff, -turn_speed * delta, turn_speed * delta)
-	_yaw += step
-	_turning = absf(diff) > deg_to_rad(4.0)
+	_want_yaw = atan2(dir.x, dir.z)
+	if turn_dir != 0:
+		return
+	var diff := wrapf(_want_yaw - _yaw, -PI, PI)
+	if absf(_speed) > 0.05:
+		_yaw += clampf(diff, -turn_speed * 0.35 * delta, turn_speed * 0.35 * delta)
+		_visual.rotation.y = _yaw
+		return
+	if absf(diff) > deg_to_rad(turn_start_deg):
+		var d := 1 if diff > 0.0 else -1
+		# Right behind it: keep turning the way it last turned (no dithering).
+		if absf(diff) > deg_to_rad(160.0) and _last_turn != 0:
+			d = _last_turn
+		_start_turn(d, false)
+
+
+func _start_turn(dir: int, chained: bool) -> void:
+	turn_dir = dir
+	_last_turn = dir
+	turn_steps += 1
+	var clip := TURN_LEFT if dir > 0 else TURN_RIGHT
+	anim.play(clip, 0.0 if chained else 0.25)
+	if chained:
+		anim.seek(0.0, true)
+	anim.speed_scale = turn_step_rate
+	_move_anim = clip
+	_turning = true
+
+
+## A turn step ends in the rest pose turned 45 degrees: hand the angle over
+## to the body's yaw (same pose, no pop), then step again or stand.
+func _update_turn() -> void:
+	if turn_dir == 0:
+		return
+	if anim.current_animation == _move_anim and anim.is_playing() and anim.current_animation_position < anim.current_animation_length - 0.0005:
+		return
+	_yaw += turn_dir * deg_to_rad(TURN_STEP_DEG)
 	_visual.rotation.y = _yaw
+	var d := turn_dir
+	turn_dir = 0
+	_turning = false
+	var diff := wrapf(_want_yaw - _yaw, -PI, PI)
+	if alive and absf(diff) > deg_to_rad(turn_start_deg * 0.6) and ((1 if diff > 0.0 else -1) == d or absf(diff) > deg_to_rad(160.0)):
+		_start_turn(d, true)
+	else:
+		anim.play(&"Idle", 0.0)
+		anim.seek(0.0, true)
+		anim.speed_scale = 1.0
+		_move_anim = &"Idle"
+
+
+## How far the body (incl. a turn step in progress) faces, and the upper
+## body twisting the rest of the way towards the player.
+func facing_yaw() -> float:
+	var y := _yaw
+	if turn_dir != 0 and anim.current_animation_length > 0.0:
+		var u := anim.current_animation_position / anim.current_animation_length
+		y += turn_dir * deg_to_rad(TURN_STEP_DEG) * smoothstep(0.06, 0.92, u)
+	return y
+
+
+func _update_twist() -> void:
+	torso_twist.target_yaw = wrapf(_want_yaw - facing_yaw(), -PI, PI) if target != null and alive else 0.0
+
+
+## Ground under its footprint: centre + 4 points `footprint_radius` round
+## it. A surface counts only if it holds at least 4 of the 5 points (no
+## standing on small boxes / props); the body's height follows it within
+## `max_step`. Moving props and players are ignored (they get pushed).
+func _update_ground(delta: float) -> void:
+	var b := Basis(Vector3.UP, _yaw)
+	var hs: Array[float] = []
+	for off in [Vector3.ZERO, Vector3(footprint_radius, 0, 0), Vector3(-footprint_radius, 0, 0), Vector3(0, 0, footprint_radius), Vector3(0, 0, -footprint_radius)]:
+		var h := _floor_at(global_position + b * off)
+		if not is_nan(h):
+			hs.append(h)
+	var best := NAN
+	for h in hs:
+		var n := 0
+		for o in hs:
+			if absf(o - h) < 0.2:
+				n += 1
+		# (any drop is fine; stepping up only as far as `max_step`)
+		if n >= 4 and (is_nan(best) or h > best) and h - global_position.y <= max_step:
+			best = h
+	if not is_nan(best):
+		ground_y = best
+		var p := global_position
+		p.y = move_toward(p.y, ground_y, 4.0 * delta)
+		global_position = p
+
+
+func _floor_at(p: Vector3) -> float:
+	var skip: Array[RID] = [get_rid()]
+	var space := get_world_3d().direct_space_state
+	for k in 4:
+		var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * (max_step + 1.0), p + Vector3.DOWN * 3.0)
+		q.collision_mask = 1
+		q.exclude = skip
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return NAN
+		var col: Object = hit.collider
+		if col is CharacterBody3D or (col is RigidBody3D and not (col as RigidBody3D).freeze):
+			skip.append(hit.rid)
+			continue
+		return hit.position.y
+	return NAN
+
+
+## Is there something it can't step over within reach along `dir`? (static
+## level geometry / frozen bodies above `max_step`; loose props get pushed.)
+func _blocked(dir: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	var side := dir.cross(Vector3.UP).normalized()
+	var reach := 0.55 * model_scale + 1.2
+	for h in [max_step + 0.15, 1.6]:
+		for s in [-0.3, 0.0, 0.3]:
+			var o: Vector3 = global_position + Vector3.UP * h + side * s * model_scale
+			var q := PhysicsRayQueryParameters3D.create(o, o + dir * reach)
+			q.collision_mask = 1
+			q.exclude = [get_rid()]
+			var hit := space.intersect_ray(q)
+			if hit.is_empty():
+				continue
+			var col: Object = hit.collider
+			if col is CharacterBody3D or (col is RigidBody3D and not (col as RigidBody3D).freeze):
+				continue
+			return true
+	return false
 
 
 # --- chaingun ---
@@ -581,7 +827,7 @@ func _fire_bullet() -> void:
 		bolt.crackle = false
 		bolt.size = chaingun_tracer_size
 		bolt.max_range = chaingun_range + 10.0
-	PlasmaFx.muzzle_flash(get_tree(), m.origin, dir, BULLET_COLOR, BULLET_HOT)
+	gun_flash.fire(_spin, 1.0)
 	last_shot_dir = dir
 	bullets_fired += 1
 
@@ -780,6 +1026,8 @@ func die(_info: DamageInfo = null) -> void:
 	set_spin(0.0)
 	gun_aim.target_weight = 0.0
 	_speed = 0.0
+	turn_dir = 0
+	_turning = false
 	_collapsed = false
 	dying_t = 0.0
 	if _targetable:
@@ -811,9 +1059,11 @@ func _update_death(delta: float) -> void:
 		Vfx.set_alpha(_core_glow, randf_range(0.4, 1.0))
 		if randf() < delta * 10.0:
 			hit_react.kick(0.25, -_visual.global_basis.z)
+		cables.set_power(randf_range(0.0, 2.5))
 	elif t0 < death_overload_time:
 		# Internal explosion: the core blows, the chest is thrown back.
 		MissileBlast.spawn(get_parent(), core.global_position + _visual.global_basis.z * 0.15 * model_scale, 1.2, 0.7, false)
+		cables.snap()
 		core_fx.blow()
 		hit_react.kick(1.4, -_visual.global_basis.z)
 		_core_glow.visible = false
@@ -862,6 +1112,10 @@ func _respawn() -> void:
 	_collapsed = false
 	_missile_t = missile_first_delay
 	core_fx.reset()
+	cables.reset()
+	turn_dir = 0
+	_detour_t = 0.0
+	ground_y = global_position.y
 	_core_mat.emission_energy_multiplier = _core_rest.emission_energy_multiplier
 	_core_mat.albedo_color = _core_rest.albedo_color
 	if _visor_mat:

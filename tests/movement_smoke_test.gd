@@ -2238,9 +2238,11 @@ func _robot_boss_tests(main: Node) -> void:
 	var draws := 0
 	var tris := 0
 	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
+		if not mi.is_visible_in_tree():
+			continue  # effects waiting to fire, broken cable pieces
 		draws += mi.mesh.get_surface_count()
 		tris += mi.mesh.get_faces().size() / 3
-	_check(draws <= 9 and tris < 120000, "boss: %d draw calls (6 + visor + loaded missile + the core's glow), %d triangles" % [draws, tris])
+	_check(draws <= 10 and tris < 120000, "boss: %d draw calls (6 + visor + loaded missile + core cables), %d triangles" % [draws, tris])
 
 	# Rig: a body clip moves the skeleton (no rest-pose lock).
 	var leg := sk.find_bone("mixamorig_LeftUpLeg")
@@ -2375,6 +2377,7 @@ func _robot_boss_tests(main: Node) -> void:
 
 	await _robot_boss_v2_tests(main, boss, body)
 	await _robot_boss_v3_tests(main, boss)
+	await _robot_boss_v4_tests(main, boss)
 
 	# Death: collapses and lies flat, feet not planted, weapons attached.
 	var foot := sk.find_bone("mixamorig_LeftFoot")
@@ -2388,6 +2391,12 @@ func _robot_boss_tests(main: Node) -> void:
 		await _ticks(1)
 		blew = blew or (boss.core_fx._blown and MissileBlast.busy_count() > 0)
 	_check(blew and boss.core_fx.body_arcs_shown > 8, "boss: core blows, red arcs spread over the robot (%d arcs)" % boss.core_fx.body_arcs_shown)
+	var ends: Array = boss.cables.broken_ends()
+	_check(boss.cables.broken and boss.core_fx._end_burst >= ends.size(), "boss: core cables snap, sparks burst from every severed end")
+	var drop := 0.0
+	for e: Array in ends:
+		drop = maxf(drop, (e[1] as Vector3).distance_to(e[0]))
+	_check(drop > 0.1 * boss.model_scale * 0.25, "boss: the broken cable ends swing loose (%.2f m apart)" % drop)
 	_check(boss.anim.assigned_animation != RobotBoss.DEATH_CLIP and boss._core_mat.emission_energy_multiplier < 0.1, "boss: core dark before it collapses")
 	var foot_move := 0.0
 	for i in 70:
@@ -2645,6 +2654,115 @@ func _robot_boss_v3_tests(main: Node, boss: RobotBoss) -> void:
 	await _ticks(5)
 	boss.close_chest()
 	await _ticks(40)
+
+
+## Boss round 3: worn silo / flap, stepped turning, grounding, core
+## cables, chaingun muzzle flash.
+func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
+	var p: PlayerController = main.players[1]
+	var sk := boss.model.find_child("Skeleton3D", true, false) as Skeleton3D
+	var sc := boss.model_scale
+	boss._missile_t = 999.0
+	# Worn materials on the silo and flap (robot atlas + procedural wear).
+	var housing := boss.model.find_child("Rocket_Launcher_Housing", true, false) as MeshInstance3D
+	var hm := housing.material_override as ShaderMaterial
+	var fm := (boss.flap as MeshInstance3D).material_override as ShaderMaterial
+	_check(hm != null and hm.shader == RobotBoss.WORN_SHADER and hm.get_shader_parameter("albedo_tex") != null
+		and fm != null and fm.get_shader_parameter("restyle") == 1.0, "boss: silo and flap use the worn armour material (robot's own texture)")
+	# Core cables: a few chunky connections, one mesh while intact.
+	_check(boss.cables != null and boss.cables.specs.size() >= 4 and boss.cables._whole.is_visible_in_tree() and not boss.cables.broken,
+		"boss: cables and hoses connect the core (%d)" % boss.cables.specs.size())
+	# Turning: the player goes behind it -> heavy steps, feet planted.
+	boss.always_active = true
+	var fwd := Vector3(sin(boss._yaw), 0, cos(boss._yaw))
+	# (5 m behind it: still on its platform)
+	p.global_position = boss.global_position - fwd * 5.0 + Vector3(0, 0.05, 0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var steps0 := boss.turn_steps
+	var feet := [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
+	var span := [null, null]
+	var slide := 0.0
+	var lead_ok := false
+	var hips_jump := 0.0
+	var hips := sk.find_bone("mixamorig_Hips")
+	var last_hips := sk.global_transform * sk.get_bone_global_pose(hips).origin
+	for i in 480:
+		await _ticks(1)
+		await sk.skeleton_updated
+		var g := sk.global_transform
+		var hp := g * sk.get_bone_global_pose(hips).origin
+		hips_jump = maxf(hips_jump, hp.distance_to(last_hips))
+		last_hips = hp
+		if boss.turn_dir != 0 and absf(boss.torso_twist.current) > deg_to_rad(10.0) and signf(boss.torso_twist.current) == float(boss.turn_dir):
+			lead_ok = true
+		for k in 2:
+			var fp: Vector3 = g * sk.get_bone_global_pose(feet[k]).origin
+			if fp.y - boss.global_position.y < 0.045 * sc:
+				if span[k] == null:
+					span[k] = fp
+				slide = maxf(slide, Vector2(fp.x - span[k].x, fp.z - span[k].z).length())
+			else:
+				span[k] = null
+		var err := absf(wrapf(boss._want_yaw - boss._yaw, -PI, PI))
+		if i > 30 and boss.turn_dir == 0 and err < deg_to_rad(boss.turn_start_deg):
+			break
+	_check(p.global_position.distance_to(boss.global_position) < 8.0, "boss: (turn test: player stayed behind it)")
+	var steps := boss.turn_steps - steps0
+	_check(steps >= 3 and steps <= 5, "boss: 180-degree turn is several heavy steps (%d)" % steps)
+	_check(absf(wrapf(boss._want_yaw - boss._yaw, -PI, PI)) < deg_to_rad(boss.turn_start_deg), "boss: ends up facing the player")
+	_check(slide < 0.05 * sc, "boss: planted feet stay put while it turns (%.3f m)" % slide)
+	_check(hips_jump < 0.06 * sc, "boss: steps hand over without a pop (%.3f m per tick)" % hips_jump)
+	_check(lead_ok, "boss: upper body turns ahead of the legs")
+	# Small correction: the torso alone, no steps.
+	await _ticks(30)
+	steps0 = boss.turn_steps
+	var now_fwd := Vector3(sin(boss._yaw), 0, cos(boss._yaw))
+	p.global_position = boss.global_position + now_fwd.rotated(Vector3.UP, deg_to_rad(18.0)) * 15.0 + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	await _ticks(60)
+	_check(boss.turn_steps == steps0 and absf(boss.torso_twist.current) > deg_to_rad(10.0), "boss: small aiming corrections twist the upper body only (%.0f deg)" % rad_to_deg(boss.torso_twist.current))
+	boss.always_active = false
+	await _ticks(10)
+	# Grounding: never stands on the small box; doesn't walk into it.
+	var home := boss.global_position
+	var box_at := Vector3(3.0, home.y, -23.0)
+	boss.global_position = box_at
+	boss.reset_physics_interpolation()
+	await _ticks(60)
+	_check(absf(boss.global_position.y - home.y) < 0.1, "boss: doesn't climb onto a small box (height %.2f m above the floor)" % (boss.global_position.y - home.y))
+	boss.global_position = box_at + Vector3(0, 0, -3.4)
+	boss._yaw = 0.0
+	boss._visual.rotation.y = 0.0
+	await _ticks(5)
+	_check(boss._blocked(Vector3(0, 0, 1)) and not boss._blocked(Vector3(0, 0, -1)), "boss: sees the box as an obstacle in its way")
+	boss.global_position = home
+	boss.reset_physics_interpolation()
+	await _ticks(10)
+	# Chaingun: one big flash per round, along the rounds, lights the robot.
+	boss.always_active = true
+	p.global_position = boss.global_position + Vector3(sin(boss._yaw), 0, cos(boss._yaw)) * 16.0 + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	var f0 := boss.gun_flash.flashes
+	var b0 := boss.bullets_fired
+	var lit := 0.0
+	var along := 180.0
+	for i in 300:
+		await _ticks(1)
+		lit = maxf(lit, boss.gun_flash._light.light_energy)
+		if boss.bullets_fired > b0:
+			along = minf(along, rad_to_deg(boss.gun_flash.global_basis.x.angle_to(boss.last_shot_dir)))
+		if boss.bullets_fired - b0 > 12:
+			break
+	_check(boss.bullets_fired > b0 and boss.gun_flash.flashes - f0 == boss.bullets_fired - b0, "boss: one muzzle flash per chaingun round (%d / %d)" % [boss.gun_flash.flashes - f0, boss.bullets_fired - b0])
+	_check(along < boss.chaingun_spread_deg * 2.0 + 0.5, "boss: flash points the way the rounds go (%.1f deg)" % along)
+	_check(lit > 1.0 and boss.gun_flash.light_energy >= 5.0 and boss.gun_flash.size >= 3.0, "boss: big flash that lights the robot up")
+	boss.always_active = false
+	boss.set_spin(0.0)
+	boss._gun_phase = 0
+	p.global_position = Vector3(0, 6.05, 8.5)
+	p.reset_physics_interpolation()
+	await _ticks(30)
 
 
 ## Rounds per second while the chaingun fires at full spin (1 s sample).
