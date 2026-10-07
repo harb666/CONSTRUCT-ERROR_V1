@@ -44,7 +44,14 @@ The source is one 62k-triangle skinned mesh on a Mixamo rig with a baked
     neighbouring parts hide) is sealed by a shallow, recessed dark cap (own
     "Interior" material, double-sided, skinned like its rim), so no detached
     part is ever hollow.
-  * Animations: the clips' joint rotations are the source's. The hips
+  * Movement clips: Running and Walking are the first robot's
+    (assets/characters/robot/robot_enemy.glb), retargeted onto this
+    skeleton (retarget_clip): the source's own were captured for other
+    proportions and looked broken on it (crossing legs, sliding, kicking
+    feet). Each bone's motion relative to its rest pose is carried over in
+    world space, the hips' travel scaled to these legs, the hips set at the
+    height that plants the feet on the floor.
+  * Other animations: the clips' joint rotations are the source's. The hips
     track is re-based on the moved hips pivot (the pelvis moves exactly as
     before) and re-grounded per frame so the body's lowest point follows
     the clip's but never goes below the floor (the source clips sink the
@@ -498,6 +505,16 @@ JOINT_FIT = {
 # The game's cannon muzzles in hand space on the source rig (printed again
 # for the re-fitted rig, for RobotSkirmisher.SKIRMISHER_MUZZLES).
 MUZZLES_OLD = {"Left": np.array([0.0639, 0.2989, 0.0226]), "Right": np.array([-0.0098, 0.4991, 0.0349])}
+# Movement clips taken from the first robot instead (retarget_clip): the
+# skirmisher's own run/walk were captured for other proportions and look
+# broken on it (crossing legs, sliding, kicking feet).
+FIRST_ROBOT = os.path.join(ROOT, "assets/characters/robot/robot_enemy.glb")
+RETARGET = ["Running", "Walking"]
+# The ground speed (m/s) the first robot's clips match at 1x (RobotEnemy
+# run_anim_speed / walk_anim_speed).
+FIRST_ROBOT_SPEED = {"Running": 3.4, "Walking": 1.2}
+# Joint pairs made exact mirror images (about x = 0) after the fit.
+SYMMETRIC = [("LeftUpLeg", "RightUpLeg"), ("LeftLeg", "RightLeg"), ("LeftFoot", "RightFoot")]
 # Vertices within this distance (m) of the closest contact count as contact.
 CONTACT_BAND = 0.012
 
@@ -557,6 +574,14 @@ def refit_skeleton(g, src):
     for name, rule in JOINT_FIT.items():
         if isinstance(rule, tuple):
             new[by_name[name]] = contact(*rule)
+    # The model is (nearly) mirror-symmetric, the contact fit is not quite:
+    # paired leg joints are made exact mirror images (averaged), so both
+    # legs are the same length and the gait comes out even.
+    for a, b_ in SYMMETRIC:
+        pa, pb = new[by_name[a]], new[by_name[b_]]
+        m = (pa + pb * np.array([-1.0, 1.0, 1.0])) * 0.5
+        new[by_name[a]] = m
+        new[by_name[b_]] = m * np.array([-1.0, 1.0, 1.0])
     for name, rule in JOINT_FIT.items():
         if isinstance(rule, str):
             ref = by_name[rule[5:]]
@@ -665,6 +690,157 @@ def ground_offsets(an, g, B, old_nodes, hips, hips_rot, hips_old, hips_new, part
     low_old = lowest_point(clip_pose(an, g, B, old_nodes, hips, hips_rot, hips_old, times), inv_old, parts)
     low_new = lowest_point(clip_pose(an, g, B, nodes, hips, hips_rot, hips_new, times), inv_new, parts)
     return times, np.maximum(low_old, 0.0) - low_new
+
+
+def mat_quat(M):
+    """Rotation matrix -> quaternion (x, y, z, w)."""
+    tr = M[0, 0] + M[1, 1] + M[2, 2]
+    if tr > 0:
+        S = np.sqrt(tr + 1.0) * 2
+        q = [(M[2, 1] - M[1, 2]) / S, (M[0, 2] - M[2, 0]) / S, (M[1, 0] - M[0, 1]) / S, 0.25 * S]
+    elif M[0, 0] > M[1, 1] and M[0, 0] > M[2, 2]:
+        S = np.sqrt(1.0 + M[0, 0] - M[1, 1] - M[2, 2]) * 2
+        q = [0.25 * S, (M[0, 1] + M[1, 0]) / S, (M[0, 2] + M[2, 0]) / S, (M[2, 1] - M[1, 2]) / S]
+    elif M[1, 1] > M[2, 2]:
+        S = np.sqrt(1.0 + M[1, 1] - M[0, 0] - M[2, 2]) * 2
+        q = [(M[0, 1] + M[1, 0]) / S, 0.25 * S, (M[1, 2] + M[2, 1]) / S, (M[0, 2] - M[2, 0]) / S]
+    else:
+        S = np.sqrt(1.0 + M[2, 2] - M[0, 0] - M[1, 1]) * 2
+        q = [(M[0, 2] + M[2, 0]) / S, (M[1, 2] + M[2, 1]) / S, 0.25 * S, (M[1, 0] - M[0, 1]) / S]
+    q = np.array(q)
+    return q / np.linalg.norm(q)
+
+
+def skinned_part_points(g, B, joint_names_wanted):
+    """{joint node: bind-space vertex positions} of every skinned vertex
+    whose strongest bone is one of `joint_names_wanted` (all meshes)."""
+    out = {}
+    skin = g["skins"][0]
+    for n in g["nodes"]:
+        if "mesh" not in n:
+            continue
+        for pr in g["meshes"][n["mesh"]]["primitives"]:
+            at = pr["attributes"]
+            if "JOINTS_0" not in at:
+                continue
+            P = read_acc(g, B, at["POSITION"]).astype(np.float64)
+            J = read_acc(g, B, at["JOINTS_0"]).astype(np.int64)
+            Wt = read_acc(g, B, at["WEIGHTS_0"]).astype(np.float64)
+            dom = J[np.arange(len(J)), Wt.argmax(1)]
+            for k, j in enumerate(skin["joints"]):
+                if g["nodes"][j]["name"].split(":")[-1] in joint_names_wanted:
+                    pts = P[dom == k]
+                    if len(pts):
+                        out[j] = np.vstack([out[j], pts]) if j in out else pts
+    return out
+
+
+def retarget_clip(sg, sB, clip, g, hips, tgt_parts):
+    """The first robot's clip `clip` on the skirmisher's (re-fitted)
+    skeleton: [times, {node: rotation quaternions}, hips translations,
+    ground speed it matches at 1x].
+
+    Each bone's motion relative to its rest pose is carried over in world
+    space (R = R_src(t) R_src_rest^-1 R_tgt_rest), so the skirmisher keeps
+    its own proportions, stance and joint layout; the hips' travel is
+    scaled by the leg-length ratio; then the hips are set at the height
+    that puts the planted feet on the floor (one height for the clip, so
+    it keeps the first robot's own gentle bob), lifted smoothly only where
+    a foot would otherwise go through the floor."""
+    snodes = sg["nodes"]
+    # Joints by bone name (mesh nodes may share a name, e.g. "Head").
+    sn = {snodes[j]["name"].split(":")[-1]: j for j in sg["skins"][0]["joints"]}
+    tnodes = g["nodes"]
+    tn = {tnodes[j]["name"].split(":")[-1]: j for j in g["skins"][0]["joints"]}
+    an = next(a for a in sg["animations"] if a["name"] == clip)
+    ships = sn["Hips"]
+    rot_t, hr, ht = None, None, None
+    for ch in an["channels"]:
+        smp = an["samplers"][ch["sampler"]]
+        t = read_acc(sg, sB, smp["input"])[:, 0]
+        if ch["target"]["path"] == "rotation":
+            rot_t = t if rot_t is None else np.union1d(rot_t, t)
+            if ch["target"]["node"] == ships:
+                hr = (t, read_acc(sg, sB, smp["output"]).astype(np.float64))
+        elif ch["target"]["node"] == ships and ch["target"]["path"] == "translation":
+            ht = (t, read_acc(sg, sB, smp["output"]).astype(np.float64))
+    times = rot_t
+    spose = clip_pose(an, sg, sB, snodes, ships, hr, ht, times)
+    sparent = {c: i for i, n in enumerate(snodes) for c in n.get("children", [])}
+    tparent = {c: i for i, n in enumerate(tnodes) for c in n.get("children", [])}
+    S0 = {j: node_world(snodes, sparent, j) for j in sg["skins"][0]["joints"]}
+    T0 = {j: node_world(tnodes, tparent, j) for j in g["skins"][0]["joints"]}
+    # Leg length ratio (hip to knee to ankle).
+    def leg(nodes_, idx):
+        return sum(np.linalg.norm(nodes_[idx[b]]["translation"]) for b in ("LeftLeg", "LeftFoot"))
+    k_len = leg(tnodes, tn) / leg(snodes, sn)
+    T = len(times)
+    Rw = {}
+    for j in g["skins"][0]["joints"]:
+        name = tnodes[j]["name"].split(":")[-1]
+        if name in sn:
+            sj = sn[name]
+            Rw[j] = np.einsum("tij,jk->tik", spose[sj][:, :3, :3], S0[sj][:3, :3].T @ T0[j][:3, :3])
+    rots = {}
+    for j in g["skins"][0]["joints"]:
+        if j not in Rw:
+            continue
+        pj = tparent.get(j)
+        Rp = Rw[pj] if pj in Rw else np.tile(np.eye(3), (T, 1, 1))
+        loc = np.einsum("tji,tjk->tik", Rp, Rw[j])
+        qs = np.array([mat_quat(M) for M in loc])
+        for k in range(1, T):
+            if np.dot(qs[k], qs[k - 1]) < 0:
+                qs[k] = -qs[k]
+        rots[j] = qs
+    hip_t = T0[hips][:3, 3] + (spose[ships][:, :3, 3] - S0[ships][:3, 3]) * k_len
+    # Re-ground on the soles.
+    src_feet = skinned_part_points(sg, sB, ("LeftFoot", "RightFoot", "LeftToeBase", "RightToeBase"))
+    src_low = lowest_point(spose, {j: np.linalg.inv(S0[j]) for j in src_feet}, src_feet)
+    src_rest = min(p[:, 1].min() for p in src_feet.values())  # sole height at rest
+    target_low = np.maximum(src_low - src_rest, 0.0) * k_len
+    tpose = clip_pose_rots(g, hips, rots, hip_t, times)
+    inv_t = {j: np.linalg.inv(T0[j]) for j in tgt_parts}
+    need = target_low - lowest_point(tpose, inv_t, tgt_parts)
+    # One height for the whole clip (keeps the first robot's own gentle
+    # bob), set so the planted feet stand on the floor...
+    planted = src_low - src_rest < 0.01
+    lift = np.full(T, float(np.median(need[planted])) if planted.any() else float(np.median(need)))
+    # ...raised smoothly only where a foot would go through the floor.
+    extra = np.maximum(need - lift, 0.0)
+    if extra.any():
+        kernel = np.hanning(9)
+        kernel /= kernel.sum()
+        wrap = np.concatenate([extra[-4:], extra, extra[:4]])
+        extra = np.maximum(np.convolve(wrap, kernel, "valid"), extra * 0.0)
+        extra = np.maximum(extra, np.maximum(need - lift, 0.0))
+    hip_t[:, 1] += lift + extra
+    # Same joint rotations, so the stride scales with the leg length: the
+    # ground speed the clip matches at 1x is the first robot's, scaled.
+    return times, rots, hip_t, FIRST_ROBOT_SPEED[clip] * k_len
+
+
+def clip_pose_rots(g, hips, rots, hip_t, times):
+    """Global 4x4 of every joint from explicit local rotation tracks (one
+    per joint, at `times`), hips translations, rest offsets elsewhere."""
+    nodes = g["nodes"]
+    parent = {c: i for i, n in enumerate(nodes) for c in n.get("children", [])}
+    joints = g["skins"][0]["joints"]
+    out = {}
+
+    def world(j):
+        if j in out:
+            return out[j]
+        n = nodes[j]
+        M = np.tile(np.eye(4), (len(times), 1, 1))
+        M[:, :3, :3] = np.stack([quat_mat(q) for q in rots[j]]) if j in rots else quat_mat(n.get("rotation", [0, 0, 0, 1]))
+        M[:, :3, 3] = hip_t if j == hips else n.get("translation", [0, 0, 0])
+        pj = parent.get(j)
+        out[j] = M if pj not in joints else world(pj) @ M
+        return out[j]
+    for j in joints:
+        world(j)
+    return out
 
 
 # ---------------------------------------------------------------- motion file
@@ -798,9 +974,30 @@ def main():
         if len(pts):
             ground_parts[j] = pts[rng.choice(len(pts), min(len(pts), 300), replace=False)]
     ground_fix = {}
+    ground_speed = {}
+    first_g, first_B = load(FIRST_ROBOT)
+    sole_parts = {j: p for j, p in ground_parts.items()
+                  if g["nodes"][j]["name"].split(":")[-1] in ("LeftFoot", "RightFoot")}
     for an in g["animations"]:
         na = {"name": an["name"], "samplers": [], "channels": []}
         name = an["name"]
+        if name in RETARGET:
+            times, rots, hip_t, ground_speed[name] = retarget_clip(first_g, first_B, name, g, hips, sole_parts)
+            inp = W.acc(times.reshape(-1, 1), 5126, "SCALAR", minmax=True)
+            for j in skin["joints"]:
+                for path, vals in (("rotation", rots.get(j)), ("translation", hip_t if j == hips else None)):
+                    if path == "translation" and j != hips:
+                        vals = np.tile(np.array(g["nodes"][j]["translation"]), (2, 1))
+                        tin = W.acc(np.array([[0.0], [times[-1]]]), 5126, "SCALAR", minmax=True)
+                    else:
+                        tin = inp
+                    if vals is None:
+                        continue
+                    na["samplers"].append({"input": tin, "output": W.acc(vals, 5126, "VEC4" if path == "rotation" else "VEC3"),
+                                           "interpolation": "LINEAR"})
+                    na["channels"].append({"sampler": len(na["samplers"]) - 1, "target": {"node": j, "path": path}})
+            anims.append(na)
+            continue
         # The hips rotation as the clip will play it (yaw taken out of the
         # turn clips): moving the hips pivot needs it (see below).
         hips_rot = None
@@ -870,6 +1067,8 @@ def main():
 
     print("re-grounding (max hips shift per clip, m): "
           + ", ".join(f"{k} {v:.3f}" for k, v in ground_fix.items()))
+    print("ground speed of the planted feet at 1x (m/s; RobotSkirmisher run/walk_anim_speed): "
+          + ", ".join(f"{k} {v:.3f}" for k, v in ground_speed.items()))
     write_motion(motion_turns, motion_travel)
     for im in images:
         im["bufferView"] = W.blob(im.pop("data"))

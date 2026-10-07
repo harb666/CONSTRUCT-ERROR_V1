@@ -12,8 +12,16 @@ extends RobotEnemy
 ## while it moves. Incoming fire sometimes makes it sidestep, jump or dive
 ## away - after an imperfect reaction delay, with cooldowns, never spammed.
 ##
-## Clips (all the model's own): Running / Walking (movement), Run_Turn_* and
-## Idle_Turn_* / Walk_Turn_* (direction changes - the build tool moved their
+## Moving away from the target it keeps facing it and runs backwards, like
+## the first robot backs off; it picks firing positions in and out at a
+## slant rather than strafing sideways, and its body only ever moves along
+## its legs - so the chest stays on the target with the waist barely
+## twisted and the feet never slide sideways.
+##
+## Clips: Running / Walking are the first robot's, retargeted onto this
+## body by the build tool (the model's own were captured for other
+## proportions and looked broken on it); the rest are the model's own:
+## Run_Turn_* and Idle_Turn_* / Walk_Turn_* (direction changes - the build tool moved their
 ## heading change out into RobotSkirmisherMotion so the body turns in step),
 ## Jump_Run (jump; the height is added here, the clip is in place),
 ## Jumping_Punch (the dive: a leaping lunge whose travel the body follows),
@@ -42,6 +50,18 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 @export var run_turn_time := 0.42
 ## Legs turn at this constant rate (rad/s): mechanical, not eased.
 @export var leg_turn_rate := 11.0
+## How fast sideways momentum dies (1/s): the feet grip the floor.
+@export var grip := 14.0
+## Moving more than this far from straight at the target (deg), it keeps
+## facing the target and runs backwards (like the first robot backs off),
+## so the upper body never twists far round from the legs.
+@export var backpedal_deg := 95.0
+## Top speed running backwards (m/s).
+@export var backpedal_speed := 3.6
+## Firing positions are reached moving at most this far off straight
+## towards / away from the target (deg): an in-and-out zig-zag, never a
+## long sideways strafe (that needs a 90-degree twist at the waist).
+@export var approach_slant_deg := Vector2(20.0, 55.0)
 @export var acceleration := 16.0
 @export var sidestep_speed := 7.5
 @export var sidestep_time := 0.3
@@ -134,10 +154,11 @@ func _init() -> void:
 	max_health = 1.4
 	section_set = SKIRMISHER_SECTIONS
 	walk_speed = 1.4
-	# Ground speeds (m/s) the walk/run clips match at 1x (the stance foot's
-	# speed on the re-fitted rig), so the feet don't slide.
-	walk_anim_speed = 0.92
-	run_anim_speed = 3.0
+	# Ground speeds (m/s) the walk/run clips match at 1x (the first robot's
+	# clips retargeted, stride scaled to these legs - the build tool prints
+	# them), so the feet don't slide.
+	walk_anim_speed = 1.0
+	run_anim_speed = 2.835
 	combat_speed = 4.6
 	detect_range = 30.0
 	lose_range = 42.0
@@ -194,9 +215,9 @@ func _muzzle_offsets() -> Dictionary:
 
 
 func _model_offset() -> Vector3:
-	# Centre the hips (rest at x -0.009, z -0.303 on the re-fitted rig) over
+	# Centre the hips (rest at x 0.007, z -0.303 on the re-fitted rig) over
 	# the body.
-	return Vector3(0.0091, 0, 0.3031)
+	return Vector3(-0.0072, 0, 0.3031)
 
 
 ## The cut caps are only seen once a section is gone.
@@ -321,42 +342,44 @@ func _combat(delta: float) -> void:
 	want = want.normalized() if want.length_squared() > 0.01 else Vector3.UP.cross(dir_to)
 	if not _los:
 		want = (want + dir_to).normalized()
-	# Never run straight away from the fight: keep within the twist range
-	# (cannons stay on the target).
-	var limit := deg_to_rad(max_twist_deg - 10.0)
-	var rel := wrapf(atan2(want.x, want.z) - player_yaw, -PI, PI)
-	if absf(rel) > limit:
-		want = Vector3(sin(player_yaw + signf(rel) * limit), 0, cos(player_yaw + signf(rel) * limit))
 	want += _sep * 1.2
 	want = _steered(want.normalized() if want.length_squared() > 0.001 else want, delta)
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
-	# Sharp change of direction at speed: a mechanical run-turn.
-	if hv.length() > 2.6 and _turn_cd <= 0.0 and want.length_squared() > 0.01:
-		var turn := wrapf(atan2(want.x, want.z) - _yaw, -PI, PI)
-		if absf(turn) > deg_to_rad(run_turn_deg):
+	# Sharp change of direction running forwards: a mechanical run-turn.
+	if hv.length() > 2.6 and not _backing and _turn_cd <= 0.0 and want.length_squared() > 0.01:
+		var legs: Array = _legs_for(atan2(want.x, want.z), player_yaw)
+		var turn := _leg_turn(legs[0], player_yaw)
+		if not legs[1] and absf(turn) > deg_to_rad(run_turn_deg):
 			_start_turn(&"Run_Turn_Left" if turn > 0.0 else &"Run_Turn_Right", turn, run_turn_time)
 			return
 	var speed := combat_speed * (0.85 if _burst_left > 0 else 1.0)
-	_drive(want * speed, delta)
+	_drive(want * speed, delta, player_yaw)
 	_aim_at_target(player_yaw)
 	_update_fire(delta, d)
 
 
-## A firing position: on the preferred ring round the target, some way
-## round from where it is now (it circles and cuts across), on solid floor.
+## A firing position: in or out towards the preferred range, slanted off
+## the line to the target to one side or the other (it zig-zags and keeps
+## changing sides), on solid floor. Reached running forwards or backwards
+## with the chest on the target, never strafing far sideways.
 func _pick_position(dir_to: Vector3, d: float) -> void:
 	_repos_t = randf_range(reposition_time.x, reposition_time.y)
-	var tp := Vector3(target.global_position.x, 0, target.global_position.z)
-	var from_target := -dir_to
-	var r := clampf(d + randf_range(-3.0, 3.0), preferred_range.x, preferred_range.y)
+	var flat := Vector3(global_position.x, 0, global_position.z)
+	# In or out: towards the preferred band, random inside it.
+	var inward := d > preferred_range.y or (d >= preferred_range.x and randf() < 0.5)
+	var base := dir_to if inward else -dir_to
 	for attempt in 6:
-		var ang := randf_range(0.35, 1.1) * (1.0 if randf() < 0.5 else -1.0)
-		var p := tp + from_target.rotated(Vector3.UP, ang) * r
+		var ang := deg_to_rad(randf_range(approach_slant_deg.x, approach_slant_deg.y))
+		ang *= 1.0 if randf() < 0.5 else -1.0
+		var dist := randf_range(2.5, 5.0)
+		var p := flat + base.rotated(Vector3.UP, ang) * dist
 		if _floor_at(p) and _clear(global_position + Vector3.UP * 0.6, Vector3(p.x, global_position.y + 0.6, p.z)):
 			_repos = p
 			return
-	_repos = Vector3(global_position.x, 0, global_position.z) + Vector3.UP.cross(dir_to) * (3.0 if randf() < 0.5 else -3.0)
+		inward = not inward if attempt == 2 else inward
+		base = dir_to if inward else -dir_to
+	_repos = flat + Vector3.UP.cross(dir_to) * (2.5 if randf() < 0.5 else -2.5)
 
 
 ## Steer round obstacles and away from drops (probes every 0.1 s).
@@ -393,16 +416,58 @@ func _floor_at(p: Vector3) -> bool:
 	return not get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
+## [legs yaw, backwards] for moving along `move_yaw`: legs along the
+## motion, or - moving away from the target - facing back towards it,
+## running backwards (with hysteresis, so it doesn't flip-flop).
+func _legs_for(move_yaw: float, player_yaw: float) -> Array:
+	var limit := deg_to_rad(backpedal_deg + (-15.0 if _backing else 15.0))
+	if absf(wrapf(move_yaw - player_yaw, -PI, PI)) > limit:
+		return [move_yaw + PI, true]
+	return [move_yaw, false]
+
+
+## Leg turn from the current heading to `legs_yaw`, taken the way round
+## that keeps facing the target side (never swinging through its back,
+## which would whip the upper-body twist round).
+func _leg_turn(legs_yaw: float, player_yaw: float) -> float:
+	var turn := wrapf(legs_yaw - _yaw, -PI, PI)
+	if absf(wrapf(_yaw - player_yaw, -PI, PI) + turn) > PI:
+		turn -= signf(turn) * TAU
+	return turn
+
+
 ## Legs head for `want_v` (turning at a constant mechanical rate; it slows
-## while they swing round), body velocity follows quickly.
-func _drive(want_v: Vector3, delta: float) -> void:
+## while they swing round), body velocity follows quickly. With the target
+## known (`player_yaw`), moving away from it runs backwards facing it.
+func _drive(want_v: Vector3, delta: float, player_yaw := NAN) -> void:
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
+	var backwards := false
 	if want_v.length_squared() > 0.04:
-		var legs := atan2(want_v.x, want_v.z)
+		var move_yaw := atan2(want_v.x, want_v.z)
+		var legs := move_yaw
 		var err := wrapf(legs - _yaw, -PI, PI)
-		_yaw += clampf(err, -leg_turn_rate * delta, leg_turn_rate * delta)
-		want_v *= clampf(1.0 - (absf(err) - 0.45) / 0.9, 0.25, 1.0)
+		if not is_nan(player_yaw):
+			var lb: Array = _legs_for(move_yaw, player_yaw)
+			legs = lb[0]
+			backwards = lb[1]
+			err = _leg_turn(legs, player_yaw)
+			if backwards:
+				want_v = want_v.limit_length(backpedal_speed)
+		# Legs turn fast from a standstill, slower at speed (it curves round
+		# like a runner rather than pivoting on the spot at full tilt).
+		var rate := leg_turn_rate / (1.0 + 0.5 * hv.length())
+		_yaw += clampf(err, -rate * delta, rate * delta)
+		# The body only ever moves along the legs (forwards, or backwards
+		# when backing off): while they swing round it curves with them
+		# and slows, and the feet grip - sideways momentum dies at once, so
+		# it never crabs sideways with the feet sliding.
+		var axis := Vector3(sin(_yaw), 0, cos(_yaw)) * (-1.0 if backwards else 1.0)
+		want_v = axis * maxf(want_v.dot(axis), 0.0)
+		hv = hv.lerp(axis * maxf(hv.dot(axis), 0.0), clampf(grip * delta, 0.0, 1.0))
+	elif not is_nan(player_yaw):
+		backwards = _backing and hv.length() > 0.5
+	_backing = backwards
 	if (hv - want_v).length() < 9.0:
 		var before := hv
 		hv += (want_v - hv).limit_length(acceleration * delta)
@@ -412,7 +477,23 @@ func _drive(want_v: Vector3, delta: float) -> void:
 		var fwd := Vector3(sin(_yaw), 0, cos(_yaw))
 		var right := Vector3(-fwd.z, 0, fwd.x)
 		_lean = _lean.lerp(Vector2(clampf(acc.dot(fwd) * 0.012, -0.12, 0.12), clampf(-acc.dot(right) * 0.012, -0.14, 0.14)), clampf(10.0 * delta, 0.0, 1.0))
-	_set_move_anim(hv.length())
+	# The clip runs at the speed the legs actually carry the body (along
+	# them), so the feet don't slide.
+	var along := absf(hv.dot(Vector3(sin(_yaw), 0, cos(_yaw))))
+	_set_move_anim(along, backwards)
+
+
+## Runs backwards too (the first robot only walks backwards).
+func _set_move_anim(speed: float, backwards := false) -> void:
+	# Runs from 1.4 m/s (the walk clip can't keep up beyond ~1.6), with a
+	# little hysteresis so it doesn't flicker between the two.
+	var run := speed > (1.2 if _move_anim == &"Running" else 1.4)
+	var a := &"Running" if run else &"Walking"
+	if a != _move_anim or backwards != _anim_backwards:
+		_move_anim = a
+		_anim_backwards = backwards
+		_anim.play(a, 0.15, -1.0 if backwards else 1.0)
+	_anim.speed_scale = clampf(speed / (run_anim_speed if run else walk_anim_speed), 0.4, 1.75)
 
 
 func _aim_at_target(player_yaw: float) -> void:
@@ -454,12 +535,20 @@ func _evade(from_dir: Vector3, unprompted := false) -> void:
 		if _side_free(ddir, 3.4):
 			_start_dive(ddir)
 			return
-	if _jump_cd <= 0.0 and r < (0.5 if not unprompted else 0.75):
-		_start_jump(dir)
+	# Jumps and sidesteps go off at a slant (forwards or back), so the legs
+	# never point far from where the chest faces: the jump clip only goes
+	# forwards, a sidestep away from the target runs backwards.
+	var slant := deg_to_rad(randf_range(30.0, 45.0))
+	var fwd_dir := (dir * cos(slant) + dir_to * sin(slant)).normalized()
+	var back_dir := (dir * cos(slant) - dir_to * sin(slant)).normalized()
+	if _jump_cd <= 0.0 and r < (0.5 if not unprompted else 0.75) and _side_free(fwd_dir, 2.4):
+		_start_jump(fwd_dir)
 		return
 	if unprompted and randf() < 0.5:
 		return  # sometimes just keep running
-	_start_sidestep(dir)
+	var d2 := to.length()
+	var step := back_dir if d2 < preferred_range.x or (d2 <= preferred_range.y and randf() < 0.5) else fwd_dir
+	_start_sidestep(step if _side_free(step, 2.4) else dir)
 
 
 func _side_free(dir: Vector3, dist: float) -> bool:
@@ -481,15 +570,23 @@ func _start_sidestep(dir: Vector3) -> void:
 	sidesteps += 1
 	evades += 1
 	_evade_cd = randf_range(evade_cooldown.x, evade_cooldown.y)
-	# Robotic: legs snap to the new direction, a burst of speed.
-	_yaw = atan2(dir.x, dir.z)
-	_anim.play(&"Running", 0.08, 2.4)
+	# Robotic: legs snap to the new direction (facing back towards the
+	# target if it's stepping away - it runs backwards), a burst of speed.
+	var player_yaw := _yaw
+	if target:
+		var to := target.global_position - global_position
+		player_yaw = atan2(to.x, to.z)
+	var legs: Array = _legs_for(atan2(dir.x, dir.z), player_yaw)
+	_yaw = _yaw + _leg_turn(legs[0], player_yaw)
+	_backing = legs[1]
+	_anim.play(&"Running", 0.08, -2.4 if _backing else 2.4)
 	var v := linear_velocity
 	linear_velocity = Vector3(dir.x * sidestep_speed, v.y, dir.z * sidestep_speed)
 	_lean = Vector2(0.1, 0.0)
 
 
 func _start_jump(dir: Vector3) -> void:
+	_backing = false
 	_begin(Act.JUMP, 0.85 / jump_anim_speed)
 	_act_dir = dir
 	_act_clip = &"Jump_Run"

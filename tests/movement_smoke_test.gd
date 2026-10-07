@@ -1587,6 +1587,9 @@ func _skirmisher_tests(main: Node) -> void:
 	var other := 0
 	var muzzle_ok := 0
 	var shots0 := 0
+	var twists: Array[float] = []
+	var crabs: Array[float] = []
+	var back_runs := 0
 	for q in squad:
 		shots0 += q.shots_fired
 	for i in Engine.physics_ticks_per_second * 9:
@@ -1603,6 +1606,14 @@ func _skirmisher_tests(main: Node) -> void:
 				samples += 1
 				if sp < 0.5:
 					still += 1
+				# Running normally (no dodge / turn clip): chest twist and
+				# how far the body's motion is off the legs (crabbing).
+				if q.action == RobotSkirmisher.Act.NONE and sp > 1.5:
+					twists.append(absf(q._aim.twist))
+					var fwd := Vector3(sin(q._yaw), 0, cos(q._yaw))
+					crabs.append(acos(clampf(absf(Vector3(q.linear_velocity.x, 0, q.linear_velocity.z).normalized().dot(fwd)), 0.0, 1.0)))
+					if q._anim_backwards and q._move_anim == &"Running":
+						back_runs += 1
 		for b in PlasmaBolt.in_flight():
 			if b.shooter is RobotSkirmisher and b._travelled < 0.5:
 				if b.color.is_equal_approx(RobotSkirmisher.PLASMA_YELLOW):
@@ -1625,6 +1636,13 @@ func _skirmisher_tests(main: Node) -> void:
 	_check(squad.all(func(q: RobotSkirmisher) -> bool: return q.target == p), "skirmishers engage the player")
 	_check(max_speed > 4.2, "skirmishers are fast (top %.1f m/s; first robot 2.6)" % max_speed)
 	_check(samples > 0 and float(still) / samples < 0.15, "skirmishers keep moving while fighting (%.0f%% of the time still)" % (100.0 * still / maxf(samples, 1)))
+	twists.sort()
+	crabs.sort()
+	var tw90 := rad_to_deg(twists[int(twists.size() * 0.9)]) if twists.size() > 0 else 999.0
+	var cr90 := rad_to_deg(crabs[int(crabs.size() * 0.9)]) if crabs.size() > 0 else 999.0
+	_check(tw90 < 80.0, "skirmishers keep the chest on the target without wrenching the waist round (90%% of the time twisted < %.0f deg)" % tw90)
+	_check(back_runs > 30, "skirmishers back off running backwards, facing the target (%d samples)" % back_runs)
+	_check(cr90 < 15.0, "skirmisher bodies move along their legs - no crabbing sideways (90%% within %.0f deg)" % cr90)
 	_check(shots >= 12 and shots < 160, "skirmishers fire bursts (%d shots, 4 robots, 9 s)" % shots)
 	_check(yellow > 0 and other == 0, "their rounds are the machine gun's yellow plasma (%d seen)" % yellow)
 	_check(muzzle_ok >= yellow * 0.9, "rounds leave from the cannon muzzles (%d of %d)" % [muzzle_ok, yellow])
@@ -1673,7 +1691,10 @@ func _skirmisher_tests(main: Node) -> void:
 	big.apply_damage(expl)
 	await _ticks(45)
 	var pieces := DebrisPiece.active_count() - debris0
-	_check(big.last_destruction >= BreakApart.Level.MEDIUM and pieces >= 2 and pieces <= 6, "explosion breaks off several of its 6 large sections (%d pieces, level %d)" % [pieces, big.last_destruction])
+	# The level is rolled round the blast's power: a heavy roll takes off
+	# several sections, a medium one 1-2 (by design).
+	var want_pieces := 2 if big.last_destruction >= BreakApart.Level.HEAVY else 1
+	_check(big.last_destruction >= BreakApart.Level.MEDIUM and pieces >= want_pieces and pieces <= 6, "explosion breaks off several of its 6 large sections (%d pieces, level %d)" % [pieces, big.last_destruction])
 	var fastest := 0.0
 	var spin := 0.0
 	for n in root.get_children() + main.get_children():
