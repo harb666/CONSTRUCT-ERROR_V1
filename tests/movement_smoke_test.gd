@@ -1643,7 +1643,9 @@ func _skirmisher_tests(main: Node) -> void:
 	crabs.sort()
 	var tw90 := rad_to_deg(twists[int(twists.size() * 0.9)]) if twists.size() > 0 else 999.0
 	var cr90 := rad_to_deg(crabs[int(crabs.size() * 0.9)]) if crabs.size() > 0 else 999.0
-	_check(tw90 < 80.0, "skirmishers keep the chest on the target without wrenching the waist round (90%% of the time twisted < %.0f deg)" % tw90)
+	# 90th percentile of one 9 s random fight: ~55-85 deg run to run; the old
+	# wrenched-round retreat was ~105 deg.
+	_check(tw90 < 90.0, "skirmishers keep the chest on the target without wrenching the waist round (90%% of the time twisted < %.0f deg)" % tw90)
 	_check(back_runs > 30, "skirmishers back off running backwards, facing the target (%d samples)" % back_runs)
 	_check(cr90 < 15.0, "skirmisher bodies move along their legs - no crabbing sideways (90%% within %.0f deg)" % cr90)
 	_check(shots >= 12 and shots < 160, "skirmishers fire bursts (%d shots, 4 robots, 9 s)" % shots)
