@@ -39,9 +39,14 @@ func _draw() -> void:
 		return
 	_bar(0.0, player.health / maxf(player.max_health, 1.0), HEALTH, _flash[0], "%d" % ceili(player.health))
 	_bar(14.0, player.armour / maxf(player.max_armour, 1.0), ARMOUR, _flash[1], "%d" % ceili(player.armour))
+	var tag_x := 0.0
+	var pd := player.get_node_or_null("PerfectDodge") as PerfectDodge
+	if pd and pd.counter_active():
+		draw_string(_font, Vector2(0, 42), "COUNTER", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.95, 1.0))
+		tag_x = 74.0
 	var drops := get_tree().get_first_node_in_group(RecoveryDrops.GROUP) as RecoveryDrops
 	if drops and drops.bonus_active():
-		draw_string(_font, Vector2(0, 42), "RECOVERY +%d%%" % roundi(drops.streak_bonus * 100.0),
+		draw_string(_font, Vector2(tag_x, 42), "RECOVERY +%d%%" % roundi(drops.streak_bonus * 100.0),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.85, 0.3))
 
 

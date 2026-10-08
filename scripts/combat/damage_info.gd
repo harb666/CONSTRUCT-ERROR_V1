@@ -22,6 +22,12 @@ var source: Node
 ## Which player weapon made the hit (&"plasma", &"machine_gun", &"shotgun",
 ## &"black_hole"; empty = unknown). Only changes how targets react.
 var weapon := &""
+## Which arm of the shooting player fired it (&"Right" / &"Left"; empty =
+## not a player's arm weapon). Concentrated / split fire use it.
+var arm := &""
+## The projectile's launch serial (PlasmaBolt.serial; 0 = not a bolt), so a
+## target can tell exactly which shot hit it (perfect-dodge checks).
+var projectile_serial := 0
 ## Scales how hard broken-off parts are thrown (e.g. < 1 when a black hole
 ## tears an enemy apart and should keep the pieces).
 var launch_scale := 1.0

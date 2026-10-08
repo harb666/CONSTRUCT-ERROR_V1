@@ -213,7 +213,7 @@ func _fire_stream(space: PhysicsDirectSpaceState3D, exclude: Array[RID], shooter
 	# unequipped meanwhile) is applied when the stream arrives.
 	ShotgunStream.fire(get_tree(), from, to, leave_dir, stream_speed, stream_color, stream_hot_color, {
 		"collider": col, "at": to, "normal": normal, "dir": dir, "damage": dmg, "force": force,
-		"shooter": shooter, "color": stream_color, "hot": stream_hot_color})
+		"shooter": shooter, "color": stream_color, "hot": stream_hot_color, "arm": arm_side})
 
 
 ## Apply one stream's hit (called by ShotgunStream when it arrives).
@@ -229,6 +229,7 @@ static func land_stream(tree: SceneTree, hit: Dictionary) -> void:
 		var shooter: Node = hit.shooter if is_instance_valid(hit.get("shooter")) else null
 		var info := DamageInfo.make(hit.damage, DamageInfo.Type.ENERGY, at, dir, force, 0.0, shooter)
 		info.weapon = &"shotgun"
+		info.arm = hit.get("arm", &"")
 		col.apply_damage(info)
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(dir * force * 0.6, at - (col as RigidBody3D).global_position)

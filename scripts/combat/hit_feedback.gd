@@ -70,6 +70,8 @@ var flashes := 0
 var sparks := 0
 var staggers := 0
 var last_tier := Tier.LIGHT
+var concentrated_hits := 0
+var _arm_hits := {}
 
 var _clock := 0.0
 var _flash_left := 0.0
@@ -131,6 +133,20 @@ func on_hit(info: DamageInfo, max_health: float) -> void:
 	if w == &"shotgun" and info.impact_force >= 6.0:
 		tier = Tier.HEAVY
 	last_tier = tier
+	# Concentrated fire (the same player's other arm hit it just now):
+	# stronger instability sparks.
+	var concentrated := false
+	if info.source and info.arm != &"":
+		var key := info.source.get_instance_id()
+		var other := &"Left" if info.arm == &"Right" else &"Right"
+		var arms: Dictionary = _arm_hits.get(key, {})
+		concentrated = arms.has(other) and _clock - float(arms[other]) <= 0.4
+		arms[info.arm] = _clock
+		_arm_hits[key] = arms
+		if _arm_hits.size() > 6:
+			_arm_hits.clear()
+	if concentrated:
+		concentrated_hits += 1
 	# Upper-body jolt (springs back; stacking capped in BossHitReact).
 	react.kick(tier_kick[tier] * prof[0], info.impact_direction)
 	# Brief tint in the weapon's colour (machine gun: only now and then).
@@ -146,7 +162,7 @@ func on_hit(info: DamageInfo, max_health: float) -> void:
 	if _clock - _last_spark >= prof[2]:
 		_last_spark = _clock
 		sparks += 1
-		JointSparks.play_on_bone(skeleton, _nearest_bone(info.impact_position), tier_sparks[tier] * prof[1])
+		JointSparks.play_on_bone(skeleton, _nearest_bone(info.impact_position), tier_sparks[tier] * prof[1] * (1.6 if concentrated else 1.0))
 		# Medium+: a second joint malfunctions a moment later.
 		if tier >= Tier.MEDIUM and randf() < 0.5:
 			var b := _random_joint()

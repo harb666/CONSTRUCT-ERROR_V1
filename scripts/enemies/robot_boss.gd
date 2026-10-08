@@ -74,6 +74,15 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 @export var max_health := 60.0
 ## Damage scale for hits anywhere but the exposed core (armour).
 @export var armour_damage_scale := 0.1
+@export_group("Stagger")
+## Concentrated fire / heavy hits fill a stagger meter (StaggerMeter); when
+## full the boss malfunctions for `stagger_duration` s: chaingun and missile
+## interrupted, it stops walking, and its armour takes
+## `stagger_armour_scale` x more damage. 0 threshold = off.
+@export var stagger_threshold := 9.0
+@export var stagger_duration := 1.25
+@export var stagger_armour_scale := 3.0
+@export_group("")
 ## Damage scale for hits on the exposed core.
 @export var core_damage_scale := 1.0
 ## A shot hits the core if its line passes this close to it (m).
@@ -223,6 +232,7 @@ var _last_barrel := -1
 var _speed := 0.0
 var _turning := false
 var _missile_t := 0.0
+var stagger: StaggerMeter
 var _windup_t := 0.0
 var _chest_open_t := -1.0
 var _exposed_t := 0.0
@@ -264,6 +274,11 @@ func _ready() -> void:
 	if _collision:
 		_collision_rest = _collision.transform
 	_spawn_xf = global_transform
+	if stagger_threshold > 0.0:
+		stagger = StaggerMeter.new()
+		stagger.threshold = stagger_threshold
+		stagger.duration = stagger_duration
+		stagger.staggered.connect(_on_staggered)
 	# Never lifted onto obstacles by its collider: height follows the ground
 	# under its footprint (_update_ground).
 	axis_lock_linear_y = true
@@ -501,6 +516,11 @@ func _physics_process(delta: float) -> void:
 	if not alive:
 		_update_death(delta)
 		return
+	if stagger:
+		stagger.update(delta)
+		if stagger.is_staggered():
+			_update_stagger(delta)
+			return
 	_update_reload(delta)
 	_update_ground(delta)
 	core_fx.instability = clampf(1.0 - health / max_health, 0.0, 1.0)
@@ -568,6 +588,49 @@ func _combat(delta: float) -> void:
 	if away.length() > home_radius * 0.8 and signf(want) * fwd.dot(away) > 0.0:
 		want = 0.0
 	_move(want, delta)
+
+
+## Staggered: stands malfunctioning, guns quiet, then picks up again.
+func _update_stagger(delta: float) -> void:
+	_update_reload(delta)
+	_update_ground(delta)
+	_update_chest(delta)
+	_move(0.0, delta)
+	set_spin(move_toward(_spin, 0.0, delta / maxf(chaingun_spin_down, 0.01)))
+	_gun_phase = 0
+	_gun_t = maxf(_gun_t, 0.4)
+	_update_twist()
+	_update_targetable()
+	# Shudders and crackles while it lasts.
+	if randf() < delta * 10.0:
+		hit_react.kick(0.25, Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+		core_fx.core_pos = core.global_position
+		core_fx.hit(0.3, Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+
+
+func _on_staggered(_d: float) -> void:
+	# Interrupt: a missile being wound up is cancelled (and comes later).
+	if state == State.WINDUP:
+		state = State.COMBAT
+		_missile_t = maxf(_missile_t, 2.0)
+	hit_react.kick(1.4, -global_basis.z)
+	core_fx.core_pos = core.global_position
+	core_fx.hit(1.0, -global_basis.z)
+	if _skeleton_node():
+		var sk := _skeleton_node()
+		for b in ["mixamorig_Spine2", "mixamorig_LeftArm", "mixamorig_RightArm", "mixamorig_Neck"]:
+			var i := sk.find_bone(b)
+			if i >= 0:
+				JointSparks.play_on_bone(sk, i, 1.0)
+
+
+func _skeleton_node() -> Skeleton3D:
+	var found := find_children("*", "Skeleton3D", true, false)
+	return found[0] if not found.is_empty() else null
+
+
+func is_staggered() -> bool:
+	return stagger != null and stagger.is_staggered()
 
 
 func _start_windup() -> void:
@@ -984,7 +1047,10 @@ func apply_damage(info: DamageInfo) -> void:
 	if not alive:
 		return
 	var on_core := exposed and hits_core(info)
-	var amount := info.damage_amount * (core_damage_scale if on_core else armour_damage_scale)
+	var armour := armour_damage_scale * (stagger_armour_scale if is_staggered() else 1.0)
+	var amount := info.damage_amount * (core_damage_scale if on_core else armour)
+	if stagger:
+		stagger.add(info)
 	health -= amount
 	if on_core:
 		core_hits += 1

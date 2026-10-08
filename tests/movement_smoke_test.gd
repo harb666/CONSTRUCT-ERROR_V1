@@ -410,12 +410,17 @@ func _run() -> void:
 	_check(lock_l.current == d1.get_node("Targetable") and lock.current == d2.get_node("Targetable"), "second enemy goes to the LEFT slot, RIGHT keeps the first")
 
 	# Left slot's enemy dies: only that slot clears; its firing stops.
+	# (The right one's robot patrols past a pillar during this long wait;
+	# hold its lock through cover here - cover rules are tested in
+	# _combat3_tests.)
+	lock.cover_memory = 999.0
 	for i in 900:
 		await _ticks(1)
 		if not lock_l.has_target():
 			break
 	_check(d1.health <= 0 and not lock_l.has_target(), "left lock clears when its enemy dies")
 	_check(selector.selected_left == null and selector.selected == d2.get_node("Targetable") and lock.has_target(), "only the left selection clears; right stays locked")
+	lock.cover_memory = 1.25
 	var shots_dead := left_shots.size()
 	await _ticks(60)
 	_check(left_shots.size() == shots_dead, "left cannon stops firing after the kill")
@@ -451,6 +456,7 @@ func _run() -> void:
 	await _recovery_tests(main)
 	await _hit_feedback_tests(main)
 	await _weapon_audio_tests(main)
+	await _combat3_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -3481,3 +3487,302 @@ func _weapon_audio_tests(main: Node) -> void:
 	await _ticks(90)
 	_check(not core.visible, "skirmisher: barrel glow dies with it")
 	r.queue_free()
+
+
+## Hybrid lock-on combat 3.0: firing solution / cover memory, perfect dodge,
+## concentrated-fire stagger, split-fire suppression.
+func _combat3_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var p: PlayerController = main.players[1]
+	p.can_die = false
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var lock: TargetLock = p.get_node("TargetLock")
+	var lock_l: TargetLock = p.get_node("TargetLockLeft")
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	sel.clear()
+	sel.forget_last_tap()
+	await _ticks(30)
+	# Phase A: cover. The head-high wall at x = 8 (z 11..17) between player and robot.
+	var r := _spawn_robot(main, Vector3(11, 0, 14))
+	await _ticks(10)
+	r.max_health = 999.0
+	r.health = 999.0
+	p.global_position = Vector3(11, 0.05, 6)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	sel.tap_target(r.get_node("Targetable"))
+	await _ticks(40)
+	var shots0: int = h.weapon("Right").shots_fired
+	await _ticks(30)
+	_check(lock.has_clear_shot() and h.weapon("Right").shots_fired > shots0, "lock: clear line - fires as before")
+	# Step behind the wall.
+	p.global_position = Vector3(4, 0.05, 14)
+	p.reset_physics_interpolation()
+	await _ticks(12)
+	shots0 = h.weapon("Right").shots_fired
+	await _ticks(30)
+	_check(lock.has_target() and not lock.clear and h.weapon("Right").shots_fired == shots0, "lock: target behind cover - lock held, firing suspended")
+	# Back into view inside the memory window: fires again.
+	p.global_position = Vector3(11, 0.05, 6)
+	p.reset_physics_interpolation()
+	await _ticks(40)
+	_check(lock.has_target() and lock.clear and h.weapon("Right").shots_fired > shots0, "lock: visible again within 1.25 s - firing resumes")
+	# Hidden too long: dropped, and not re-locked by itself.
+	p.global_position = Vector3(4, 0.05, 14)
+	p.reset_physics_interpolation()
+	var lost := [""]
+	lock.target_lost.connect(func(reason: String) -> void: lost[0] = reason, CONNECT_ONE_SHOT)
+	await _ticks(int(60 * 1.6))
+	_check(not lock.has_target() and lost[0] == "obstructed" and sel.get_selected("Right") == null, "lock: hidden longer than 1.25 s - lock dropped")
+	p.global_position = Vector3(11, 0.05, 6)
+	p.reset_physics_interpolation()
+	await _ticks(20)
+	_check(not lock.has_target(), "lock: a dropped target isn't re-locked without a new tap")
+	sel.tap_target(r.get_node("Targetable"))
+	await _ticks(5)
+	_check(lock.has_target() and lock.clear, "lock: tapping it again re-locks")
+	sel.clear()
+	await _ticks(3)
+
+	# Phase B: perfect dodge (only genuine near misses).
+	var pd: PerfectDodge = p.get_node("PerfectDodge")
+	_check(pd != null and pd.player == p, "dodge: every player has its own perfect-dodge tracker")
+	var open := Vector3(-20, 0.05, 30)
+	p.global_position = open
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(40)
+	var chest := p.global_position + Vector3.UP * 0.9
+	# 1) A bolt that would hit in ~0.12 s; dodge sideways -> it misses -> reward.
+	var b := PlasmaBolt.fire(self, chest + Vector3(0, 0, -3.6), Vector3(0, 0, 1), r, 30.0, 0.4)
+	Input.action_press("move_right")
+	Input.action_press("dodge")
+	await _ticks(2)
+	Input.action_release("dodge")
+	Input.action_release("move_right")
+	await _ticks(40)
+	_check(pd.count == 1 and pd.counter_active(), "dodge: dodging a shot about to hit -> perfect dodge, counter window")
+	_check(is_equal_approx(PerfectDodge.stagger_scale_for(p), 1.35), "dodge: counter gives +35%% stagger (%.2f)" % PerfectDodge.stagger_scale_for(p))
+	var n := pd.count
+	pd._on_dodged(Vector3.RIGHT)
+	await _ticks(40)
+	_check(pd.count == n, "dodge: the same shot never rewards twice")
+	await _ticks(int(60 * 2.2))
+	_check(not pd.counter_active() and is_equal_approx(PerfectDodge.stagger_scale_for(p), 1.0), "dodge: counter window ends after 2 s")
+	# 2) A shot that was going to miss anyway: no reward.
+	chest = p.global_position + Vector3.UP * 0.9
+	n = pd.count
+	PlasmaBolt.fire(self, chest + Vector3(2.0, 0, -3.6), Vector3(0, 0, 1), r, 30.0, 0.4)
+	Input.action_press("move_left")
+	Input.action_press("dodge")
+	await _ticks(2)
+	Input.action_release("dodge")
+	Input.action_release("move_left")
+	await _ticks(50)
+	_check(pd.count == n, "dodge: a shot that would have missed anyway gives nothing")
+	# 3) Dodging too early (impact 0.5 s away): nothing.
+	await _ticks(40)
+	chest = p.global_position + Vector3.UP * 0.9
+	PlasmaBolt.fire(self, chest + Vector3(0, 0, -15.0), Vector3(0, 0, 1), r, 30.0, 0.4)
+	Input.action_press("move_right")
+	Input.action_press("dodge")
+	await _ticks(2)
+	Input.action_release("dodge")
+	Input.action_release("move_right")
+	await _ticks(60)
+	_check(pd.count == n, "dodge: dodging long before the impact gives nothing")
+	# 4) Dodge pressed but the shot still lands: nothing.
+	await _ticks(40)
+	chest = p.global_position + Vector3.UP * 0.9
+	var taken := p.damage_taken
+	PlasmaBolt.fire(self, chest + Vector3(0, 0, -2.5), Vector3(0, 0, 1), r, 30.0, 0.4)
+	pd._on_dodged(Vector3.ZERO)  # the press, without getting out of the way
+	await _ticks(40)
+	_check(p.damage_taken > taken and pd.count == n, "dodge: a dodge that still gets hit gives nothing")
+	# 5) Nearby enemy but no shot: nothing.
+	Input.action_press("dodge")
+	await _ticks(2)
+	Input.action_release("dodge")
+	await _ticks(40)
+	_check(pd.count == n, "dodge: just dodging near enemies gives nothing")
+	r.queue_free()
+
+	# Phase C: concentrated fire -> stagger (tougher enemies only).
+	var boss: RobotBoss = load("res://scenes/enemies/robot_boss.tscn").instantiate()
+	main.add_child(boss)
+	boss.global_position = Vector3(25, 0, -25)
+	await _ticks(20)
+	var light := _spawn_robot(main, Vector3(-25, 0, -25))
+	var sk2 := _spawn_skirmisher(main, Vector3(-20, 0, -25))
+	await _ticks(5)
+	_check(boss.stagger != null and light.get("stagger") == null and sk2.get("stagger") == null, "stagger: the boss has a stagger meter; light troops don't (quick kills instead)")
+	light.queue_free()
+	sk2.queue_free()
+	var shot := func(arm: StringName, w := &"plasma", dmg := 0.45, force := 2.0) -> DamageInfo:
+		var i := DamageInfo.make(dmg, DamageInfo.Type.ENERGY, boss.global_position + Vector3.UP * 4.0, Vector3.FORWARD, force, 0.0, p)
+		i.weapon = w
+		i.arm = arm
+		return i
+	# One arm, 8 bolts/s: hits needed.
+	var m := boss.stagger
+	var single := 0
+	while m.staggers == 0 and single < 400:
+		boss.apply_damage(shot.call(&"Right"))
+		single += 1
+		await _ticks(7)
+	await _ticks(int(60 * 5))
+	boss.health = boss.max_health
+	var s0 := m.staggers
+	var dual := 0
+	while m.staggers == s0 and dual < 400:
+		boss.apply_damage(shot.call(&"Right" if dual % 2 == 0 else &"Left"))
+		dual += 1
+		await _ticks(4)
+	_check(m.dual_hits > 0 and dual < single, "stagger: both arms on one target build it faster (%d hits vs %d one-armed)" % [dual, single])
+	_check(boss.is_staggered() and boss._gun_phase == 0, "stagger: staggered boss stops its chaingun")
+	var hp := boss.health
+	boss.apply_damage(shot.call(&"Right", &"plasma", 1.0))
+	var stag_dmg := hp - boss.health
+	await _ticks(int(60 * 1.4))
+	_check(not boss.is_staggered(), "stagger: lasts about 1.25 s")
+	hp = boss.health
+	boss.apply_damage(shot.call(&"Right", &"plasma", 1.0))
+	_check(stag_dmg > (hp - boss.health) * 2.5, "stagger: armour takes 3x damage while staggered (%.2f vs %.2f)" % [stag_dmg, hp - boss.health])
+	var s1 := m.staggers
+	for i in 60:
+		boss.apply_damage(shot.call(&"Right" if i % 2 == 0 else &"Left"))
+		await _ticks(1)
+	_check(m.staggers == s1, "stagger: can't be re-staggered straight away (no stun-lock)")
+	# Missile wind-up is interrupted by a stagger.
+	await _ticks(int(60 * 3.5))
+	boss.state = RobotBoss.State.WINDUP
+	boss._windup_t = 0.7
+	m.value = m.threshold - 0.01
+	boss.apply_damage(shot.call(&"Right"))
+	_check(boss.state == RobotBoss.State.COMBAT and boss.is_staggered(), "stagger: interrupts a missile wind-up")
+	# Counter window (perfect dodge) adds 35 %.
+	var base_amt := StaggerMeter.new().amount_for(shot.call(&"Right"))
+	pd.counter_left = 1.0
+	var boosted := StaggerMeter.new().amount_for(shot.call(&"Right"))
+	pd.counter_left = 0.0
+	_check(is_equal_approx(boosted, base_amt * 1.35), "stagger: perfect-dodge counter adds 35% stagger")
+	var close := StaggerMeter.new().amount_for(shot.call(&"Right", &"shotgun", 0.6, 9.0))
+	var far := StaggerMeter.new().amount_for(shot.call(&"Right", &"shotgun", 0.25, 2.0))
+	var mg := StaggerMeter.new().amount_for(shot.call(&"Right", &"machine_gun", 0.22, 2.0))
+	_check(close > far * 3.0 and mg < base_amt, "stagger: shotgun strongest up close, machine gun modest per hit")
+	# Decays when left alone (after the post-stagger immunity).
+	await _ticks(int(60 * 5))
+	boss.apply_damage(shot.call(&"Right"))
+	var v0 := m.value
+	await _ticks(int(60 * 2.5))
+	_check(m.value < v0, "stagger: drains when the boss isn't being hit")
+	boss.queue_free()
+
+	# Phase D: split fire -> suppression (light troops; never a stun).
+	var e1 := _spawn_robot(main, Vector3(-25, 0, -20))
+	var e2 := _spawn_skirmisher(main, Vector3(-18, 0, -20))
+	await _ticks(10)
+	for e in [e1, e2]:
+		e.max_health = 999.0
+		e.health = 999.0
+	p.global_position = Vector3(-21, 0.05, -10)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	var hit := func(e: RobotEnemy, arm: StringName) -> void:
+		var i := DamageInfo.make(0.45, DamageInfo.Type.ENERGY, e.global_position + Vector3.UP, Vector3.FORWARD, 2.0, 0.0, p)
+		i.weapon = &"plasma"
+		i.arm = arm
+		e.apply_damage(i)
+	# Both arms on ONE target: no suppression.
+	sel.clear()
+	sel.forget_last_tap()
+	sel.tap_target(e1.get_node("Targetable"))
+	await _ticks(2)
+	sel.tap_target(e1.get_node("Targetable"))
+	await _ticks(3)
+	_check(lock.current == lock_l.current and lock.current != null and not Suppression.split_fire(p), "split: double tap still puts both arms on one target")
+	for i in 6:
+		hit.call(e1, &"Right")
+	_check(e1.suppression == null or e1.suppression.level == 0.0, "split: concentrated fire doesn't suppress")
+	# One arm on each: suppression builds on both.
+	sel.clear()
+	sel.forget_last_tap()
+	await _ticks(2)
+	sel.tap_target(e1.get_node("Targetable"))
+	sel.forget_last_tap()
+	await _ticks(2)
+	sel.tap_target(e2.get_node("Targetable"))
+	await _ticks(3)
+	_check(Suppression.split_fire(p) and lock.current != lock_l.current, "split: one arm on each enemy (independent targets as before)")
+	e1._burst_left = 3
+	var cool0: float = e1._cool_t
+	for i in 4:
+		hit.call(e1, &"Right")
+		hit.call(e2, &"Left")
+	_check(e1.suppression.level > 0.4 and e2.suppression.level > 0.4, "split: sustained hits suppress both targets (%.2f, %.2f)" % [e1.suppression.level, e2.suppression.level])
+	_check(e1.aim_spread_scale() > 1.8, "split: suppressed enemies aim worse (spread x%.1f)" % e1.aim_spread_scale())
+	_check(e1.suppression.delays == 1 and e1._burst_left == 0 and e1._cool_t >= cool0 + 0.6, "split: its burst is cut short and the next delayed")
+	for i in 10:
+		hit.call(e1, &"Right")
+	_check(e1.suppression.delays == 1, "split: delays have a per-enemy cooldown (no lock-down)")
+	sel.clear()
+	await _ticks(int(60 * 3))
+	_check(e1.suppression.level == 0.0 and e1.aim_spread_scale() == 1.0, "split: suppression wears off within a few seconds")
+	# Suppressed skirmishers still move.
+	RobotEnemy.ai_enabled = true
+	p.global_position = e2.global_position + Vector3(0, 0.05, 10)
+	p.reset_physics_interpolation()
+	await _ticks(30)
+	var start2 := e2.global_position
+	for i in 60:
+		if i % 6 == 0:
+			e2.suppression.level = 1.0
+		await _ticks(1)
+	_check(e2.global_position.distance_to(start2) > 1.0, "split: a suppressed skirmisher keeps moving (%.1f m in 1 s)" % e2.global_position.distance_to(start2))
+	RobotEnemy.ai_enabled = false
+	# Phase E feedback: concentrated hits spark harder; skirmisher wind-up tell.
+	var c0: int = e1.hit_fx.concentrated_hits
+	hit.call(e1, &"Right")
+	hit.call(e1, &"Left")
+	_check(e1.hit_fx.concentrated_hits == c0 + 1, "feedback: both arms hitting one robot gives stronger instability sparks")
+	e2.target = p
+	e2._burst_left = 0
+	e2._cool_t = 0.05
+	e2._aim.weight = 1.0
+	e2._glow_pulse = [0.0, 0.0]
+	e2._update_barrel_glows(0.016)
+	_check(e2._glow_pulse[0] > 0.3, "feedback: skirmisher cannons swell just before a burst (readable wind-up)")
+	e1.queue_free()
+	e2.queue_free()
+
+	# Three players (two simulated, no network): per-player state, shared enemy state.
+	var p2: PlayerController = main.spawn_player(2, false)
+	var p3: PlayerController = main.spawn_player(3, false)
+	await _ticks(5)
+	var pds := [p, p2, p3].map(func(q: PlayerController) -> PerfectDodge: return q.get_node("PerfectDodge"))
+	_check(pds[0] != pds[1] and pds[1] != pds[2] and pds[1].player == p2 and pds[2].player == p3, "co-op: each of 3 players has its own perfect-dodge / counter state")
+	pds[1].counter_left = 1.0
+	_check(PerfectDodge.stagger_scale_for(p2) > 1.3 and PerfectDodge.stagger_scale_for(p) == 1.0 and PerfectDodge.stagger_scale_for(p3) == 1.0, "co-op: a counter bonus belongs only to the player who earned it")
+	pds[1].counter_left = 0.0
+	_check(p2.get_node("TargetLock") != p.get_node("TargetLock") and p3.get_node("TargetLockLeft") != p2.get_node("TargetLockLeft"), "co-op: every player keeps independent arm locks")
+	var shared := StaggerMeter.new()
+	var mk := func(src: Node, arm: StringName) -> DamageInfo:
+		var i := DamageInfo.make(0.45, DamageInfo.Type.ENERGY, Vector3.ZERO, Vector3.FORWARD, 2.0, 0.0, src)
+		i.weapon = &"plasma"
+		i.arm = arm
+		return i
+	shared.add(mk.call(p2, &"Right"))
+	shared.add(mk.call(p3, &"Left"))
+	_check(shared.dual_hits == 0 and shared.value > 0.8, "co-op: one shared stagger meter per enemy; concentrated bonus counts per player's own two arms")
+	for q in [p2, p3]:
+		main.players.erase(q.player_id)
+		q.queue_free()
+	await _ticks(3)
+	p.can_die = true
+	RobotEnemy.ai_enabled = was_ai

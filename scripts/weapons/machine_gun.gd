@@ -292,6 +292,7 @@ func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
 		bolt_color, bolt_hot_color, pass_group)
 	if b:
 		b.weapon_tag = &"machine_gun"
+		b.arm_side = arm_side
 		b.mark_life = impact_mark_life
 		b.crackle = true
 		b.size = bolt_size

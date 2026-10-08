@@ -14,6 +14,8 @@ const BH_CHARGE := preload("res://assets/audio/black_hole/charge.ogg")
 const MG_FIRE := preload("res://assets/audio/machine_gun/raptor_firing.ogg")
 const MG_COOLDOWN := preload("res://assets/audio/machine_gun/raptor_cooldown.ogg")
 const WEAPON_PICKUP := preload("res://assets/audio/pickup/weapon_pickup.ogg")
+## Perfect dodge confirmation (generated electric zap + chime).
+const PERFECT_DODGE := preload("res://assets/audio/combat/perfect_dodge.ogg")
 
 ## The local player is added to this group; distances are measured from it.
 const LISTENER_GROUP := &"sfx_listener"

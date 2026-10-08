@@ -170,6 +170,10 @@ var _fall_speed := 0.0
 func _ready() -> void:
 	health = max_health
 	armour = minf(start_armour, max_armour)
+	if get_node_or_null("PerfectDodge") == null:
+		var pd := PerfectDodge.new()
+		pd.name = "PerfectDodge"
+		add_child(pd)
 	_gravity = 2.0 * jump_height / (time_to_apex * time_to_apex)
 	_jump_velocity = _gravity * time_to_apex
 	_air_jump_velocity = sqrt(2.0 * _gravity * air_jump_height)

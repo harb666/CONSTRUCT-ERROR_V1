@@ -83,6 +83,9 @@ func update(shooter: Node3D) -> bool:
 	_set_aim_offset(current.aim_correction(point) if current.has_method("aim_correction") else Vector3.ZERO)
 	if not current.can_fire():
 		return false
+	# Behind cover: keep aiming, hold fire until the line clears.
+	if not lock.has_clear_shot():
+		return false
 	var aim_dir := (point - current.global_position).normalized()
 	if current.get_barrel_direction().angle_to(aim_dir) > deg_to_rad(fire_cone_degrees):
 		return false
@@ -144,6 +147,7 @@ func equip(def: WeaponDefinition, player: Node) -> Weapon:
 
 	var weapon: Weapon = def.weapon_scene.instantiate()
 	weapon.definition = def
+	weapon.arm_side = StringName(side)
 	weapon.name = "%sWeapon" % side
 	_attachment.add_child(weapon)
 	# Placed in world space every rendered frame from the skeleton's

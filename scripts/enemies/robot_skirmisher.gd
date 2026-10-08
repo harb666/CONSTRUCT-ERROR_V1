@@ -105,6 +105,8 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 ## solid hot core and size of the soft halo round it (m).
 @export var barrel_glow_core := 0.075
 @export var barrel_glow_halo := 0.45
+## The cannon glow swells this long before each burst (a readable tell).
+@export var windup_glow_time := 0.35
 
 @export_group("Effects")
 ## Beyond this camera distance: no muzzle flashes, sparks or death arcs.
@@ -311,6 +313,9 @@ func _update_barrel_glows(delta: float) -> void:
 		if not on:
 			continue
 		_glow_pulse[i] = maxf(_glow_pulse[i] - delta * 6.0, 0.0)
+		# Readable wind-up: the cannons swell just before a burst.
+		if alive and target and _burst_left == 0 and _cool_t < windup_glow_time and _aim.weight > 0.6:
+			_glow_pulse[i] = maxf(_glow_pulse[i], 0.55 * (1.0 - _cool_t / windup_glow_time))
 		var tip := _aim.muzzle_position(i)
 		var axis := (tip - _aim.elbow_position(i))
 		axis = axis.normalized() if axis.length_squared() > 1e-6 else Vector3.FORWARD
@@ -896,7 +901,7 @@ func _fire_one() -> void:
 		aim += Vector3(tv.x, 0, tv.z) * (muzzle.distance_to(aim) / bolt_speed) * 0.4
 	var to := (aim - muzzle).normalized()
 	var dir := to if axis.angle_to(to) <= deg_to_rad(cannon_aim_snap_deg) else axis
-	var spread := deg_to_rad(aim_spread_deg)
+	var spread := deg_to_rad(aim_spread_deg * aim_spread_scale())
 	var side := dir.cross(Vector3.UP if absf(dir.y) < 0.95 else Vector3.RIGHT).normalized()
 	dir = dir.rotated(side.rotated(dir, randf() * TAU), spread * sqrt(randf()))
 	var b := PlasmaBolt.fire(get_tree(), muzzle, dir, self, bolt_speed, bolt_damage, PLASMA_YELLOW, PLASMA_HOT)

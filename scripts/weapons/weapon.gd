@@ -13,6 +13,8 @@ signal recoiled(strength: float)
 
 var definition: WeaponDefinition
 var is_equipped := false
+## Arm holding it (&"Right" / &"Left"; empty on a pad). Set by WeaponSlot.
+var arm_side := &""
 ## Keep firing while the trigger is held (as fast as can_fire() allows).
 @export var auto_fire := true
 ## Recoil kick strength (1 = heavy weapon).

@@ -33,6 +33,11 @@ var size := 1.0
 var flicker := 0.0
 ## Copied into the DamageInfo it delivers (DamageInfo.weapon).
 var weapon_tag := &"plasma"
+## Arm that fired it (player weapons set it after fire()).
+var arm_side := &""
+## Unique per launch (pooled bolts are reused, so the node isn't an id).
+var serial := 0
+static var _serials := 0
 var impact_light := false
 ## Size of the impact splash (1 = standard).
 var impact_scale := 1.0
@@ -58,6 +63,9 @@ static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_sp
 		return null
 	b.pass_group = through
 	b.weapon_tag = &"plasma"
+	b.arm_side = &""
+	_serials += 1
+	b.serial = _serials
 	b._set_colors(col, hot_col)
 	b._launch(from, dir.normalized(), by, bolt_speed, dmg)
 	return b
@@ -180,6 +188,8 @@ func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 		var src: Node = shooter if is_instance_valid(shooter) else null
 		var info := DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, src)
 		info.weapon = weapon_tag
+		info.arm = arm_side
+		info.projectile_serial = serial
 		col.apply_damage(info)
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)

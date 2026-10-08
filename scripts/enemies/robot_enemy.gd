@@ -57,6 +57,10 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var bolt_damage := 1.0
 ## Drops a health/armour shard on death (RecoveryDrops).
 @export var drops_recovery := true
+## Split-fire suppression (Suppression): hits from a player whose arms are on
+## two different targets shake its aim and can delay its next burst.
+@export var suppressible := true
+var suppression: Suppression
 
 @export_group("Death")
 ## Death clips (must exist in the model). The killing hit picks one of seven
@@ -430,6 +434,8 @@ func get_skeleton() -> Skeleton3D:
 
 func _physics_process(delta: float) -> void:
 	if alive:
+		if suppression:
+			suppression.update(delta)
 		_behave(delta)
 	else:
 		_corpse(delta)
@@ -621,7 +627,7 @@ func _fire_one() -> void:
 		var tv := (target as CharacterBody3D).velocity
 		aim += Vector3(tv.x, 0, tv.z) * (muzzle.distance_to(aim) / bolt_speed) * 0.5
 	var dir := (aim - muzzle).normalized()
-	var spread := deg_to_rad(aim_spread_deg)
+	var spread := deg_to_rad(aim_spread_deg * aim_spread_scale())
 	dir = dir.rotated(Vector3.UP, randf_range(-spread, spread))
 	var right := dir.cross(Vector3.UP)
 	if right.length_squared() > 0.001:
@@ -705,6 +711,26 @@ func apply_damage(info: DamageInfo) -> void:
 	elif hit_fx:
 		# Wounded: jolt, tint and crackle where it was hit (by weapon/severity).
 		hit_fx.on_hit(info, max_health)
+	if alive and suppressible:
+		if suppression == null:
+			suppression = Suppression.new()
+		if suppression.add(info):
+			_suppressed()
+
+
+## Split fire rattled it: the burst is cut short and the next one comes
+## later, with a small flinch. It keeps moving and dodging.
+func _suppressed() -> void:
+	_burst_left = 0
+	_cool_t = maxf(_cool_t, 0.0) + suppression.burst_delay
+	if hit_fx and hit_fx.react:
+		hit_fx.react.kick(0.5, -_visual.global_basis.z)
+	if _skeleton:
+		JointSparks.play_on_bone(_skeleton, _skeleton.find_bone(&"mixamorig_Spine2"), 0.3)
+
+
+func aim_spread_scale() -> float:
+	return suppression.spread_scale() if suppression else 1.0
 
 
 func die(info: DamageInfo) -> void:

@@ -47,7 +47,9 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 		dir = get_barrel_direction()
 	var spread := deg_to_rad(spread_deg)
 	dir = dir.rotated(Vector3.UP, randf_range(-spread, spread))
-	PlasmaBolt.fire(get_tree(), from, dir, shooter, bolt_speed, damage, bolt_color, bolt_hot_color, pass_group)
+	var b := PlasmaBolt.fire(get_tree(), from, dir, shooter, bolt_speed, damage, bolt_color, bolt_hot_color, pass_group)
+	if b:
+		b.arm_side = arm_side
 	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color)
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
