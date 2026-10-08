@@ -170,6 +170,14 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 ## Core overloads this long, then blows; the robot collapses at
 ## `death_collapse_time` (s after the killing hit).
 @export var death_overload_time := 0.55
+## Machine-death sound (Sfx.MACHINE_DEATH, the owner's own sound) as it
+## starts to die: loudness, full within `death_sound_near` m, silent beyond
+## `death_sound_far` m.
+@export var death_sound_db := 0.0
+@export var death_sound_near := 8.0
+@export var death_sound_far := 80.0
+## Death sounds started (tests).
+var death_sounds := 0
 @export var death_collapse_time := 1.05
 ## Visor glow (emission energy) while it's alive.
 @export var visor_glow := 2.5
@@ -1104,6 +1112,9 @@ func die(_info: DamageInfo = null) -> void:
 		anim.play(&"Idle", 0.3)
 		_move_anim = &"Idle"
 	core_fx.core_pos = core.global_position
+	# The owner's machine-death sound, right as it starts to die.
+	Sfx.play_at(get_parent(), Sfx.MACHINE_DEATH, core.global_position, death_sound_db, death_sound_near, death_sound_far)
+	death_sounds += 1
 	core_fx.failure()
 	_core_glow.visible = true
 	died.emit()

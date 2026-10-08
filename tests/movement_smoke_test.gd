@@ -2787,6 +2787,7 @@ func _robot_boss_tests(main: Node) -> void:
 		foot_move = maxf(foot_move, (sk.global_transform * sk.get_bone_global_pose(foot).origin).distance_to(foot0))
 	await _ticks(60)
 	_check(boss.anim.assigned_animation == RobotBoss.DEATH_CLIP and not boss.alive, "boss: dies with its heavy death animation")
+	_check(boss.death_sounds == 1, "boss: the owner's machine death sound played as it started to die")
 	var pts := _skinned_points(body, 9)
 	var lo := INF
 	for q in pts:
@@ -3521,12 +3522,8 @@ func _weapon_audio_tests(main: Node) -> void:
 	_check(near_gain > 0.9 and far_gain < near_gain * 0.6 and far_gain > 0.0, "skirmisher: burst sound follows real distance (%.2f at 2 m, %.2f at 30 m)" % [near_gain, far_gain])
 	r._on_burst_start()
 	_check(r.fire_sounds == 1 and r._fire_snd.playing, "skirmisher: one firing sound per burst")
-	var tip := r._aim.muzzle_position(0)
-	var core: MeshInstance3D = r._glows[0][0]
-	_check(r._glows.size() == 2 and core.visible and core.global_position.distance_to(tip) < 0.1, "skirmisher: yellow glow caps each barrel end (%.3f m)" % core.global_position.distance_to(tip))
-	r.die(DamageInfo.make(99, DamageInfo.Type.ENERGY, r.global_position, Vector3.FORWARD))
-	await _ticks(90)
-	_check(not core.visible, "skirmisher: barrel glow dies with it")
+	# (The yellow barrel-end glow is switched off for now - see
+	# _barrel_glow_tests.)
 	r.queue_free()
 
 
@@ -3816,13 +3813,8 @@ func _combat3_tests(main: Node) -> void:
 	hit.call(e1, &"Right")
 	hit.call(e1, &"Left")
 	_check(e1.hit_fx.concentrated_hits == c0 + 1, "feedback: both arms hitting one robot gives stronger instability sparks")
-	e2.target = p
-	e2._burst_left = 0
-	e2._cool_t = 0.05
-	e2._aim.weight = 1.0
-	e2._glow_pulse = [0.0, 0.0]
-	e2._update_barrel_glows(0.016)
-	_check(e2._glow_pulse[0] > 0.3, "feedback: skirmisher cannons swell just before a burst (readable wind-up)")
+	# (The skirmisher wind-up glow went with its barrel-end glow, switched
+	# off for now at the owner's request.)
 	e1.queue_free()
 	e2.queue_free()
 
@@ -4027,7 +4019,13 @@ func _shot_audio_tests(main: Node) -> void:
 	RobotEnemy.ai_enabled = true
 	await _ticks(240)
 	_check(r.shots_fired > 0 and r.shot_sounds == r.shots_fired, "audio: grunt cannons - a shot sound per bolt (%d)" % r.shot_sounds)
-	_check(r._shot_voices.size() == 2 and r._shot_voices[0].pitch_scale < 0.9, "audio: grunt shots lower-pitched than the player's")
+	_check(r._shot_voices.size() == 4 and r._shot_voices[0].stream == Sfx.ENEMY_TROOP_1_FIRING, "audio: grunt cannons play the owner's troop firing sound (4 voices)")
+	const TROOP_SHA := "f038d06ab59e72fa940758b92f99fa0b9104e0e885bc3c80c0e69b0adba46614"
+	if FileAccess.file_exists("res://assets/audio/enemies/enemy_troop_1_firing.mp3"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/enemy_troop_1_firing.mp3") == TROOP_SHA, "audio: troop firing sound file is the owner's original, unchanged")
+	const DEATH_SHA := "87429e38c8a4d01b44147f426b68fd629685e4e7ebd7cffc06d50613d84902b2"
+	if FileAccess.file_exists("res://assets/audio/enemies/machine_death.wav"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/machine_death.wav") == DEATH_SHA, "audio: machine death sound file is the owner's original, unchanged")
 	RobotEnemy.ai_enabled = was_ai
 	r.queue_free()
 	lock.view_camera = cam_was
@@ -4037,32 +4035,23 @@ func _shot_audio_tests(main: Node) -> void:
 ## Skirmisher barrel lights: never shown before they are placed on the
 ## barrel (the core mesh is a 1 m sphere), always small and on the muzzle.
 func _barrel_glow_tests(main: Node) -> void:
+	# The owner switched the yellow barrel-end glow off; muzzle flashes stay.
 	var s := _spawn_skirmisher(main, Vector3(-30, 0.05, 20))
+	await _ticks(10)
 	var glows: Array = s.get("_glows")
-	var hidden_at_spawn := true
-	for g in glows:
-		hidden_at_spawn = hidden_at_spawn and not (g[0] as MeshInstance3D).visible
-	_check(glows.size() == 2 and hidden_at_spawn, "skirmisher lights: hidden until placed on the barrels")
-	var core_mesh := (glows[0][0] as MeshInstance3D).mesh as SphereMesh
-	var halo_mesh := (glows[0][1] as MeshInstance3D).mesh as QuadMesh
-	_check(core_mesh.radius <= 0.1 and halo_mesh.size.x <= 0.5, "skirmisher lights: built at their real size (core %.3f m, halo %.2f m) - can't be drawn big" % [core_mesh.radius, halo_mesh.size.x])
-	# What is actually drawn: the interpolated transform (physics
-	# interpolation is on), the mesh's real radius times its scale.
-	var worst_size := 0.0
-	var worst_drawn := 0.0
-	var worst_off := 0.0
-	for f in 90:
-		await process_frame
-		for i in glows.size():
-			var core: MeshInstance3D = glows[i][0]
-			var halo: MeshInstance3D = glows[i][1]
-			if core.is_visible_in_tree():
-				var r: float = (core.mesh as SphereMesh).radius
-				var drawn := core.get_global_transform_interpolated()
-				worst_size = maxf(worst_size, r * core.global_basis.get_scale().x)
-				worst_drawn = maxf(worst_drawn, r * drawn.basis.get_scale().x)
-				worst_off = maxf(worst_off, drawn.origin.distance_to(s.get("_aim").muzzle_position(i)))
-				worst_drawn = maxf(worst_drawn, (halo.mesh as QuadMesh).size.x * halo.get_global_transform_interpolated().basis.get_scale().x * 0.5)
-	_check(worst_size > 0.0 and worst_size < 0.15 and worst_drawn < 0.6 and worst_off < 0.3, "skirmisher lights: drawn small and on the barrel ends (%.3f m, drawn %.3f m, %.2f m off)" % [worst_size, worst_drawn, worst_off])
+	var spheres := 0
+	for n in s.find_children("*", "MeshInstance3D", true, false):
+		if (n as MeshInstance3D).mesh is SphereMesh:
+			spheres += 1
+	_check(not s.barrel_glows_enabled and glows.is_empty() and spheres == 0, "skirmisher: no yellow barrel-end glow (switched off)")
+	var p: PlayerController = main.players[1]
+	s.target = p
+	var flashes_before: int = RobotSkirmisher._flashes.size()
+	s.call("_fire_one")
+	await _ticks(1)
+	var flashing := false
+	for f in RobotSkirmisher._flashes:
+		flashing = flashing or (is_instance_valid(f) and f.is_inside_tree())
+	_check(RobotSkirmisher._flashes.size() >= maxi(flashes_before, 1) and flashing, "skirmisher: muzzle flash still fires")
 	s.queue_free()
 	await _ticks(2)

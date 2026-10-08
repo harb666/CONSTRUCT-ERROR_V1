@@ -103,6 +103,9 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 @export var fire_sound_far := 48.0
 ## Glowing yellow cannon tips (hide the open barrel ends): radius of the
 ## solid hot core and size of the soft halo round it (m).
+## The yellow barrel-end glow (core + halo). Off for now, at the owner's
+## request (muzzle flashes stay on).
+@export var barrel_glows_enabled := false
 @export var barrel_glow_core := 0.075
 @export var barrel_glow_halo := 0.3
 ## How much the halo grows with each shot / the wind-up (1 = doubles).
@@ -294,6 +297,8 @@ func _make_barrel_glows() -> void:
 		if is_instance_valid(g[0]):
 			g[0].queue_free()
 	_glows.clear()
+	if not barrel_glows_enabled:
+		return
 	# Built at its real size (scaled only by the small pulse, at most 1.35x),
 	# so it can never be drawn big whatever happens to its transform.
 	if _core_mesh == null or not is_equal_approx((_core_mesh as SphereMesh).radius, barrel_glow_core):

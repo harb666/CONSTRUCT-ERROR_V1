@@ -67,12 +67,13 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var aim_spread_deg := 2.0
 @export var bolt_speed := 30.0
 @export var bolt_damage := 1.0
-## Cannon shot sound (Sfx.CANNON_SHOT, lower pitched than the player's):
-## loudness, full within `shot_sound_near` m, silent beyond `shot_sound_far`.
+## Cannon shot sound (Sfx.ENEMY_TROOP_1_FIRING, the owner's own sound - keep
+## it): loudness, full within `shot_sound_near` m, silent beyond
+## `shot_sound_far`, and a slight random pitch variation.
 @export var shot_sound_db := -5.0
 @export var shot_sound_near := 3.0
 @export var shot_sound_far := 40.0
-@export var shot_sound_pitch := Vector2(0.78, 0.88)
+@export var shot_sound_pitch := Vector2(0.95, 1.05)
 ## Drops a health/armour shard on death (RecoveryDrops).
 @export var drops_recovery := true
 ## Split-fire suppression (Suppression): hits from a player whose arms are on
@@ -734,7 +735,8 @@ func _fire_one() -> void:
 	PlasmaBolt.fire(get_tree(), muzzle, dir, self, bolt_speed, bolt_damage)
 	PlasmaFx.muzzle_flash(get_tree(), muzzle, dir)
 	if _shot_voices.is_empty():
-		_shot_voices = Sfx.voices(self, Sfx.CANNON_SHOT, 2, shot_sound_db, shot_sound_near, shot_sound_far, Vector3.UP * 1.3)
+		# 4 voices: a 3-4 shot burst of the 0.9 s sound, each left to finish.
+		_shot_voices = Sfx.voices(self, Sfx.ENEMY_TROOP_1_FIRING, 4, shot_sound_db, shot_sound_near, shot_sound_far, Vector3.UP * 1.3)
 	_shot_voice = Sfx.play_next(_shot_voices, _shot_voice, shot_sound_pitch)
 	shot_sounds += 1
 	shots_fired += 1

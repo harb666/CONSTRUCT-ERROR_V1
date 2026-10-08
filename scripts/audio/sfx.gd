@@ -21,7 +21,12 @@ const PISTOL_CANNON := preload("res://assets/audio/plasma/pistol_cannon_firing.o
 ## The player's shotgun firing sound - supplied by the game's owner. Keep
 ## this exact file; never replace or regenerate it without asking them.
 const SHOTGUN_FIRING := preload("res://assets/audio/plasma/shotgun_firing.mp3")
-## Grunt robots' cannon shot and the
+## Owner-supplied enemy sounds - keep these exact files; never replace or
+## regenerate them without asking. ENEMY_TROOP_1_FIRING: the grunts' green
+## cannons. MACHINE_DEATH: the robot boss starting to die.
+const ENEMY_TROOP_1_FIRING := preload("res://assets/audio/enemies/enemy_troop_1_firing.mp3")
+const MACHINE_DEATH := preload("res://assets/audio/enemies/machine_death.wav")
+## The generated cannon shot (no longer used by the grunts) and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")
 const SHOTGUN_BLAST := preload("res://assets/audio/plasma/shotgun_blast.ogg")
