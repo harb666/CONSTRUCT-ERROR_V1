@@ -487,6 +487,7 @@ func _run() -> void:
 	await _gait_tests(main)
 	await _shot_audio_tests(main)
 	await _barrel_glow_tests(main)
+	await _turned_spawn_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -4055,3 +4056,39 @@ func _barrel_glow_tests(main: Node) -> void:
 	_check(RobotSkirmisher._flashes.size() >= maxi(flashes_before, 1) and flashing, "skirmisher: muzzle flash still fires")
 	s.queue_free()
 	await _ticks(2)
+
+
+## Robots spawned with a turned body (as the battle arena does) face that
+## way, then face, aim at and fire on the player like any other.
+func _turned_spawn_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = true
+	var p: PlayerController = main.players[1]
+	p.can_die = false
+	var cam_was: Camera3D = (p.get_node("TargetLock") as TargetLock).view_camera
+	var base := Vector3(-30, 0.05, -10)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var robots: Array[RobotEnemy] = []
+	for k in 2:
+		var r: RobotEnemy = load("res://scenes/enemies/robot_skirmisher.tscn" if k == 1 else "res://scenes/enemies/robot_enemy.tscn").instantiate()
+		r.patrol_distance = 0.0
+		r.respawn_time = -1.0
+		r.max_health = 999.0
+		r.position = base + Vector3(-4.0 + 8.0 * k, 0, -10)
+		r.rotation.y = 2.6  # turned away from the player
+		main.add_child(r)
+		robots.append(r)
+		# (Checked straight away: the AI turns it towards the player next.)
+		_check(absf(r.global_rotation.y) < 0.001 and absf(wrapf(r.get("_yaw") - 2.6, -PI, PI)) < 0.01, "spawn: a turned %s keeps that facing, its body set straight" % ("skirmisher" if r is RobotSkirmisher else "grunt"))
+	await _ticks(300)
+	for r in robots:
+		r.health = 999.0
+		var to := p.global_position - r.global_position
+		var facing := wrapf(r.get("_yaw") + r.get("_aim").twist - atan2(to.x, to.z), -PI, PI)
+		_check(r.shots_fired > 0 and absf(facing) < deg_to_rad(60.0), "spawn: a robot spawned turned away still turns, aims and fires at the player (%d shots, chest %.0f deg off)" % [r.shots_fired, rad_to_deg(facing)])
+		r.queue_free()
+	RobotEnemy.ai_enabled = was_ai
+	(p.get_node("TargetLock") as TargetLock).view_camera = cam_was
+	await _ticks(3)

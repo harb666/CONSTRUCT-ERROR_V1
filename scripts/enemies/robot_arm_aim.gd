@@ -90,12 +90,32 @@ func elbow_position(i: int) -> Vector3:
 
 
 ## Both cannons (or `side`: 0 left, 1 right) can point at the target.
-func on_target(side := -1) -> bool:
+## Worked out directly from where the chest faces and where the target is
+## (never from the pose step's results, which can go stale when the
+## skeleton isn't being updated - robots then never fired).
+func on_target(_side := -1) -> bool:
 	if weight < 0.6:
 		return false
-	if side >= 0:
-		return side < _off.size() and not _off[side]
-	return not (_off[0] or _off[1])
+	var skel := get_skeleton()
+	if skel == null or not skel.is_inside_tree():
+		return false
+	var shoulder := skel.global_transform * Vector3(0.0, 1.1, 0.0)
+	var d := skel.global_transform.basis.inverse() * (target_point - shoulder)
+	var flat := Vector2(d.x, d.z)
+	if flat.length_squared() < 1e-6:
+		return true
+	var off := wrapf(atan2(d.x, d.z) - twist * weight, -PI, PI)
+	var pitch := atan2(d.y, flat.length())
+	var slack := deg_to_rad(on_target_slack_deg)
+	return absf(off) <= deg_to_rad(arm_cone_deg) + slack and absf(pitch) <= deg_to_rad(arm_pitch_deg) + slack
+
+
+## Blend and firing kicks ease here, every frame, whether or not the pose
+## step runs.
+func _process(delta: float) -> void:
+	weight = move_toward(weight, target_weight, blend_speed * delta)
+	for i in kick.size():
+		kick[i] = maxf(kick[i] - kick_decay * delta * maxf(kick[i], 0.25), 0.0)
 
 
 ## `d` limited to the arm's cone around the chest's facing (sideways and
@@ -139,10 +159,6 @@ func _process_modification() -> void:
 	var skel := get_skeleton()
 	if skel == null:
 		return
-	var dt := get_process_delta_time() if is_inside_tree() else 0.016
-	weight = move_toward(weight, target_weight, blend_speed * dt)
-	for i in kick.size():
-		kick[i] = maxf(kick[i] - kick_decay * dt * maxf(kick[i], 0.25), 0.0)
 	if weight <= 0.001:
 		_store_muzzles(skel)
 		posed.emit()

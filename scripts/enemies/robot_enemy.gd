@@ -185,10 +185,22 @@ func _ready() -> void:
 	_mask = collision_mask
 	set_meta("gravity_center_y", 0.9)
 	_targetable = get_node_or_null("Targetable") as Targetable
+	# A turned body (the battle arena spawns robots facing random ways)
+	# becomes the robot's starting facing; the body itself is set straight.
+	# All facing is done on the Visual (_yaw) and every aim / turn sum
+	# assumes an unturned body - turned, robots faced and aimed off by the
+	# spawn angle and often never fired.
+	var spawn_yaw := global_rotation.y
+	var body_turned := absf(spawn_yaw) > 0.0001
+	if body_turned:
+		global_rotation = Vector3.ZERO
 	_spawn_xf = global_transform
 	_phase = randf()
 	_dir = 1.0 if randf() < 0.5 else -1.0
 	_build_model()
+	if body_turned:
+		_yaw = spawn_yaw
+		_visual.rotation.y = _yaw
 	health = max_health
 
 
