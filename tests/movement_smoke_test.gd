@@ -277,6 +277,7 @@ func _run() -> void:
 	var view_cam := lock.view_camera
 	for l: TargetLock in [lock, p.get_node("TargetLockLeft") as TargetLock]:
 		l.view_camera = null
+		l.cover_memory = 999.0  # (pillars pass between while strafing)
 	var selector: TargetSelector = p.get_node("Input/TargetSelector")
 	var d1: RobotEnemy = main.get_node("Targets/Robot1")
 	var d2: RobotEnemy = main.get_node("Targets/Robot2")
@@ -428,7 +429,6 @@ func _run() -> void:
 	_check(d1.health <= 0 and not lock_l.has_target(), "left lock clears when its enemy dies")
 	_check(selector.selected_left == null and selector.selected == d2.get_node("Targetable") and lock.has_target(), "only the left selection clears; right stays locked")
 	for l: TargetLock in [lock, lock_l]:
-		l.cover_memory = 0.3
 		l.off_screen_grace = 0.25
 	var shots_dead := left_shots.size()
 	await _ticks(60)
@@ -448,6 +448,7 @@ func _run() -> void:
 	_check(not lock.has_target(), "lock clears when the enemy is out of range")
 	for l: TargetLock in [lock, lock_l]:
 		l.view_camera = view_cam
+		l.cover_memory = 0.3
 
 	await _gravity_well_tests(main, p, holder)
 	await _cooldown_audio_tests(main)
@@ -3859,7 +3860,10 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	r.global_position = at
 	r.reset_physics_interpolation()
 	await physics_frame
+	# Already facing and walking +X (no turn-round at the start).
 	r.set("_dir", 1.0)
+	r.set("_yaw", PI * 0.5)
+	r._visual.rotation.y = PI * 0.5
 	r.linear_velocity = Vector3(speed, 0, 0)
 	var sk := r.get_skeleton()
 	var probe := FootProbe.new()
@@ -3876,10 +3880,12 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	var total := 0
 	var min_sep := INF
 	var max_h := 0.0
-	for f in frames + 40:
+	for f in 45:
+		await physics_frame
+	for f in frames:
 		await process_frame
 		var cur: Array = probe.pos.duplicate()
-		if f >= 40:
+		if f > 0:
 			for i in 2:
 				var on: bool = legs._legs[i].planted if legs is RobotWalker else legs._legs[i].locked
 				total += 1
