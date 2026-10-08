@@ -29,6 +29,25 @@ const PERFECT_DODGE := preload("res://assets/audio/combat/perfect_dodge.ogg")
 const LISTENER_GROUP := &"sfx_listener"
 
 
+## Browser only: hands every game sound to the browser's audio engine at
+## start-up (it decodes them while the game loads). Otherwise each sound is
+## handed over - and decoded - the first time it plays, so the first shots,
+## pickups etc. after loading are silent. Returns how many were registered.
+static func preload_all() -> int:
+	if not OS.has_feature("web"):
+		return 0
+	var n := 0
+	var consts: Dictionary = (load("res://scripts/audio/sfx.gd") as Script).get_script_constant_map()
+	for k in consts:
+		if not (consts[k] is AudioStream):
+			continue
+		var st: AudioStream = consts[k]
+		if not AudioServer.is_stream_registered_as_sample(st):
+			AudioServer.register_stream_as_sample(st)
+			n += 1
+	return n
+
+
 ## Positional player as a child of `parent` (follows it). Not started.
 ## Full volume within `near` metres, silent beyond `far`.
 static func emitter(parent: Node, stream: AudioStream, volume_db := 0.0,

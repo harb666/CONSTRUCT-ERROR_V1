@@ -4039,15 +4039,23 @@ func _barrel_glow_tests(main: Node) -> void:
 	for g in glows:
 		hidden_at_spawn = hidden_at_spawn and not (g[0] as MeshInstance3D).visible
 	_check(glows.size() == 2 and hidden_at_spawn, "skirmisher lights: hidden until placed on the barrels")
+	# What is actually drawn: the interpolated transform (physics
+	# interpolation is on), the mesh's real radius times its scale.
 	var worst_size := 0.0
+	var worst_drawn := 0.0
 	var worst_off := 0.0
-	for f in 60:
+	for f in 90:
 		await process_frame
 		for i in glows.size():
 			var core: MeshInstance3D = glows[i][0]
-			if core.visible:
-				worst_size = maxf(worst_size, core.global_basis.get_scale().x)
-				worst_off = maxf(worst_off, core.global_position.distance_to(s.get("_aim").muzzle_position(i)))
-	_check(worst_size > 0.0 and worst_size < 0.15 and worst_off < 0.2, "skirmisher lights: small and on the barrel ends (%.3f m, %.2f m off)" % [worst_size, worst_off])
+			var halo: MeshInstance3D = glows[i][1]
+			if core.is_visible_in_tree():
+				var r: float = (core.mesh as SphereMesh).radius
+				var drawn := core.get_global_transform_interpolated()
+				worst_size = maxf(worst_size, r * core.global_basis.get_scale().x)
+				worst_drawn = maxf(worst_drawn, r * drawn.basis.get_scale().x)
+				worst_off = maxf(worst_off, drawn.origin.distance_to(s.get("_aim").muzzle_position(i)))
+				worst_drawn = maxf(worst_drawn, halo.get_global_transform_interpolated().basis.get_scale().x * 0.5)
+	_check(worst_size > 0.0 and worst_size < 0.15 and worst_drawn < 0.6 and worst_off < 0.3, "skirmisher lights: drawn small and on the barrel ends (%.3f m, drawn %.3f m, %.2f m off)" % [worst_size, worst_drawn, worst_off])
 	s.queue_free()
 	await _ticks(2)

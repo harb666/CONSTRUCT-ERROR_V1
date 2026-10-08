@@ -316,9 +316,14 @@ func _make_barrel_glows() -> void:
 		# 1 m-radius sphere, so an unplaced core would be a 2 m yellow ball.
 		core.visible = false
 		core.scale = Vector3.ONE * 0.001
+		# Placed every frame: physics interpolation off (like every other
+		# per-frame effect), or it draws them smeared from stale, full-size
+		# transforms - big yellow balls far off the barrels.
+		core.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(core)
 		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15, 0.6), Vector2.ONE, BaseMaterial3D.BILLBOARD_ENABLED, false)
 		halo.top_level = true
+		halo.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		core.add_child(halo)
 		_glows.append([core, halo])
 	_glow_pulse = [0.0, 0.0]

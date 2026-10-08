@@ -16,6 +16,7 @@ var players := {}  # player_id -> PlayerController
 
 func _ready() -> void:
 	Vfx.configure_for_device()
+	Sfx.preload_all()
 	# ?level=toxic (or -- --level=toxic) plays Toxic Arena instead of the
 	# default battle arena.
 	if StressTest._param("level") == "toxic" and get_node_or_null("ToxicArena") == null and get_tree().current_scene == self:
