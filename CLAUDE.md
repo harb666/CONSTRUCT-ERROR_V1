@@ -12,6 +12,10 @@
   firing sound, supplied by the owner (sha256
   d7ac2450dd3b41bc5c791471bc3ad987f4ff0b8af60659fee657a41f50b7e371; a test
   fails if it changes). `PlasmaCannon` plays it via `Sfx.PISTOL_CANNON`.
+- `assets/audio/plasma/shotgun_firing.mp3` - the player's shotgun firing
+  sound, supplied by the owner (sha256
+  66d93f1c970fcf61603d3489d508947f3d83268ab539f1eadf61e58fad6712db; a test fails if it
+  changes). `Shotgun` plays it via `Sfx.SHOTGUN_FIRING`.
 
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`

@@ -4014,7 +4014,11 @@ func _shot_audio_tests(main: Node) -> void:
 	await _ticks(20)
 	sel.tap_target(r.get_node("Targetable"))
 	await _ticks(90)
-	_check(sg.shots_fired > 0 and sg.fire_sounds == sg.shots_fired and sg._voices[0].stream == Sfx.SHOTGUN_BLAST, "audio: shotgun - a blast sound per shot (%d)" % sg.fire_sounds)
+	_check(sg.shots_fired > 0 and sg.fire_sounds == sg.shots_fired and sg._voices.size() == 3 and sg._voices[0].stream == Sfx.SHOTGUN_FIRING, "audio: shotgun plays the owner's firing sound, one per shot (%d)" % sg.fire_sounds)
+	const SHOTGUN_SHA := "66d93f1c970fcf61603d3489d508947f3d83268ab539f1eadf61e58fad6712db"
+	var sg_path := "res://assets/audio/plasma/shotgun_firing.mp3"
+	if FileAccess.file_exists(sg_path):
+		_check(FileAccess.get_sha256(sg_path) == SHOTGUN_SHA, "audio: shotgun sound file is the owner's original, unchanged")
 	sel.clear()
 	h.equip(h.default_weapon, "Right")
 	# A grunt firing at the player: its own (lower) shot sound.

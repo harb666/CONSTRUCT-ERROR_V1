@@ -75,7 +75,8 @@ const BARREL_MARKERS := ["Muzzle_1", "Muzzle_2", "Muzzle_3", "Muzzle_4", "Muzzle
 @export var muzzle_flash_intensity := 1.0
 
 @export_group("Sound")
-## Blast sound (Sfx.SHOTGUN_BLAST): loudness, full within `fire_sound_near`
+## Blast sound (Sfx.SHOTGUN_FIRING, the owner's own sound - keep it):
+## loudness, full within `fire_sound_near`
 ## m, silent beyond `fire_sound_far` m, random pitch range.
 @export var fire_sound_db := -1.0
 @export var fire_sound_near := 6.0
@@ -112,7 +113,8 @@ func _ready() -> void:
 	var centre := Vector3.ZERO
 	for l in locals:
 		centre += l / maxf(locals.size(), 1)
-	_voices = Sfx.voices(self, Sfx.SHOTGUN_BLAST, 2, fire_sound_db, fire_sound_near, fire_sound_far, centre)
+	# 3 voices: the 2.3 s blast rings on past the next shot.
+	_voices = Sfx.voices(self, Sfx.SHOTGUN_FIRING, 3, fire_sound_db, fire_sound_near, fire_sound_far, centre)
 
 
 func _process(delta: float) -> void:

@@ -18,6 +18,9 @@ const WEAPON_PICKUP := preload("res://assets/audio/pickup/weapon_pickup.ogg")
 ## the game's owner. Keep this exact file; never replace or regenerate it
 ## without asking them.
 const PISTOL_CANNON := preload("res://assets/audio/plasma/pistol_cannon_firing.ogg")
+## The player's shotgun firing sound - supplied by the game's owner. Keep
+## this exact file; never replace or regenerate it without asking them.
+const SHOTGUN_FIRING := preload("res://assets/audio/plasma/shotgun_firing.mp3")
 ## Grunt robots' cannon shot and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")
