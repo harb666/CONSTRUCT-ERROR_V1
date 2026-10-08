@@ -45,8 +45,9 @@ static func configure_for_device() -> void:
 	var web_touch := OS.has_feature("web") and DisplayServer.is_touchscreen_available()
 	var force := StressTest._param("lights") == "1"
 	effect_lights = force or not web_touch
-	# The black hole's screen-space lens also reads the screen; same reason.
-	if web_touch and not force:
+	# The black holes' gravitational lens stays on everywhere (it's most of
+	# their look); ?lens=0 turns it off for testing.
+	if StressTest._param("lens") == "0":
 		distortion_enabled = false
 
 

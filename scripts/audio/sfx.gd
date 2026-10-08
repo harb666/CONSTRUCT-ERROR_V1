@@ -14,6 +14,10 @@ const BH_CHARGE := preload("res://assets/audio/black_hole/charge.ogg")
 const MG_FIRE := preload("res://assets/audio/machine_gun/raptor_firing.ogg")
 const MG_COOLDOWN := preload("res://assets/audio/machine_gun/raptor_cooldown.ogg")
 const WEAPON_PICKUP := preload("res://assets/audio/pickup/weapon_pickup.ogg")
+## Plasma arm cannon shot (player's default weapon + grunt robots) and the
+## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
+const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")
+const SHOTGUN_BLAST := preload("res://assets/audio/plasma/shotgun_blast.ogg")
 ## Perfect dodge confirmation (generated electric zap + chime).
 const PERFECT_DODGE := preload("res://assets/audio/combat/perfect_dodge.ogg")
 
@@ -32,6 +36,32 @@ static func emitter(parent: Node, stream: AudioStream, volume_db := 0.0,
 	p.far = far
 	parent.add_child(p)
 	return p
+
+
+## `count` players of one rapid-fire sound under `parent`, used in turn by
+## play_next (the browser plays separate voices reliably; one player
+## restarted many times a second drops sounds there).
+static func voices(parent: Node, stream: AudioStream, count: int, volume_db := 0.0,
+		near := 4.0, far := 50.0, at := Vector3.ZERO) -> Array[DynamicSound]:
+	var out: Array[DynamicSound] = []
+	for i in count:
+		var e := emitter(parent, stream, volume_db, near, far)
+		e.name = "Voice%d" % i
+		e.position = at
+		out.append(e)
+	return out
+
+
+## Plays the next of `pool` (round robin via `index`), at a random pitch in
+## `pitch`; returns the next index.
+static func play_next(pool: Array[DynamicSound], index: int, pitch := Vector2(1.0, 1.0)) -> int:
+	if pool.is_empty():
+		return index
+	var e := pool[index % pool.size()]
+	if is_instance_valid(e) and e.is_inside_tree():
+		e.pitch_scale = randf_range(pitch.x, pitch.y)
+		e.play()
+	return (index + 1) % pool.size()
 
 
 ## Fire-and-forget sound at a world position; frees itself when done.

@@ -96,7 +96,37 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 			rig.aiming = holder.current != null
 			holder.weapon_equipped.connect(func(_d: WeaponDefinition) -> void:
 				rig.aiming = true)
+		_test_hooks(player, selector)
 	return player
+
+
+## Browser testing switches: ?weapon=<id> starts with that weapon in the
+## right hand; ?autolock=1 keeps the nearest on-screen enemy locked.
+func _test_hooks(player: PlayerController, selector: TargetSelector) -> void:
+	var wid := StressTest._param("weapon")
+	var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
+	if wid != "" and holder:
+		var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+		var def := reg.find(StringName(wid)) if reg else null
+		if def:
+			holder.equip.call_deferred(def, "Right")
+	if StressTest._param("autolock") == "1":
+		var t := Timer.new()
+		t.wait_time = 1.0
+		t.autostart = true
+		add_child(t)
+		t.timeout.connect(func() -> void:
+			if selector.get_selected("Right") != null:
+				return
+			var best: Node3D = null
+			for e in get_tree().get_nodes_in_group(&"enemies"):
+				var n := e as Node3D
+				var tg := n.get_node_or_null("Targetable") as Targetable if n else null
+				var lk := player.get_node("TargetLock") as TargetLock
+				if tg and tg.is_valid_target() and lk.in_view(tg.get_aim_point()) and (best == null or n.global_position.distance_to(player.global_position) < best.global_position.distance_to(player.global_position)):
+					best = n
+			if best:
+				selector.tap_target(best.get_node("Targetable")))
 
 
 ## Brief green flash at the screen edges when the local player is hit.

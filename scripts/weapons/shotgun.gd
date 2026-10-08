@@ -74,7 +74,20 @@ const BARREL_MARKERS := ["Muzzle_1", "Muzzle_2", "Muzzle_3", "Muzzle_4", "Muzzle
 ## Overall brightness/size of the muzzle flash and its light (1 = default).
 @export var muzzle_flash_intensity := 1.0
 
+@export_group("Sound")
+## Blast sound (Sfx.SHOTGUN_BLAST): loudness, full within `fire_sound_near`
+## m, silent beyond `fire_sound_far` m, random pitch range.
+@export var fire_sound_db := -1.0
+@export var fire_sound_near := 6.0
+@export var fire_sound_far := 60.0
+@export var fire_sound_pitch := Vector2(0.95, 1.05)
+@export_group("")
+
 var shots_fired := 0
+## Blast sounds started (tests).
+var fire_sounds := 0
+var _voices: Array[DynamicSound] = []
+var _voice := 0
 ## Per stream of the last shot: {from, to, collider, target, assisted, damage}.
 var last_shot: Array = []
 
@@ -96,6 +109,10 @@ func _ready() -> void:
 	_flash.name = "MuzzleFlash"
 	_flash.barrels = locals
 	add_child(_flash)
+	var centre := Vector3.ZERO
+	for l in locals:
+		centre += l / maxf(locals.size(), 1)
+	_voices = Sfx.voices(self, Sfx.SHOTGUN_BLAST, 2, fire_sound_db, fire_sound_near, fire_sound_far, centre)
 
 
 func _process(delta: float) -> void:
@@ -173,6 +190,8 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 				dir = dir.slerp(to_sec, assist_strength).normalized()
 		_fire_stream(space, exclude, shooter, from, dir, leave, primary, assisted)
 	_flash.play(muzzle_flash_intensity)
+	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
+	fire_sounds += 1
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
 	return true

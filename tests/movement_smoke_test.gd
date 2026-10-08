@@ -470,6 +470,7 @@ func _run() -> void:
 	await _weapon_audio_tests(main)
 	await _combat3_tests(main)
 	await _gait_tests(main)
+	await _shot_audio_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -3948,3 +3949,56 @@ func _gait_tests(main: Node) -> void:
 	s.queue_free()
 	await _ticks(2)
 	RobotEnemy.ai_enabled = was_ai
+
+
+## Every plasma weapon has a firing sound (the default cannon, shotgun and
+## grunt robots used to be silent).
+func _shot_audio_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var lock: TargetLock = p.get_node("TargetLock")
+	var cam_was := lock.view_camera
+	lock.view_camera = null
+	h.equip(h.default_weapon, "Right")
+	sel.clear()
+	await _ticks(5)
+	var r := _spawn_robot(main, Vector3(-30, 0, 0))
+	r.max_health = 999.0
+	r.health = 999.0
+	p.global_position = Vector3(-30, 0.05, 10)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	var gun := h.weapon("Right") as PlasmaCannon
+	var s0 := gun.fire_sounds
+	var f0 := gun.shots_fired
+	sel.tap_target(r.get_node("Targetable"))
+	await _ticks(90)
+	_check(gun.shots_fired > f0 and gun.fire_sounds - s0 == gun.shots_fired - f0, "audio: default cannon - a shot sound per shot (%d)" % (gun.fire_sounds - s0))
+	var playing := 0
+	for v in gun._voices:
+		playing += int(v.playing or v.get_playback_position() > 0.0)
+	_check(gun._voices.size() == 3 and playing >= 1 and gun._voices[0].stream == Sfx.CANNON_SHOT, "audio: cannon shots use 3 voices in turn")
+	sel.clear()
+	await _ticks(5)
+	var sg := h.equip(load("res://resources/weapons/shotgun.tres"), "Right") as Shotgun
+	await _ticks(20)
+	sel.tap_target(r.get_node("Targetable"))
+	await _ticks(90)
+	_check(sg.shots_fired > 0 and sg.fire_sounds == sg.shots_fired and sg._voices[0].stream == Sfx.SHOTGUN_BLAST, "audio: shotgun - a blast sound per shot (%d)" % sg.fire_sounds)
+	sel.clear()
+	h.equip(h.default_weapon, "Right")
+	# A grunt firing at the player: its own (lower) shot sound.
+	r.max_health = 2.0
+	r.health = 2.0
+	RobotEnemy.ai_enabled = true
+	await _ticks(240)
+	_check(r.shots_fired > 0 and r.shot_sounds == r.shots_fired, "audio: grunt cannons - a shot sound per bolt (%d)" % r.shot_sounds)
+	_check(r._shot_voices.size() == 2 and r._shot_voices[0].pitch_scale < 0.9, "audio: grunt shots lower-pitched than the player's")
+	RobotEnemy.ai_enabled = was_ai
+	r.queue_free()
+	lock.view_camera = cam_was
+	await _ticks(3)

@@ -15,14 +15,26 @@ extends Weapon
 @export var bolt_hot_color := Color(0.75, 0.97, 1.0)
 ## Bolts fly through these bodies (no friendly fire).
 @export var pass_group := &"players"
+## Shot sound (Sfx.CANNON_SHOT): loudness, full within `fire_sound_near` m,
+## silent beyond `fire_sound_far` m, random pitch range.
+@export var fire_sound_db := -2.0
+@export var fire_sound_near := 5.0
+@export var fire_sound_far := 45.0
+@export var fire_sound_pitch := Vector2(0.94, 1.07)
 
 var shots_fired := 0
+## Shot sounds started (tests).
+var fire_sounds := 0
+var _voices: Array[DynamicSound] = []
+var _voice := 0
 var _cool := 0.0
 var _muzzle: Node3D
 
 
 func _ready() -> void:
 	_muzzle = find_marker(MUZZLE_MARKER)
+	_voices = Sfx.voices(self, Sfx.CANNON_SHOT, 3, fire_sound_db, fire_sound_near, fire_sound_far,
+		_muzzle.position if _muzzle and _muzzle.get_parent() == self else Vector3.ZERO)
 
 
 func _process(delta: float) -> void:
@@ -51,6 +63,8 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if b:
 		b.arm_side = arm_side
 	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color)
+	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
+	fire_sounds += 1
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
 	return true

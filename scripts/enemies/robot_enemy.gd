@@ -67,6 +67,12 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var aim_spread_deg := 2.0
 @export var bolt_speed := 30.0
 @export var bolt_damage := 1.0
+## Cannon shot sound (Sfx.CANNON_SHOT, lower pitched than the player's):
+## loudness, full within `shot_sound_near` m, silent beyond `shot_sound_far`.
+@export var shot_sound_db := -5.0
+@export var shot_sound_near := 3.0
+@export var shot_sound_far := 40.0
+@export var shot_sound_pitch := Vector2(0.78, 0.88)
 ## Drops a health/armour shard on death (RecoveryDrops).
 @export var drops_recovery := true
 ## Split-fire suppression (Suppression): hits from a player whose arms are on
@@ -158,6 +164,10 @@ var _sep := Vector3.ZERO
 var _move_anim := &"Walking"
 var _anim_backwards := false
 var _backing := false
+## Shot sounds started (tests).
+var shot_sounds := 0
+var _shot_voices: Array[DynamicSound] = []
+var _shot_voice := 0
 
 
 func _ready() -> void:
@@ -721,6 +731,10 @@ func _fire_one() -> void:
 		dir = dir.rotated(right.normalized(), randf_range(-spread, spread) * 0.6)
 	PlasmaBolt.fire(get_tree(), muzzle, dir, self, bolt_speed, bolt_damage)
 	PlasmaFx.muzzle_flash(get_tree(), muzzle, dir)
+	if _shot_voices.is_empty():
+		_shot_voices = Sfx.voices(self, Sfx.CANNON_SHOT, 2, shot_sound_db, shot_sound_near, shot_sound_far, Vector3.UP * 1.3)
+	_shot_voice = Sfx.play_next(_shot_voices, _shot_voice, shot_sound_pitch)
+	shot_sounds += 1
 	shots_fired += 1
 
 
