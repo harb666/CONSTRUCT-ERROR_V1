@@ -126,6 +126,14 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 ## Black hole particles
 While travelling (and while stuck) `BlackHoleFlightVfx` adds purple glow motes and black dust orbiting the disc (local space) and a dark purple mist (`assets/vfx/smoke_puff.png`, alpha-blended via `Vfx.mix_material`) shed into the world so it trails and tumbles behind.
 
+## Machine gun, skirmisher and pickup audio
+- `assets/audio/machine_gun/raptor_firing.ogg` (supplied Raptor_firing, normalised - the original clipped) and `raptor_cooldown.ogg` (supplied Raptor_cooldown.mp3 as OGG), via `Sfx.MG_FIRE` / `Sfx.MG_COOLDOWN`.
+- **Machine gun** (`MachineGun`, Audio group): the firing sound is a short burst with a tail; while the trigger is held it restarts every `fire_sound_interval` (0.34 s, shorter as the barrel spins up) on a 4-voice player, so bursts overlap and never cut off, pitch rising up to +12 % with spin. Letting go leaves the last tail ringing. After at least `cooldown_after` (0.45 s) of fire the cooldown plays, louder the hotter the gun; overheating always plays it at full volume.
+- **Skirmishers**: one Raptor firing sound per burst from each robot (`fire_sound_db`, full within `fire_sound_near` 3 m, fading with real distance to silence at `fire_sound_far` 48 m; slight random pitch).
+- **Weapon pickup**: `assets/audio/pickup/weapon_pickup.ogg` (generated: mechanical clack, rising charge, chime) plays at the pad when a weapon is collected (`WeaponSpawner.pickup_volume_db`).
+- **Muzzle flashes**: machine gun `muzzle_flash_intensity` 1.7, flame 0.42 m, 45 ms, brighter light; skirmisher flashes 0.42 m / size 1.3 / intensity 1.35 / 50 ms.
+- **Skirmisher barrel glow**: each cannon's open barrel end is capped by a small solid hot-yellow core (`barrel_glow_core` 7.5 cm, unshaded, one shared mesh) sunk half into the mouth plus an additive halo (`barrel_glow_halo`), following the aimed muzzle every frame; it swells with each shot and drains away when the robot dies.
+
 ## Black hole audio
 All sounds are `DynamicSound`s (`scripts/audio/dynamic_sound.gd`, created via `Sfx` in `scripts/audio/sfx.gd`): panned in 3D, full volume within `near` metres of the local player (group `sfx_listener`), fading smoothly (squared) to silence at `far`. Godot's own attenuation is disabled so the curve is identical on web and desktop. Files in `assets/audio/black_hole/`:
 - `fire.ogg` — the gun, on launch with the muzzle flash, from the muzzle (`fire_volume_db/near/far` on `BlackHoleGenerator`).

@@ -6,6 +6,10 @@ extends Node3D
 
 signal weapon_taken(player: Node, definition: WeaponDefinition)
 
+## Pickup chime (a mechanical clack + rising charge), positional.
+@export var pickup_volume_db := -1.0
+var pickup_sounds := 0
+
 @export var weapon: WeaponDefinition
 @export var spin_speed := 0.6        # rad/s
 @export var bob_height := 0.08       # m
@@ -89,5 +93,8 @@ func _on_body_entered(body: Node) -> void:
 	else:
 		holder.equip(weapon)
 	weapon_taken.emit(body, weapon)
+	pickup_sounds += 1
+	Sfx.play_at(get_tree().current_scene if get_tree().current_scene else get_tree().root,
+		Sfx.WEAPON_PICKUP, global_position + Vector3.UP, pickup_volume_db, 6.0, 40.0)
 	if respawn_time > 0.0:
 		get_tree().create_timer(respawn_time).timeout.connect(spawn_display)

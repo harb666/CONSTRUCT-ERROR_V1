@@ -95,7 +95,16 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 ## Within this angle of the target a round goes straight at it; otherwise
 ## it flies where the cannon points.
 @export var cannon_aim_snap_deg := 7.0
-@export var flash_intensity := 0.75
+@export var flash_intensity := 1.35
+## Burst sound (the machine gun's): full within `fire_sound_near` m of the
+## player, fading with real distance to silence at `fire_sound_far`.
+@export var fire_sound_db := -5.0
+@export var fire_sound_near := 3.0
+@export var fire_sound_far := 48.0
+## Glowing yellow cannon tips (hide the open barrel ends): radius of the
+## solid hot core and size of the soft halo round it (m).
+@export var barrel_glow_core := 0.075
+@export var barrel_glow_halo := 0.45
 
 @export_group("Effects")
 ## Beyond this camera distance: no muzzle flashes, sparks or death arcs.
@@ -147,6 +156,13 @@ var _hips := -1
 var _hips_rest_y := 0.79
 
 static var _flashes: Array[MachineGunFlash] = []
+static var _core_mesh: Mesh
+var _glows: Array = []
+var _glow_pulse: Array[float] = [0.0, 0.0]
+var _glow_power := 1.0
+var _fire_snd: DynamicSound
+## Burst sounds started (tests).
+var fire_sounds := 0
 static var _flash_next := 0
 
 
@@ -238,6 +254,78 @@ func _build_model() -> void:
 	_breaker.extreme_keep = 1
 	_reset_action()
 	_engaged = false
+	_make_barrel_glows()
+	if _fire_snd == null:
+		_fire_snd = Sfx.emitter(self, Sfx.MG_FIRE, fire_sound_db, fire_sound_near, fire_sound_far)
+		_fire_snd.name = "FireSound"
+		_fire_snd.max_polyphony = 2
+		_fire_snd.position = Vector3(0, 1.1, 0)
+
+
+## Per cannon: [core (solid, unshaded), halo (additive billboard)].
+func _make_barrel_glows() -> void:
+	for g in _glows:
+		if is_instance_valid(g[0]):
+			g[0].queue_free()
+	_glows.clear()
+	if _core_mesh == null:
+		var sm := SphereMesh.new()
+		sm.radius = 1.0
+		sm.height = 2.0
+		sm.radial_segments = 10
+		sm.rings = 5
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color(1.0, 0.93, 0.55)
+		m.disable_receive_shadows = true
+		sm.material = m
+		_core_mesh = sm
+	for i in 2:
+		var core := MeshInstance3D.new()
+		core.name = "BarrelGlow%d" % i
+		core.mesh = _core_mesh
+		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		core.top_level = true
+		add_child(core)
+		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15) * 0.9, Vector2.ONE, BaseMaterial3D.BILLBOARD_ENABLED, false)
+		halo.top_level = true
+		core.add_child(halo)
+		_glows.append([core, halo])
+	_glow_pulse = [0.0, 0.0]
+
+
+func _process(delta: float) -> void:
+	_update_barrel_glows(delta)
+
+
+func _update_barrel_glows(delta: float) -> void:
+	if _glows.is_empty() or _aim == null:
+		return
+	# Dead: the glow drains away over a second, then it's gone.
+	_glow_power = move_toward(_glow_power, 1.0 if alive else 0.0, delta * (4.0 if alive else 1.0))
+	var on := _glow_power > 0.01 and _visual.is_visible_in_tree()
+	for i in _glows.size():
+		var core: MeshInstance3D = _glows[i][0]
+		var halo: MeshInstance3D = _glows[i][1]
+		core.visible = on
+		if not on:
+			continue
+		_glow_pulse[i] = maxf(_glow_pulse[i] - delta * 6.0, 0.0)
+		var tip := _aim.muzzle_position(i)
+		var axis := (tip - _aim.elbow_position(i))
+		axis = axis.normalized() if axis.length_squared() > 1e-6 else Vector3.FORWARD
+		var flick := 1.0 + randf_range(-0.06, 0.06)
+		var r := barrel_glow_core * (0.6 + 0.4 * _glow_power) * (1.0 + 0.35 * _glow_pulse[i])
+		core.global_transform = Transform3D(Basis.from_scale(Vector3.ONE * r), tip - axis * r * 0.45)
+		halo.global_position = tip + axis * r * 0.3
+		halo.scale = Vector3.ONE * barrel_glow_halo * _glow_power * flick * (1.0 + 1.2 * _glow_pulse[i])
+
+
+func _on_burst_start() -> void:
+	if _fire_snd and _fire_snd.is_inside_tree():
+		_fire_snd.pitch_scale = randf_range(0.95, 1.08)
+		_fire_snd.play()
+		fire_sounds += 1
 
 
 # --- Behaviour ---
@@ -824,6 +912,8 @@ func _fire_one() -> void:
 	# Mechanical recoil: that arm jerks, the body rocks back a touch.
 	_aim.kick[i] = 1.0
 	_recoil = 1.0
+	if i < _glow_pulse.size():
+		_glow_pulse[i] = 1.0
 	if _cam_d < fx_distance:
 		_flash(muzzle, dir)
 
@@ -835,10 +925,11 @@ func _flash(at: Vector3, dir: Vector3) -> void:
 	if _flashes.size() < FLASH_POOL:
 		f = MachineGunFlash.new()
 		f.top_level = true
-		f.length = 0.24
-		f.size = 0.8
-		f.light_energy = 1.8
-		f.light_range = 2.6
+		f.length = 0.42
+		f.size = 1.3
+		f.flash_life = 0.05
+		f.light_energy = 2.8
+		f.light_range = 3.4
 		var host: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root
 		host.add_child(f)
 		_flashes.append(f)

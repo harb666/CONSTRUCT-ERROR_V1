@@ -75,7 +75,22 @@ extends Weapon
 @export var vibration_angle_deg := 0.7
 
 @export_group("Effects")
-@export var muzzle_flash_intensity := 1.0
+@export var muzzle_flash_intensity := 1.7
+
+@export_group("Audio")
+## The firing sound is a short burst; while the trigger is held it is
+## restarted every `fire_sound_interval` s (overlapping, so it never cuts
+## off), a little faster and higher as the barrel spins up. Letting go
+## leaves the last one's tail ringing out.
+@export var fire_volume_db := -2.0
+@export var fire_sound_interval := 0.34
+@export var fire_near := 6.0
+@export var fire_far := 60.0
+## Spin-down / venting after at least `cooldown_after` s of fire (louder
+## the hotter the gun), and always on overheating.
+@export var cooldown_volume_db := -4.0
+@export var cooldown_after := 0.45
+@export_group("")
 ## Glow of the hot front/barrel.
 @export var barrel_glow_intensity := 1.0
 ## Electrical arcs around the barrel and in the orb.
@@ -110,6 +125,14 @@ var _kick := Vector3.ZERO
 var _kick_v := Vector3.ZERO
 var _aim_fix := Vector3.ZERO
 var _flash: MachineGunFlash
+var _fire_snd: DynamicSound
+var _cool_snd: DynamicSound
+var _snd_t := 0.0
+## Seconds of continuous fire (for the cooldown sound).
+var _firing_for := 0.0
+## Times the firing / cooldown sounds started (tests).
+var fire_sounds := 0
+var cooldown_sounds := 0
 var _fx: MachineGunEnergy
 
 signal overheat_started
@@ -139,7 +162,17 @@ func _ready() -> void:
 	_flash = MachineGunFlash.new()
 	_flash.name = "MuzzleFlash"
 	_flash.position = _muzzle.position if _muzzle else Vector3(0.44, 0, 0)
+	_flash.length = 0.42
+	_flash.flash_life = 0.045
+	_flash.light_energy = 3.4
+	_flash.light_range = 4.0
 	_body.add_child(_flash)
+	_fire_snd = Sfx.emitter(self, Sfx.MG_FIRE, fire_volume_db, fire_near, fire_far)
+	_fire_snd.name = "FireSound"
+	_fire_snd.max_polyphony = 4
+	_fire_snd.position = _flash.position
+	_cool_snd = Sfx.emitter(self, Sfx.MG_COOLDOWN, cooldown_volume_db, fire_near, fire_far * 0.75)
+	_cool_snd.name = "CooldownSound"
 
 
 ## Rounds per second right now.
@@ -181,7 +214,17 @@ func muzzle_position() -> Vector3:
 func _physics_process(delta: float) -> void:
 	_trigger_t += delta
 	_since_shot += delta
+	var was := trigger
 	trigger = _trigger_t <= delta * 1.5
+	_snd_t -= delta
+	if trigger and not overheated:
+		_firing_for += delta
+	elif was and not overheated:
+		# Let go after a proper burst: the barrel spins down and vents.
+		if _firing_for >= cooldown_after:
+			_play_cooldown(clampf(0.35 + heat_ratio(), 0.35, 1.0))
+		_firing_for = 0.0
+		_snd_t = 0.0
 	if not trigger:
 		_aim_fix = Vector3.ZERO
 	if trigger and not overheated:
@@ -256,6 +299,11 @@ func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
 	heat += heat_per_shot
 	if _flash:
 		_flash.fire(energy, muzzle_flash_intensity)
+	if _fire_snd and _snd_t <= 0.0 and _fire_snd.is_inside_tree():
+		_fire_snd.pitch_scale = (1.0 + 0.12 * spin) * randf_range(0.98, 1.02)
+		_fire_snd.play()
+		fire_sounds += 1
+		_snd_t = fire_sound_interval / (1.0 + 0.35 * spin)
 	# Rapid fire: small kicks that add up (arm/chest via the slot's spring),
 	# plus the gun's own mechanical shake.
 	recoiled.emit(recoil_strength * (1.0 + recoil_spin_boost * spin))
@@ -274,7 +322,17 @@ func _overheat() -> void:
 	spin = minf(spin, 0.35)
 	if _fx:
 		_fx.vent()
+	_play_cooldown(1.0)
+	_firing_for = 0.0
 	overheat_started.emit()
+
+
+func _play_cooldown(loudness: float) -> void:
+	if _cool_snd == null or not _cool_snd.is_inside_tree():
+		return
+	_cool_snd.fade = loudness
+	_cool_snd.play()
+	cooldown_sounds += 1
 
 
 func _process(delta: float) -> void:

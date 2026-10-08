@@ -450,6 +450,7 @@ func _run() -> void:
 	await _mesh_cap_tests(main)
 	await _recovery_tests(main)
 	await _hit_feedback_tests(main)
+	await _weapon_audio_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -3407,3 +3408,65 @@ func _battle_arena_tests() -> void:
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
 	main.queue_free()
 	await _ticks(5)
+
+
+## Machine-gun / skirmisher sounds, weapon pickup sound, skirmisher barrel glow.
+func _weapon_audio_tests(main: Node) -> void:
+	var pads := 0
+	for n in ["WeaponSpawnPad", "ShotgunSpawnPad", "MachineGunSpawnPad"]:
+		pads += (main.get_node(n + "/WeaponSpawner") as WeaponSpawner).pickup_sounds
+	_check(pads >= 2, "audio: picking up weapons plays the pickup sound (%d pickups)" % pads)
+	var gun: MachineGun = load("res://scenes/weapons/machine_gun.tscn").instantiate()
+	main.add_child(gun)
+	gun.global_position = Vector3(30, 1.5, -30)
+	gun.pass_group = &"nothing"
+	await _ticks(3)
+	_check(gun._fire_snd.stream == Sfx.MG_FIRE and gun._cool_snd.stream == Sfx.MG_COOLDOWN, "audio: machine gun uses the Raptor firing / cooldown sounds")
+	# 1.5 s of fire: rounds every tick or so, sound restarted only every ~0.3 s.
+	var shots0 := gun.shots_fired
+	for i in 90:
+		gun.fire_at(null, gun.global_position + Vector3(0, 0, -20))
+		await _ticks(1)
+	var rounds := gun.shots_fired - shots0
+	_check(gun.fire_sounds >= 4 and gun.fire_sounds <= 7 and rounds > gun.fire_sounds * 3, "audio: firing sound overlaps smoothly, not one per round (%d sounds, %d rounds)" % [gun.fire_sounds, rounds])
+	_check(gun._fire_snd.playing and gun._fire_snd.pitch_scale > 1.02, "audio: pitch rises with the barrel spin (%.2f)" % gun._fire_snd.pitch_scale)
+	await _ticks(3)
+	_check(gun.cooldown_sounds == 1 and gun._cool_snd.playing, "audio: letting go after sustained fire plays the cooldown")
+	# A quick tap: no cooldown.
+	await _ticks(30)
+	for i in 10:
+		gun.fire_at(null, gun.global_position + Vector3(0, 0, -20))
+		await _ticks(1)
+	await _ticks(3)
+	_check(gun.cooldown_sounds == 1, "audio: a short tap doesn't play the cooldown")
+	# Overheating vents with the cooldown sound.
+	gun.heat = gun.max_heat - 0.5
+	gun.fire_at(null, gun.global_position + Vector3(0, 0, -20))
+	await _ticks(1)
+	_check(gun.overheated and gun.cooldown_sounds == 2, "audio: overheating plays the cooldown")
+	_check(gun._flash.length >= 0.4 and gun.muzzle_flash_intensity >= 1.5, "machine gun: bigger, brighter muzzle flash")
+	gun.queue_free()
+
+	# Skirmisher: burst sound by distance, glowing barrel ends.
+	var p: PlayerController = main.players[1]
+	var r := _spawn_skirmisher(main, Vector3(-14, 0, 22))
+	await _ticks(10)
+	_check(r._fire_snd != null and r._fire_snd.stream == Sfx.MG_FIRE, "skirmisher: its cannons use the Raptor firing sound")
+	p.global_position = r.global_position + Vector3(0, 0.05, 2)
+	p.reset_physics_interpolation()
+	await _ticks(3)
+	var near_gain := r._fire_snd.gain
+	p.global_position = r.global_position + Vector3(0, 0.05, 30)
+	p.reset_physics_interpolation()
+	await _ticks(3)
+	var far_gain := r._fire_snd.gain
+	_check(near_gain > 0.9 and far_gain < near_gain * 0.6 and far_gain > 0.0, "skirmisher: burst sound follows real distance (%.2f at 2 m, %.2f at 30 m)" % [near_gain, far_gain])
+	r._on_burst_start()
+	_check(r.fire_sounds == 1 and r._fire_snd.playing, "skirmisher: one firing sound per burst")
+	var tip := r._aim.muzzle_position(0)
+	var core: MeshInstance3D = r._glows[0][0]
+	_check(r._glows.size() == 2 and core.visible and core.global_position.distance_to(tip) < 0.1, "skirmisher: yellow glow caps each barrel end (%.3f m)" % core.global_position.distance_to(tip))
+	r.die(DamageInfo.make(99, DamageInfo.Type.ENERGY, r.global_position, Vector3.FORWARD))
+	await _ticks(90)
+	_check(not core.visible, "skirmisher: barrel glow dies with it")
+	r.queue_free()

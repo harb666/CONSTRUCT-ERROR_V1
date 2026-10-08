@@ -602,6 +602,12 @@ func _update_fire(delta: float, dist: float) -> void:
 	if _cool_t <= 0.0 and _aim.weight > 0.6:
 		_burst_left = randi_range(burst_count.x, burst_count.y)
 		_shot_t = 0.0
+		_on_burst_start()
+
+
+## A burst begins (subclasses: sound).
+func _on_burst_start() -> void:
+	pass
 
 
 ## One plasma bolt from the next cannon (alternating left/right).

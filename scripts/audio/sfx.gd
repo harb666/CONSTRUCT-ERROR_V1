@@ -9,6 +9,11 @@ const BH_FIRE := preload("res://assets/audio/black_hole/fire.ogg")
 const BH_BURST := preload("res://assets/audio/black_hole/energy_burst.ogg")
 const BH_EXPLODE := preload("res://assets/audio/black_hole/explode.ogg")
 const BH_CHARGE := preload("res://assets/audio/black_hole/charge.ogg")
+## Machine gun ("Raptor"): a short burst of rounds with its tail, and the
+## venting / spin-down after sustained fire. Also the skirmishers' cannons.
+const MG_FIRE := preload("res://assets/audio/machine_gun/raptor_firing.ogg")
+const MG_COOLDOWN := preload("res://assets/audio/machine_gun/raptor_cooldown.ogg")
+const WEAPON_PICKUP := preload("res://assets/audio/pickup/weapon_pickup.ogg")
 
 ## The local player is added to this group; distances are measured from it.
 const LISTENER_GROUP := &"sfx_listener"
