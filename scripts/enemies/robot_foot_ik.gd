@@ -200,7 +200,7 @@ func _process_modification() -> void:
 			var vert_ok := sqrt(maxf(reach * reach - horiz * horiz, 0.0))
 			short = -dv.y - vert_ok
 		need_drop = maxf(need_drop, short)
-	_hip_drop = move_toward(_hip_drop, clampf(need_drop, 0.0, max_hip_drop), dt * 0.6)
+	_hip_drop = move_toward(_hip_drop, clampf(need_drop, 0.0, max_hip_drop), dt * 3.0)
 	if _hip_drop > 0.0005:
 		hips_g.origin.y -= _hip_drop * weight
 		skel.set_bone_global_pose(_hips, hips_g)
