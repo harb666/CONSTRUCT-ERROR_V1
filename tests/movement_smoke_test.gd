@@ -3162,9 +3162,13 @@ func _recovery_tests(main: Node) -> void:
 		if s.active:
 			shard = s
 	_check(shard != null and shard.kind == RecoveryDrops.Kind.HEALTH and is_equal_approx(shard.value, drops.health_value), "recovery: it is an 8 HP health shard")
-	await _ticks(60)
+	# Scatter + a few bounces, then it rests (at most ~2 s).
+	for i in 120:
+		await _ticks(1)
+		if i > 30 and shard.vel.length() < 0.3:
+			break
 	var moved := Vector2(shard.node.global_position.x - at.x, shard.node.global_position.z - at.z).length()
-	_check(moved > 0.5 and shard.vel.length() < 1.0, "recovery: shard scatters out (%.2f m) and settles" % moved)
+	_check(moved > 0.5 and shard.vel.length() < 0.3, "recovery: shard scatters out (%.2f m) and settles" % moved)
 	_check(p.health == 50.0, "recovery: not collected from far away")
 	# Inside the magnet radius it flies to the player and is collected.
 	var sp := shard.node.global_position
