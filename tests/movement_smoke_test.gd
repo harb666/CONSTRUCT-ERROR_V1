@@ -14,6 +14,15 @@ func _ticks(n: int) -> void:
 		await physics_frame
 
 
+## Waits (frame by frame) until `cond` holds or `seconds` of wall-clock time
+## pass - for things that run on the real clock (the weapon wheel's easing).
+func _wall_wait(cond: Callable, seconds: float) -> void:
+	var t0 := Time.get_ticks_msec()
+	await process_frame
+	while not cond.call() and Time.get_ticks_msec() - t0 < seconds * 1000.0:
+		await process_frame
+
+
 func _check(cond: bool, msg: String) -> void:
 	print(("PASS  " if cond else "FAIL  ") + msg)
 	if not cond:
@@ -348,8 +357,14 @@ func _run() -> void:
 	_check(launched and kick_peak > 0.6, "heavy recoil kick on launch (peak %.2f)" % kick_peak)
 	_check(not cam_kicked, "no camera shake on launch")
 	_check(fire_sound, "gun fire sound plays as the shot leaves the barrel")
-	await _ticks(60)
-	_check(absf(anim2.recoil) < 0.1 and absf(rig2.camera.fov - rig2._base_fov) < 0.01, "recoil and camera recover")
+	# Settles before the next shot (this test's gun recharges in ~1 s).
+	var r_side: float = anim2.recoil_side["Right"]
+	for i in 60:
+		await _ticks(1)
+		r_side = anim2.recoil_side["Right"]
+		if absf(r_side) < 0.02 and absf(rig2.camera.fov - rig2._base_fov) < 0.01:
+			break
+	_check(absf(r_side) < 0.1 and absf(rig2.camera.fov - rig2._base_fov) < 0.01, "recoil and camera recover (recoil %.2f, fov +%.2f)" % [r_side, rig2.camera.fov - rig2._base_fov])
 	var n_before := projs.size()
 	for i in 240:
 		await _ticks(1)
@@ -2177,6 +2192,9 @@ func _weapon_switch_tests(main: Node) -> void:
 	wheel.open_at(start)
 	for i in 12:
 		await process_frame
+	# (The wheel eases on the wall clock: wait for it in real time, so this
+	# holds in fast-forward test runs too.)
+	await _wall_wait(func() -> bool: return Engine.time_scale < 0.8, 1.5)
 	var spd := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(wheel.is_open and spd > 3.0, "wheel opens while moving; movement continues (%.1f m/s)" % spd)
 	_check(Engine.time_scale < 0.8 and Engine.time_scale >= 0.4, "game slows slightly while the wheel is open (x%.2f)" % Engine.time_scale)
@@ -2186,7 +2204,7 @@ func _weapon_switch_tests(main: Node) -> void:
 	await process_frame
 	_check(wheel.hover_def == null, "small drags select nothing (dead zone)")
 	wheel.release_at(start + Vector2(20, -15))
-	await create_timer(0.2, true, false, true).timeout  # wheel easing runs in real time
+	await _wall_wait(func() -> bool: return not wheel.is_open and Engine.time_scale == 1.0, 1.5)  # wheel easing runs in real time
 	Input.action_release("move_forward")
 	_check(not wheel.is_open and Engine.time_scale == 1.0 and h.slot("Right").definition == cannon and h.slot("Left").definition == cannon, "releasing in the dead zone changes nothing; speed back to normal")
 

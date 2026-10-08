@@ -6,8 +6,10 @@ Current state: **movement prototype only**.
 ## Play the latest build
 https://harb666.github.io/CONSTRUCT-ERROR_V1/  (rotate phone to landscape)
 
-Every push to `main` or `claude/**` runs `.github/workflows/web-build.yml`:
-import → headless movement smoke test → Web export → publish to the `gh-pages` branch.
+Every push to `main` or `claude/**` runs `.github/workflows/web-build.yml` (~3 min):
+import → Web export → the full test suite twice at the same time (on the project, and on the exported `index.pck`), in fast-forward (`--fixed-fps 60`: every frame is 1/60 s of game time, simulated as fast as the CPU allows - ~1 min instead of ~5.5 min in real time) → publish. Nothing is published unless both runs end with `FAILURES: 0`.
+Publishing: the export is pushed to the `gh-pages` branch (live when Settings → Pages → Source is "Deploy from a branch"; kept as the rollback) and also deployed directly by the `pages` job (live when the source is "GitHub Actions" - no separate branch build; it fails softly otherwise).
+Run the suite locally the same way: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`. Tests that depend on the wall clock (the weapon wheel's easing) wait for it with `_wall_wait`.
 The HUD shows the branch/commit of the running build.
 
 ## Controls

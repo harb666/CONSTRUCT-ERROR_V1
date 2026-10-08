@@ -1,7 +1,22 @@
 name: Web build
 
-# Builds the Godot Web export on every push and publishes it to the
-# gh-pages branch (served by GitHub Pages) so it can be played on a phone.
+# Builds the Godot Web export on every push, tests it, and publishes it so it
+# can be played on a phone.
+#
+# Publishing (two paths; the repo's Settings -> Pages -> Source picks which
+# one is live):
+#   * "Deploy from a branch" (gh-pages): the `build` job pushes the export to
+#     the gh-pages branch, as it always has. This stays in place as the
+#     fallback / rollback - switch the setting back and it is live again.
+#   * "GitHub Actions": the `pages` job deploys the same export directly
+#     (no separate branch build, usually under a minute). While the setting
+#     is still on the branch this job just fails softly (continue-on-error)
+#     and nothing else is affected.
+#
+# Speed: the test suite runs in fast-forward (--fixed-fps 60: every frame is
+# exactly 1/60 s of game time, simulated as fast as the CPU allows instead of
+# waiting in real time - same checks, deterministic timing), and the two
+# runs (the project, and the exported package) run at the same time.
 on:
   push:
     branches: [main, "claude/**"]
@@ -56,21 +71,58 @@ jobs:
       - name: Import project
         run: godot --headless --path . --import
 
-      - name: Movement smoke test
-        run: godot --headless --path . -s tests/movement_smoke_test.gd
-
       - name: Export Web
         run: |
           mkdir -p build/web
           godot --headless --path . --export-release "Web" build/web/index.html
           test -s build/web/index.wasm
+          test -s build/web/index.pck
           touch build/web/.nojekyll
 
-      - name: Smoke test the exported package
-        # Catches anything that works in the project but is lost on export.
+      - name: Tests (project + exported package, in parallel)
+        # The same suite twice at once: on the project, and on the exported
+        # package (catches anything lost on export). Nothing is published
+        # unless both pass.
         run: |
-          mkdir -p /tmp/pcktest && cd /tmp/pcktest
-          godot --headless --main-pack "$GITHUB_WORKSPACE/build/web/index.pck" -s "$GITHUB_WORKSPACE/tests/movement_smoke_test.gd"
+          set -uo pipefail
+          mkdir -p /tmp/pcktest/data
+          godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd \
+            > /tmp/test_project.log 2>&1 &
+          P1=$!
+          # Own user-data folder, so the two runs never share files.
+          (cd /tmp/pcktest && XDG_DATA_HOME=/tmp/pcktest/data godot --headless --fixed-fps 60 \
+            --main-pack "$GITHUB_WORKSPACE/build/web/index.pck" -s "$GITHUB_WORKSPACE/tests/movement_smoke_test.gd") \
+            > /tmp/test_package.log 2>&1 &
+          P2=$!
+          wait $P1; R1=$?
+          wait $P2; R2=$?
+          for n in project package; do
+            echo "::group::Tests: $n"; cat "/tmp/test_$n.log"; echo "::endgroup::"
+          done
+          for n in project package; do
+            echo "$n: $(grep -c '^PASS' "/tmp/test_$n.log") passed, $(grep -c '^FAIL  ' "/tmp/test_$n.log") failed"
+            grep '^FAIL  ' "/tmp/test_$n.log" || true
+          done
+          # Both must finish with FAILURES: 0 (a crash or hang never passes).
+          grep -q '^FAILURES: 0$' /tmp/test_project.log && grep -q '^FAILURES: 0$' /tmp/test_package.log \
+            && [ "$R1" -eq 0 ] && [ "$R2" -eq 0 ]
+        timeout-minutes: 15
+
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pages && cp -r build/web /tmp/pages && cd /tmp/pages
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Web build ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
+      - name: Package for direct Pages deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -78,13 +130,19 @@ jobs:
           name: web-build
           path: build/web
 
-      - name: Publish to gh-pages
-        run: |
-          set -euo pipefail
-          cd build/web
-          git init -q -b gh-pages
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "Web build ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+  # Direct deployment (Settings -> Pages -> Source: "GitHub Actions"). Fails
+  # softly while the source is still the gh-pages branch.
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
