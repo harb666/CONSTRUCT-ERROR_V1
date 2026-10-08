@@ -449,6 +449,7 @@ func _run() -> void:
 	await _machine_gun_tests(main)
 	await _mesh_cap_tests(main)
 	await _recovery_tests(main)
+	await _hit_feedback_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -3241,3 +3242,136 @@ func _recovery_tests(main: Node) -> void:
 	_check(drops.active_count() == 0, "recovery: respawn clears shards")
 	var hud := main.get_node_or_null("UI/VitalsHud")
 	_check(hud is VitalsHud and (hud as VitalsHud).player == p, "recovery: vitals HUD shows the local player")
+
+
+func _shot(r: RobotEnemy, weapon: StringName, dmg: float, force: float) -> DamageInfo:
+	var dir := (r.global_position - Vector3(r.global_position.x + 6, 0, r.global_position.z)).normalized()
+	var info := DamageInfo.make(dmg, DamageInfo.Type.ENERGY, r.global_position + Vector3.UP * 1.1, dir, force)
+	info.weapon = weapon
+	return info
+
+
+## Hit reactions, per-weapon impact feedback and death effects (HitFeedback).
+func _hit_feedback_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var p: PlayerController = main.players[1]
+	var spot := Vector3(-14, 0, 22)
+	p.global_position = spot + Vector3(7, 0.05, 0)
+	p.reset_physics_interpolation()
+	p.can_die = false
+	var g := _spawn_robot(main, spot)
+	await _ticks(10)
+	var fx: HitFeedback = g.hit_fx
+	_check(fx != null and fx.react != null and fx.react.get_index() < g._aim.get_index(), "hits: light robot has hit feedback; lean runs before the arm aim")
+	_check(HitFeedback.weapon_of(_shot(g, &"", 1.0, 1.0)) == &"" and HitFeedback.weapon_of(DamageInfo.make(1, DamageInfo.Type.SUPERNOVA, Vector3.ZERO, Vector3.FORWARD)) == &"black_hole", "hits: supernova counts as the black hole")
+	# Severity tiers from the real weapon numbers.
+	var mg := fx.tier_of(fx.severity(_shot(g, &"machine_gun", 0.22, 2.0), g.max_health))
+	var pl := fx.tier_of(fx.severity(_shot(g, &"plasma", 0.45, 2.0), g.max_health))
+	var sg := fx.tier_of(fx.severity(_shot(g, &"shotgun", 0.6, 9.0), g.max_health))
+	_check(mg == HitFeedback.Tier.LIGHT and pl == HitFeedback.Tier.MEDIUM and sg == HitFeedback.Tier.HEAVY,
+		"hits: machine gun = light, plasma = medium, close shotgun = heavy (%d %d %d)" % [mg, pl, sg])
+
+	# Plasma: jolt + tint + sparks, springs back, animation untouched.
+	g.health = 100.0
+	var clip: StringName = g._anim.current_animation
+	g.apply_damage(_shot(g, &"plasma", 0.45, 2.0))
+	await _ticks(3)
+	var lean: float = fx.react.amount()
+	_check(lean > 0.05 and fx.flash_active() and g._whole.material_overlay != null and fx.sparks == 1, "hits: plasma jolts the upper body, tints the body, sparks (lean %.2f)" % lean)
+	_check(g._anim.current_animation == clip, "hits: the clip keeps playing (no restart)")
+	await _ticks(20)
+	_check(not fx.flash_active() and g._whole.material_overlay == null and fx.react.amount() < lean, "hits: tint gone in a few frames, lean settling")
+	var plasma_lean := lean
+	# Shotgun close: stronger than plasma.
+	await _ticks(60)
+	g.apply_damage(_shot(g, &"shotgun", 0.6, 9.0))
+	await _ticks(3)
+	_check(fx.react.amount() > plasma_lean * 1.3 and fx.last_tier == HitFeedback.Tier.HEAVY, "hits: close shotgun hits harder (%.2f vs plasma %.2f)" % [fx.react.amount(), plasma_lean])
+	await _ticks(60)
+
+	# Machine gun at full rate: throttled sparks/flashes, bounded lean.
+	var s0 := fx.sparks
+	var f0 := fx.flashes
+	var peak := 0.0
+	var js_peak := 0
+	for i in 96:  # 24 rounds/s for 1.6 s (2 of every 5 ticks)
+		if i % 5 < 2:
+			g.apply_damage(_shot(g, &"machine_gun", 0.22, 2.0))
+		await _ticks(1)
+		peak = maxf(peak, fx.react.amount())
+		js_peak = maxi(js_peak, JointSparks.active_count())
+	var rounds := 0
+	for i in 96:
+		rounds += int(i % 5 < 2)
+	var ns := fx.sparks - s0
+	var nf := fx.flashes - f0
+	_check(ns <= rounds / 3 and ns >= 3, "hits: machine-gun sparks throttled (%d for %d rounds)" % [ns, rounds])
+	_check(nf < rounds * 0.6 and nf >= 3, "hits: machine-gun armour flicker only now and then (%d of %d)" % [nf, rounds])
+	_check(peak < 2.2, "hits: rapid fire can't stack the lean (peak %.2f)" % peak)
+	_check(js_peak <= 16, "hits: spark pool not flooded (%d active)" % js_peak)
+	# Pulled by a gravity well: shudders and crackles; stops once released.
+	await _ticks(60)
+	var wf := fx.flashes
+	for i in 90:
+		g.on_gravity_pull()
+		await _ticks(1)
+	_check(fx.flashes - wf >= 2, "hits: robot in a gravity well shudders and crackles (%d)" % (fx.flashes - wf))
+	await _ticks(10)
+	wf = fx.flashes
+	await _ticks(90)
+	_check(fx.flashes == wf and not g.in_gravity_well(), "hits: crackling stops once the well lets go")
+	g.queue_free()
+
+	# Skirmisher keeps running under machine-gun fire; close shotgun staggers it.
+	RobotEnemy.ai_enabled = true
+	var r := _spawn_skirmisher(main, spot + Vector3(-9, 0, 0))
+	await _ticks(60)
+	r.health = 1000.0
+	r.max_health = 1.4
+	var dist := 0.0
+	var last := r.global_position
+	var staggers := 0
+	var prev := r.action
+	for i in 120:
+		if i % 5 < 2:
+			r.apply_damage(_shot(r, &"machine_gun", 0.22, 2.0))
+		await _ticks(1)
+		dist += Vector2(r.global_position.x - last.x, r.global_position.z - last.z).length()
+		last = r.global_position
+		if r.action == RobotSkirmisher.Act.STAGGER and prev != RobotSkirmisher.Act.STAGGER:
+			staggers += 1
+		prev = r.action
+	_check(dist / 2.0 > 1.5 and staggers == 0, "hits: skirmisher keeps moving under machine-gun fire (%.1f m/s, %d staggers)" % [dist / 2.0, staggers])
+	await _ticks(10)
+	var st0 := r.hit_fx.staggers
+	for i in 30:
+		if r.action == RobotSkirmisher.Act.NONE:
+			break
+		await _ticks(1)
+	r.apply_damage(_shot(r, &"shotgun", 0.6, 9.0))
+	_check(r.hit_fx.staggers == st0 + 1, "hits: close shotgun blast staggers the skirmisher")
+	r.apply_damage(_shot(r, &"shotgun", 0.6, 9.0))
+	_check(r.hit_fx.staggers == st0 + 1, "hits: stagger has a cooldown (no stun-lock)")
+	RobotEnemy.ai_enabled = false
+
+	# Death: burst, scrap chips, electrical failure; shard still drops.
+	var drops := RecoveryDrops.get_for(p.get_tree())
+	drops.clear()
+	var d0 := RobotDeathSparks.active_count()
+	r.apply_damage(_shot(r, &"plasma", 2000.0, 2.0))
+	await _ticks(2)
+	_check(not r.alive and HitFeedback.chips_active() > 0 and RobotDeathSparks.active_count() > 0, "hits: death bursts sparks and scrap, electrical failure plays")
+	_check(drops.active_count() == 1, "hits: recovery shard still drops on death")
+	var g2 := _spawn_robot(main, spot + Vector3(0, 0, 5))
+	await _ticks(10)
+	g2.apply_damage(_shot(g2, &"shotgun", 99.0, 9.0))
+	await _ticks(2)
+	_check(not g2.alive and RobotDeathSparks.active_count() > 0 and drops.active_count() == 2, "hits: first robot gets the electrical death too, and its shard")
+	await _ticks(70)
+	_check(HitFeedback.chips_active() == 0, "hits: scrap chips gone within a second")
+	g2.queue_free()
+	r.queue_free()
+	drops.clear()
+	p.can_die = true
+	RobotEnemy.ai_enabled = was_ai

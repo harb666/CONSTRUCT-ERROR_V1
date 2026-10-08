@@ -227,7 +227,9 @@ static func land_stream(tree: SceneTree, hit: Dictionary) -> void:
 	var force: float = hit.force
 	if col.has_method("apply_damage"):
 		var shooter: Node = hit.shooter if is_instance_valid(hit.get("shooter")) else null
-		col.apply_damage(DamageInfo.make(hit.damage, DamageInfo.Type.ENERGY, at, dir, force, 0.0, shooter))
+		var info := DamageInfo.make(hit.damage, DamageInfo.Type.ENERGY, at, dir, force, 0.0, shooter)
+		info.weapon = &"shotgun"
+		col.apply_damage(info)
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(dir * force * 0.6, at - (col as RigidBody3D).global_position)
 	PlasmaFx.impact(tree, at, hit.normal, col is StaticBody3D, hit.color, hit.hot)

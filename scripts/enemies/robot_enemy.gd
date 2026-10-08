@@ -187,6 +187,14 @@ func _build_model() -> void:
 	_aim.name = "ArmAim"
 	_skeleton.add_child(_aim)
 	_aim.setup(_skeleton, _muzzle_offsets())
+	if hit_fx:
+		hit_fx.queue_free()
+	hit_fx = HitFeedback.new()
+	hit_fx.name = "HitFeedback"
+	add_child(hit_fx)
+	var bodies: Array[GeometryInstance3D] = [_whole, _whole_far]
+	hit_fx.setup(self, _skeleton, bodies)
+	hit_fx.stagger = _hit_stagger
 	if _breaker:
 		_breaker.queue_free()
 	_breaker = BreakApart.new()
@@ -255,6 +263,8 @@ var _far_skin: Skin
 @export var far_distance := 30.0
 @export var far_margin := 2.0
 var _whole: MeshInstance3D
+## Hit reactions / impact and death feedback (HitFeedback).
+var hit_fx: HitFeedback
 var _whole_far: MeshInstance3D
 ## Casts the robot's shadow using the simple mesh (a shadow is a soft
 ## silhouette; the full-detail body itself doesn't need to cast it).
@@ -620,6 +630,11 @@ func on_gravity_pull() -> void:
 	_pulled_frame = Engine.get_physics_frames()
 
 
+## Being pulled by (or captured in) a gravity well right now.
+func in_gravity_well() -> bool:
+	return alive and (freeze or Engine.get_physics_frames() - _pulled_frame < 6)
+
+
 func _patrol(delta: float) -> void:
 	# Held, or being dragged into a black hole: helpless, no walking.
 	if freeze or Engine.get_physics_frames() - _pulled_frame < 6:
@@ -662,7 +677,9 @@ func on_projectile_hit(projectile: Node) -> void:
 	var dir := Vector3.FORWARD
 	if projectile is Node3D:
 		dir = global_position - (projectile as Node3D).global_position
-	apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, global_position + Vector3.UP, dir, 5.0, 0.0, projectile))
+	var info := DamageInfo.make(1.0, DamageInfo.Type.ENERGY, global_position + Vector3.UP, dir, 5.0, 0.0, projectile)
+	info.weapon = &"black_hole"
+	apply_damage(info)
 
 
 ## Simple-damage entry point (amount + where it came from).
@@ -679,10 +696,9 @@ func apply_damage(info: DamageInfo) -> void:
 	health -= info.damage_amount
 	if health <= 0.0:
 		die(info)
-	elif _skeleton:
-		# Wounded: a tiny crackle where it was hit.
-		var b := _nearest_bone(info.impact_position)
-		JointSparks.play_on_bone(_skeleton, b, 0.35)
+	elif hit_fx:
+		# Wounded: jolt, tint and crackle where it was hit (by weapon/severity).
+		hit_fx.on_hit(info, max_health)
 
 
 func die(info: DamageInfo) -> void:
@@ -722,6 +738,8 @@ func die(info: DamageInfo) -> void:
 		_failure_sparks()
 	else:
 		_schedule_breakup(info)
+	if hit_fx:
+		hit_fx.on_death(info, last_destruction != BreakApart.Level.NONE)
 	if drops_recovery:
 		RecoveryDrops.on_enemy_killed(self, info)
 	died.emit(info)
@@ -856,6 +874,12 @@ func _failure_sparks() -> void:
 				var bones := [&"mixamorig_Head", &"mixamorig_Neck", &"mixamorig_Spine2", &"mixamorig_LeftArm", &"mixamorig_RightArm", &"mixamorig_LeftForeArm", &"mixamorig_RightForeArm"]
 				var b := _skeleton.find_bone(bones[randi() % bones.size()])
 				JointSparks.play_on_bone(_skeleton, b, randf_range(0.3, 0.5)))
+
+
+## A heavy hit (close shotgun blast, black hole): the base robot only gets
+## the strong jolt; subclasses may add a short stagger.
+func _hit_stagger() -> void:
+	pass
 
 
 func _nearest_bone(p: Vector3) -> int:

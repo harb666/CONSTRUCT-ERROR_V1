@@ -853,6 +853,12 @@ func _flash(at: Vector3, dir: Vector3) -> void:
 
 # --- Damage ---
 
+## Heavy hit (HitFeedback): a short stagger, if it isn't mid-move.
+func _hit_stagger() -> void:
+	if alive and action == Act.NONE:
+		_start_stagger()
+
+
 func apply_damage(info: DamageInfo) -> void:
 	var was_alive := alive
 	super.apply_damage(info)
@@ -864,9 +870,13 @@ func apply_damage(info: DamageInfo) -> void:
 	push = push.normalized() if push.length_squared() > 1e-4 else -fwd
 	var right := Vector3(-fwd.z, 0, fwd.x)
 	var k := clampf(0.5 + info.total_force() * 0.05, 0.5, 1.2)
-	_jolt = Vector2(push.dot(fwd) * 0.14, -push.dot(right) * 0.12) * k
+	# Light hits (machine-gun rounds) barely check its stride, so it keeps
+	# running under automatic fire; heavier hits knock it about more.
+	var sev := clampf(hit_fx.severity(info, max_health) / hit_fx.heavy_at, 0.15, 1.0) if hit_fx else 1.0
+	_jolt = _jolt.lerp(Vector2(push.dot(fwd) * 0.14, -push.dot(right) * 0.12) * k, sev)
 	var v := linear_velocity
-	linear_velocity = Vector3(v.x * 0.55, v.y, v.z * 0.55) + push * 0.8 * k
+	var keep := lerpf(1.0, 0.55, sev)
+	linear_velocity = Vector3(v.x * keep, v.y, v.z * keep) + push * 0.8 * k * sev
 	if action == Act.NONE and info.total_force() > 9.0:
 		_start_stagger()
 	elif action == Act.NONE and _evade_cd <= 0.0 and randf() < hit_evade_chance:
@@ -899,8 +909,7 @@ func die(info: DamageInfo) -> void:
 		# Falls the rest of the way from where it was hit.
 		_visual.position.y = maxf(air - 0.6, 0.0)
 		create_tween().tween_property(_visual, "position:y", 0.0, 0.25).set_ease(Tween.EASE_IN)
-	if _cam_d < fx_distance and _skeleton:
-		RobotDeathSparks.play(_skeleton, 1.0 if last_destruction == BreakApart.Level.NONE else 1.3)
+	# Electrical failure, kill burst and scrap: RobotEnemy.die() -> HitFeedback.
 
 
 func _death_options(info: DamageInfo) -> Array:

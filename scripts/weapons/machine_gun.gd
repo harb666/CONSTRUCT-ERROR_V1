@@ -242,6 +242,7 @@ func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
 	var b := PlasmaBolt.fire(get_tree(), from + dir * bolt_speed * minf(late, 0.05), dir, shooter, bolt_speed, damage,
 		bolt_color, bolt_hot_color, pass_group)
 	if b:
+		b.weapon_tag = &"machine_gun"
 		b.mark_life = impact_mark_life
 		b.crackle = true
 		b.size = bolt_size

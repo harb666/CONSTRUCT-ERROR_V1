@@ -13,6 +13,10 @@ extends SkeletonModifier3D
 @export var damping := 13.0
 ## Mechanical shake per unit of kick (deg).
 @export var shake_deg := 1.6
+## Caps the spring speed and shake so rapid fire can't stack into a huge lean.
+@export var max_kick_speed := 14.0
+## Bone that leans (light robots use the same reaction).
+@export var bone_name := &"mixamorig_Spine1"
 
 var _bone := -1
 var _axis := Vector3.RIGHT
@@ -22,7 +26,7 @@ var _shake := 0.0
 
 
 func setup(skel: Skeleton3D) -> void:
-	_bone = skel.find_bone("mixamorig_Spine1")
+	_bone = skel.find_bone(bone_name)
 
 
 ## A hit: `strength` 0..1 (1 = heavy), from world direction `dir` (the way
@@ -37,7 +41,7 @@ func kick(strength: float, dir: Vector3) -> void:
 		d = Vector3(0, 0, -1)
 	# Lean away from the hit: rotate about the horizontal axis across it.
 	_axis = Vector3.UP.cross(d.normalized()).normalized()
-	_v += 9.0 * clampf(strength, 0.0, 1.5)
+	_v = minf(_v + 9.0 * clampf(strength, 0.0, 1.5), max_kick_speed)
 	_shake = minf(_shake + strength, 1.5)
 
 

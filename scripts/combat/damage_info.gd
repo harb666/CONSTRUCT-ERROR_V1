@@ -19,6 +19,9 @@ var impact_force := 0.0
 ## ~10 = grenade edge, 40 = point-blank supernova).
 var explosive_force := 0.0
 var source: Node
+## Which player weapon made the hit (&"plasma", &"machine_gun", &"shotgun",
+## &"black_hole"; empty = unknown). Only changes how targets react.
+var weapon := &""
 ## Scales how hard broken-off parts are thrown (e.g. < 1 when a black hole
 ## tears an enemy apart and should keep the pieces).
 var launch_scale := 1.0

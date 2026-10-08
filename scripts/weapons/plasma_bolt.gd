@@ -31,6 +31,8 @@ var size := 1.0
 ## Electrical flicker of the glow/trail (0 = steady), and a brief light at
 ## the impact (shared PlasmaFx light pool); set after fire().
 var flicker := 0.0
+## Copied into the DamageInfo it delivers (DamageInfo.weapon).
+var weapon_tag := &"plasma"
 var impact_light := false
 ## Size of the impact splash (1 = standard).
 var impact_scale := 1.0
@@ -55,6 +57,7 @@ static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_sp
 	if b == null:
 		return null
 	b.pass_group = through
+	b.weapon_tag = &"plasma"
 	b._set_colors(col, hot_col)
 	b._launch(from, dir.normalized(), by, bolt_speed, dmg)
 	return b
@@ -175,7 +178,9 @@ func _impact(at: Vector3, normal: Vector3, col: Object) -> void:
 	if col and col.has_method("apply_damage"):
 		# The shooter may be gone by the time the bolt lands.
 		var src: Node = shooter if is_instance_valid(shooter) else null
-		col.apply_damage(DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, src))
+		var info := DamageInfo.make(damage, DamageInfo.Type.ENERGY, at, velocity.normalized(), 2.0, 0.0, src)
+		info.weapon = weapon_tag
+		col.apply_damage(info)
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(velocity.normalized() * 2.5, at - (col as RigidBody3D).global_position)
 	# Scorch marks only on solid level geometry (they don't follow movers).
