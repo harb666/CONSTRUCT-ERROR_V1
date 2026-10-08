@@ -3935,8 +3935,9 @@ func _gait_tests(main: Node) -> void:
 			_check(res[2] > 0.3, "gait: skirmisher at %.1f m/s - legs never cross (min %.2f m apart)" % [c[1], res[2]])
 	# Standing: both feet down, flat, still.
 	var s := _spawn_skirmisher(main, spot)
-	await _ticks(90)
 	var w: RobotWalker = s.get("_foot_ik")
+	w.max_camera_distance = 1.0e6  # (the test camera may be far off)
+	await _ticks(90)
 	_check(s._anim.current_animation == "Stand" and w._legs[0].planted and w._legs[1].planted, "gait: skirmisher standing - both feet planted")
 	var steps := w.steps
 	await _ticks(30)
