@@ -1,6 +1,8 @@
 """Synthesises the plasma weapons' firing sounds (no samples needed):
 
-  assets/audio/plasma/cannon_shot.ogg   - the arm cannon (player + grunts):
+  (The player's pistol cannon uses assets/audio/plasma/pistol_cannon_firing.ogg,
+  the owner's own recording - this tool never writes it.)
+  assets/audio/plasma/cannon_shot.ogg   - the grunt robots' arm cannons:
       a sharp energy crack, a fast falling "pew" with a little FM shimmer,
       a short sub thump and a sizzle tail (~0.35 s).
   assets/audio/plasma/shotgun_blast.ogg - the five-barrel plasma shotgun:

@@ -14,7 +14,11 @@ const BH_CHARGE := preload("res://assets/audio/black_hole/charge.ogg")
 const MG_FIRE := preload("res://assets/audio/machine_gun/raptor_firing.ogg")
 const MG_COOLDOWN := preload("res://assets/audio/machine_gun/raptor_cooldown.ogg")
 const WEAPON_PICKUP := preload("res://assets/audio/pickup/weapon_pickup.ogg")
-## Plasma arm cannon shot (player's default weapon + grunt robots) and the
+## The player's pistol cannon (default weapon) firing sound - supplied by
+## the game's owner. Keep this exact file; never replace or regenerate it
+## without asking them.
+const PISTOL_CANNON := preload("res://assets/audio/plasma/pistol_cannon_firing.ogg")
+## Grunt robots' cannon shot and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")
 const SHOTGUN_BLAST := preload("res://assets/audio/plasma/shotgun_blast.ogg")

@@ -104,7 +104,9 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 ## Glowing yellow cannon tips (hide the open barrel ends): radius of the
 ## solid hot core and size of the soft halo round it (m).
 @export var barrel_glow_core := 0.075
-@export var barrel_glow_halo := 0.45
+@export var barrel_glow_halo := 0.3
+## How much the halo grows with each shot / the wind-up (1 = doubles).
+@export var barrel_glow_swell := 0.5
 ## The cannon glow swells this long before each burst (a readable tell).
 @export var windup_glow_time := 0.35
 
@@ -310,8 +312,12 @@ func _make_barrel_glows() -> void:
 		core.mesh = _core_mesh
 		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		core.top_level = true
+		# Hidden (and tiny) until first placed on its barrel: the mesh is a
+		# 1 m-radius sphere, so an unplaced core would be a 2 m yellow ball.
+		core.visible = false
+		core.scale = Vector3.ONE * 0.001
 		add_child(core)
-		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15) * 0.9, Vector2.ONE, BaseMaterial3D.BILLBOARD_ENABLED, false)
+		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15, 0.6), Vector2.ONE, BaseMaterial3D.BILLBOARD_ENABLED, false)
 		halo.top_level = true
 		core.add_child(halo)
 		_glows.append([core, halo])
@@ -334,8 +340,8 @@ func _update_barrel_glows(delta: float) -> void:
 	var on := _glow_power > 0.01 and _visual.is_visible_in_tree()
 	for i in _glows.size():
 		var core: MeshInstance3D = _glows[i][0]
-		core.visible = on
 		if not on:
+			core.visible = false
 			continue
 		_glow_pulse[i] = maxf(_glow_pulse[i] - delta * 6.0, 0.0)
 		# Readable wind-up: the cannons swell just before a burst.
@@ -350,7 +356,7 @@ func _place_barrel_glows() -> void:
 	for i in _glows.size():
 		var core: MeshInstance3D = _glows[i][0]
 		var halo: MeshInstance3D = _glows[i][1]
-		if not is_instance_valid(core) or not core.visible:
+		if not is_instance_valid(core) or _glow_power <= 0.01 or not _visual.is_visible_in_tree():
 			continue
 		var tip := _aim.muzzle_position(i)
 		var axis := (tip - _aim.elbow_position(i))
@@ -359,7 +365,8 @@ func _place_barrel_glows() -> void:
 		var r := barrel_glow_core * (0.6 + 0.4 * _glow_power) * (1.0 + 0.35 * _glow_pulse[i])
 		core.global_transform = Transform3D(Basis.from_scale(Vector3.ONE * r), tip - axis * r * 0.45)
 		halo.global_position = tip + axis * r * 0.3
-		halo.scale = Vector3.ONE * barrel_glow_halo * _glow_power * flick * (1.0 + 1.2 * _glow_pulse[i])
+		halo.scale = Vector3.ONE * barrel_glow_halo * _glow_power * flick * (1.0 + barrel_glow_swell * _glow_pulse[i])
+		core.visible = true  # only once it's sized and on the barrel
 
 
 func _on_burst_start() -> void:

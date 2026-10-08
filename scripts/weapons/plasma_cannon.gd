@@ -15,7 +15,8 @@ extends Weapon
 @export var bolt_hot_color := Color(0.75, 0.97, 1.0)
 ## Bolts fly through these bodies (no friendly fire).
 @export var pass_group := &"players"
-## Shot sound (Sfx.CANNON_SHOT): loudness, full within `fire_sound_near` m,
+## Shot sound (Sfx.PISTOL_CANNON, the owner's own sound - keep it):
+## loudness, full within `fire_sound_near` m,
 ## silent beyond `fire_sound_far` m, random pitch range.
 @export var fire_sound_db := -2.0
 @export var fire_sound_near := 5.0
@@ -33,7 +34,8 @@ var _muzzle: Node3D
 
 func _ready() -> void:
 	_muzzle = find_marker(MUZZLE_MARKER)
-	_voices = Sfx.voices(self, Sfx.CANNON_SHOT, 3, fire_sound_db, fire_sound_near, fire_sound_far,
+	# 4 voices: the 0.84 s shot overlaps itself at 4 shots/s.
+	_voices = Sfx.voices(self, Sfx.PISTOL_CANNON, 4, fire_sound_db, fire_sound_near, fire_sound_far,
 		_muzzle.position if _muzzle and _muzzle.get_parent() == self else Vector3.ZERO)
 
 

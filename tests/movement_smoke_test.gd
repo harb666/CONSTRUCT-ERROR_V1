@@ -486,6 +486,7 @@ func _run() -> void:
 	await _combat3_tests(main)
 	await _gait_tests(main)
 	await _shot_audio_tests(main)
+	await _barrel_glow_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -4000,7 +4001,13 @@ func _shot_audio_tests(main: Node) -> void:
 	var playing := 0
 	for v in gun._voices:
 		playing += int(v.playing or v.get_playback_position() > 0.0)
-	_check(gun._voices.size() == 3 and playing >= 1 and gun._voices[0].stream == Sfx.CANNON_SHOT, "audio: cannon shots use 3 voices in turn")
+	# The owner's sound file itself must never change (checked where the
+	# source file exists, i.e. on the project, not the exported package).
+	const PISTOL_SHA := "d7ac2450dd3b41bc5c791471bc3ad987f4ff0b8af60659fee657a41f50b7e371"
+	var pistol_path := "res://assets/audio/plasma/pistol_cannon_firing.ogg"
+	if FileAccess.file_exists(pistol_path):
+		_check(FileAccess.get_sha256(pistol_path) == PISTOL_SHA, "audio: pistol cannon sound file is the owner's original, unchanged")
+	_check(gun._voices.size() == 4 and playing >= 1 and gun._voices[0].stream == Sfx.PISTOL_CANNON and Sfx.PISTOL_CANNON.resource_path.ends_with("pistol_cannon_firing.ogg"), "audio: pistol cannon plays the owner's firing sound, 4 voices in turn")
 	sel.clear()
 	await _ticks(5)
 	var sg := h.equip(load("res://resources/weapons/shotgun.tres"), "Right") as Shotgun
@@ -4021,3 +4028,26 @@ func _shot_audio_tests(main: Node) -> void:
 	r.queue_free()
 	lock.view_camera = cam_was
 	await _ticks(3)
+
+
+## Skirmisher barrel lights: never shown before they are placed on the
+## barrel (the core mesh is a 1 m sphere), always small and on the muzzle.
+func _barrel_glow_tests(main: Node) -> void:
+	var s := _spawn_skirmisher(main, Vector3(-30, 0.05, 20))
+	var glows: Array = s.get("_glows")
+	var hidden_at_spawn := true
+	for g in glows:
+		hidden_at_spawn = hidden_at_spawn and not (g[0] as MeshInstance3D).visible
+	_check(glows.size() == 2 and hidden_at_spawn, "skirmisher lights: hidden until placed on the barrels")
+	var worst_size := 0.0
+	var worst_off := 0.0
+	for f in 60:
+		await process_frame
+		for i in glows.size():
+			var core: MeshInstance3D = glows[i][0]
+			if core.visible:
+				worst_size = maxf(worst_size, core.global_basis.get_scale().x)
+				worst_off = maxf(worst_off, core.global_position.distance_to(s.get("_aim").muzzle_position(i)))
+	_check(worst_size > 0.0 and worst_size < 0.15 and worst_off < 0.2, "skirmisher lights: small and on the barrel ends (%.3f m, %.2f m off)" % [worst_size, worst_off])
+	s.queue_free()
+	await _ticks(2)
