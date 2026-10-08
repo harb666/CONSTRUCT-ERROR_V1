@@ -3408,7 +3408,7 @@ func _battle_arena_tests() -> void:
 		low = minf(low, c.global_position.y)
 		high = maxf(high, c.global_position.y)
 		nearest = minf(nearest, c.global_position.distance_to(p.global_position))
-	_check(t.get_child_count() == 30 and bosses == 2 and grunts == 14 and skirm == 14, "battle: 30 enemies - %d bosses, %d grunts, %d skirmishers" % [bosses, grunts, skirm])
+	_check(t.get_child_count() == 15 and bosses == 1 and grunts == 7 and skirm == 7, "battle: 15 enemies - %d boss, %d grunts, %d skirmishers" % [bosses, grunts, skirm])
 	_check(low > -0.1 and high < 0.1, "battle: every enemy stands on the arena floor (y %.2f..%.2f)" % [low, high])
 	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")

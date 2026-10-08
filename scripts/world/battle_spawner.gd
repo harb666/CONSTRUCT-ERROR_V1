@@ -9,8 +9,8 @@ const GRUNT := preload("res://scenes/enemies/robot_enemy.tscn")
 const SKIRMISHER := preload("res://scenes/enemies/robot_skirmisher.tscn")
 const BOSS := preload("res://scenes/enemies/robot_boss.tscn")
 
-@export var total := 30
-@export var bosses := 2
+@export var total := 15
+@export var bosses := 1
 @export var min_spawn_distance := 16.0
 ## Kept clear round each block / ramp footprint (m).
 @export var clearance := 2.5
