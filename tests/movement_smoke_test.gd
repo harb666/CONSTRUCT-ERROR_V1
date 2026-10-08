@@ -4043,6 +4043,9 @@ func _barrel_glow_tests(main: Node) -> void:
 	for g in glows:
 		hidden_at_spawn = hidden_at_spawn and not (g[0] as MeshInstance3D).visible
 	_check(glows.size() == 2 and hidden_at_spawn, "skirmisher lights: hidden until placed on the barrels")
+	var core_mesh := (glows[0][0] as MeshInstance3D).mesh as SphereMesh
+	var halo_mesh := (glows[0][1] as MeshInstance3D).mesh as QuadMesh
+	_check(core_mesh.radius <= 0.1 and halo_mesh.size.x <= 0.5, "skirmisher lights: built at their real size (core %.3f m, halo %.2f m) - can't be drawn big" % [core_mesh.radius, halo_mesh.size.x])
 	# What is actually drawn: the interpolated transform (physics
 	# interpolation is on), the mesh's real radius times its scale.
 	var worst_size := 0.0
@@ -4059,7 +4062,7 @@ func _barrel_glow_tests(main: Node) -> void:
 				worst_size = maxf(worst_size, r * core.global_basis.get_scale().x)
 				worst_drawn = maxf(worst_drawn, r * drawn.basis.get_scale().x)
 				worst_off = maxf(worst_off, drawn.origin.distance_to(s.get("_aim").muzzle_position(i)))
-				worst_drawn = maxf(worst_drawn, halo.get_global_transform_interpolated().basis.get_scale().x * 0.5)
+				worst_drawn = maxf(worst_drawn, (halo.mesh as QuadMesh).size.x * halo.get_global_transform_interpolated().basis.get_scale().x * 0.5)
 	_check(worst_size > 0.0 and worst_size < 0.15 and worst_drawn < 0.6 and worst_off < 0.3, "skirmisher lights: drawn small and on the barrel ends (%.3f m, drawn %.3f m, %.2f m off)" % [worst_size, worst_drawn, worst_off])
 	s.queue_free()
 	await _ticks(2)

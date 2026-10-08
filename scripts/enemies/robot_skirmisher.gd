@@ -294,15 +294,17 @@ func _make_barrel_glows() -> void:
 		if is_instance_valid(g[0]):
 			g[0].queue_free()
 	_glows.clear()
-	if _core_mesh == null:
+	# Built at its real size (scaled only by the small pulse, at most 1.35x),
+	# so it can never be drawn big whatever happens to its transform.
+	if _core_mesh == null or not is_equal_approx((_core_mesh as SphereMesh).radius, barrel_glow_core):
 		var sm := SphereMesh.new()
-		sm.radius = 1.0
-		sm.height = 2.0
+		sm.radius = barrel_glow_core
+		sm.height = barrel_glow_core * 2.0
 		sm.radial_segments = 10
 		sm.rings = 5
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.albedo_color = Color(1.0, 0.93, 0.55)
+		m.albedo_color = Color(0.95, 0.78, 0.3)
 		m.disable_receive_shadows = true
 		sm.material = m
 		_core_mesh = sm
@@ -312,16 +314,14 @@ func _make_barrel_glows() -> void:
 		core.mesh = _core_mesh
 		core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		core.top_level = true
-		# Hidden (and tiny) until first placed on its barrel: the mesh is a
-		# 1 m-radius sphere, so an unplaced core would be a 2 m yellow ball.
+		# Hidden until first placed on its barrel.
 		core.visible = false
-		core.scale = Vector3.ONE * 0.001
 		# Placed every frame: physics interpolation off (like every other
 		# per-frame effect), or it draws them smeared from stale, full-size
 		# transforms - big yellow balls far off the barrels.
 		core.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		add_child(core)
-		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15, 0.6), Vector2.ONE, BaseMaterial3D.BILLBOARD_ENABLED, false)
+		var halo := Vfx.quad("glow", Color(1.0, 0.78, 0.15, 0.35), Vector2.ONE * barrel_glow_halo, BaseMaterial3D.BILLBOARD_ENABLED, false)
 		halo.top_level = true
 		halo.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 		core.add_child(halo)
@@ -367,10 +367,11 @@ func _place_barrel_glows() -> void:
 		var axis := (tip - _aim.elbow_position(i))
 		axis = axis.normalized() if axis.length_squared() > 1e-6 else Vector3.FORWARD
 		var flick := 1.0 + randf_range(-0.06, 0.06)
-		var r := barrel_glow_core * (0.6 + 0.4 * _glow_power) * (1.0 + 0.35 * _glow_pulse[i])
-		core.global_transform = Transform3D(Basis.from_scale(Vector3.ONE * r), tip - axis * r * 0.45)
+		var k := (0.6 + 0.4 * _glow_power) * (1.0 + 0.35 * _glow_pulse[i])
+		var r := barrel_glow_core * k
+		core.global_transform = Transform3D(Basis.from_scale(Vector3.ONE * k), tip - axis * r * 0.45)
 		halo.global_position = tip + axis * r * 0.3
-		halo.scale = Vector3.ONE * barrel_glow_halo * _glow_power * flick * (1.0 + barrel_glow_swell * _glow_pulse[i])
+		halo.scale = Vector3.ONE * _glow_power * flick * (1.0 + barrel_glow_swell * _glow_pulse[i])
 		core.visible = true  # only once it's sized and on the barrel
 
 
