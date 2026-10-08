@@ -448,6 +448,7 @@ func _run() -> void:
 	await _weapon_switch_tests(main)
 	await _machine_gun_tests(main)
 	await _mesh_cap_tests(main)
+	await _recovery_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -3106,3 +3107,133 @@ func _boss_fire_rate(boss: RobotBoss) -> float:
 	var n := boss.bullets_fired - n0
 	boss._gun_t = 0.0
 	return n
+
+
+## Health / armour, shard drops, magnet + collection, kill-streak bonus.
+func _recovery_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	p.respawn()
+	await _ticks(3)
+	_check(p.health == p.max_health and p.armour == p.start_armour, "recovery: respawn refills health (%.0f) and armour (%.0f)" % [p.health, p.armour])
+	# Armour soaks damage first.
+	p.armour = 20.0
+	p.apply_damage(DamageInfo.make(2.0, DamageInfo.Type.ENERGY, p.global_position, Vector3.FORWARD))  # 10 HP
+	_check(is_equal_approx(p.armour, 10.0) and is_equal_approx(p.health, p.max_health), "recovery: armour absorbs the hit before health (armour %.1f, health %.1f)" % [p.armour, p.health])
+	p.apply_damage(DamageInfo.make(4.0, DamageInfo.Type.ENERGY, p.global_position, Vector3.FORWARD))  # 20 HP
+	_check(p.armour == 0.0 and is_equal_approx(p.health, p.max_health - 10.0), "recovery: overflow goes to health (%.1f)" % p.health)
+	p.apply_damage(DamageInfo.make(50.0, DamageInfo.Type.SUPERNOVA, p.global_position, Vector3.FORWARD))
+	_check(is_equal_approx(p.health, p.max_health - 10.0), "recovery: own black hole does no damage")
+	# Never above the maximum.
+	_check(is_equal_approx(p.heal(500.0), 10.0) and p.health == p.max_health, "recovery: heal clamps to max health")
+	p.armour = p.max_armour - 2.0
+	_check(is_equal_approx(p.add_armour(6.0), 2.0) and p.armour == p.max_armour, "recovery: armour clamps to max")
+
+	var drops := RecoveryDrops.get_for(p.get_tree())
+	drops.clear()
+	drops._kill_times.clear()
+	drops._bonus_until = -1.0
+	# Kind preference: lower share wins.
+	p.health = 40.0
+	p.armour = 80.0
+	_check(drops._choose_kind(p) == RecoveryDrops.Kind.HEALTH, "recovery: low health -> health shard")
+	p.health = 90.0
+	p.armour = 10.0
+	_check(drops._choose_kind(p) == RecoveryDrops.Kind.ARMOUR, "recovery: low armour -> armour shard")
+
+	# A robot kill drops one shard that scatters, lands, then waits.
+	var far := Vector3(-30, 0.05, -30)
+	p.global_position = far
+	p.reset_physics_interpolation()
+	var robot: RobotEnemy = null
+	for e in p.get_tree().get_nodes_in_group(&"enemies"):
+		if e is RobotEnemy and e.alive:
+			robot = e
+			break
+	_check(robot != null, "recovery: found a living robot")
+	if robot == null:
+		return
+	var at := robot.global_position
+	p.health = 50.0
+	p.armour = 100.0
+	robot.apply_damage(DamageInfo.make(99.0, DamageInfo.Type.BULLET, at + Vector3.UP, Vector3.FORWARD, 1.0))
+	_check(drops.active_count() == 1, "recovery: light robot kill drops one shard (%d)" % drops.active_count())
+	var shard: RecoveryDrops.Shard = null
+	for s in drops._pool:
+		if s.active:
+			shard = s
+	_check(shard != null and shard.kind == RecoveryDrops.Kind.HEALTH and is_equal_approx(shard.value, drops.health_value), "recovery: it is an 8 HP health shard")
+	await _ticks(60)
+	var moved := Vector2(shard.node.global_position.x - at.x, shard.node.global_position.z - at.z).length()
+	_check(moved > 0.5 and shard.vel.length() < 1.0, "recovery: shard scatters out (%.2f m) and settles" % moved)
+	_check(p.health == 50.0, "recovery: not collected from far away")
+	# Inside the magnet radius it flies to the player and is collected.
+	var sp := shard.node.global_position
+	var inward := Vector3(-sp.x, 0.0, -sp.z).normalized()  # towards the arena centre, on the floor
+	p.global_position = sp + inward * 2.6
+	p.global_position.y = shard.floor_y + 0.05
+	p.reset_physics_interpolation()
+	var got := [0.0]
+	var cb := func(_k: int, a: float) -> void: got[0] += a
+	drops.collected.connect(cb)
+	var pulled := false
+	for i in 40:
+		await _ticks(1)
+		pulled = pulled or shard.magnet
+		if not shard.active:
+			break
+	_check(pulled, "recovery: shard is pulled in within 3 m")
+	_check(not shard.active and is_equal_approx(p.health, 58.0) and is_equal_approx(got[0], 8.0), "recovery: collected, +8 HP (%.1f)" % p.health)
+	drops.collected.disconnect(cb)
+
+	# Full stat: shard stays put.
+	p.health = p.max_health
+	p.armour = p.max_armour
+	drops.spawn(RecoveryDrops.Kind.HEALTH, p.global_position + Vector3(0, 1, 0), 8.0)
+	await _ticks(40)
+	_check(drops.active_count() == 1, "recovery: not collected while health is full")
+	# Expires after its lifetime.
+	for s in drops._pool:
+		s.age = drops.lifetime - 0.05
+	await _ticks(5)
+	_check(drops.active_count() == 0, "recovery: shards vanish after ~10 s")
+
+	# Kill streak: 3 kills in 5 s -> +25 % value.
+	drops.clear()
+	p.global_position = far
+	p.reset_physics_interpolation()
+	p.health = 10.0
+	drops._kill_times.clear()
+	drops._bonus_until = -1.0
+	for i in 2:
+		drops.enemy_killed(far + Vector3(10, 0, 0), null)
+	_check(not drops.bonus_active(), "recovery: 2 kills: no bonus yet")
+	drops.enemy_killed(far + Vector3(10, 0, 0), null)
+	_check(drops.bonus_active(), "recovery: 3 kills within 5 s start the bonus")
+	var boosted := 0.0
+	for s in drops._pool:
+		if s.active:
+			boosted = s.value
+	_check(is_equal_approx(boosted, drops.health_value * 1.25), "recovery: bonus shard worth +25%% (%.1f)" % boosted)
+	drops._bonus_until = -1.0
+	drops._kill_times.clear()
+	drops.enemy_killed(far + Vector3(10, 0, 0), null)
+	await _ticks(2)
+	drops._clock += drops.streak_window + 0.1
+	drops.enemy_killed(far + Vector3(10, 0, 0), null)
+	drops.enemy_killed(far + Vector3(10, 0, 0), null)
+	_check(not drops.bonus_active(), "recovery: kills spread over > 5 s give no bonus")
+	# Pool cap.
+	for i in 40:
+		drops.spawn(RecoveryDrops.Kind.ARMOUR, far + Vector3(10, 1, 0), 6.0)
+	_check(drops._pool.size() <= drops.max_active and drops.active_count() == drops.max_active, "recovery: active shards capped at %d" % drops.max_active)
+
+	# Dying respawns with full health and clears the shards.
+	var died := [false]
+	p.died.connect(func() -> void: died[0] = true, CONNECT_ONE_SHOT)
+	p.armour = 0.0
+	p.health = 3.0
+	p.apply_damage(DamageInfo.make(5.0, DamageInfo.Type.ENERGY, p.global_position, Vector3.FORWARD))
+	_check(died[0] and p.health == p.max_health and p.global_position.distance_to(p.spawn_transform.origin) < 0.1, "recovery: 0 HP -> respawn at spawn with full health")
+	_check(drops.active_count() == 0, "recovery: respawn clears shards")
+	var hud := main.get_node_or_null("UI/VitalsHud")
+	_check(hud is VitalsHud and (hud as VitalsHud).player == p, "recovery: vitals HUD shows the local player")

@@ -55,6 +55,8 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var aim_spread_deg := 2.0
 @export var bolt_speed := 30.0
 @export var bolt_damage := 1.0
+## Drops a health/armour shard on death (RecoveryDrops).
+@export var drops_recovery := true
 
 @export_group("Death")
 ## Death clips (must exist in the model). The killing hit picks one of seven
@@ -720,6 +722,8 @@ func die(info: DamageInfo) -> void:
 		_failure_sparks()
 	else:
 		_schedule_breakup(info)
+	if drops_recovery:
+		RecoveryDrops.on_enemy_killed(self, info)
 	died.emit(info)
 
 

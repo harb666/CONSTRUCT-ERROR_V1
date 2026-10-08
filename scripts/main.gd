@@ -72,6 +72,10 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		marker.lock_left = lock_left
 		marker.camera = rig.camera
 		debug_hud.player = player
+		var vitals := VitalsHud.new()
+		vitals.name = "VitalsHud"
+		vitals.player = player
+		$UI.add_child(vitals)
 		# Weapon wheel (hold the weapon button, drag to an arm's weapon).
 		var loadout := player.get_node_or_null("WeaponLoadout") as WeaponLoadout
 		if loadout:

@@ -89,9 +89,29 @@ var _idle_face_timer := 0.0
 ## Velocity from outside forces (gravity wells, blasts), added on top of the
 ## player's own movement so input, jumping and escaping always still work.
 ## Zero normally; decays when nothing keeps pushing.
-## Hits taken (no health system yet: hits only give feedback).
+## Hits taken. Armour soaks damage before health; at 0 health the player
+## respawns at spawn with full health.
 signal damaged(info: DamageInfo)
+## Health or armour changed (damage, pickups, respawn).
+signal vitals_changed
+signal died
 var damage_taken := 0.0
+
+@export_group("Health")
+@export var max_health := 100.0
+@export var max_armour := 100.0
+## Armour on spawn/respawn.
+@export var start_armour := 0.0
+## Share of each hit armour absorbs while it lasts (1 = all of it).
+@export_range(0.0, 1.0) var armour_absorb := 1.0
+## Enemy weapon damage is in robot-health units (a robot has 1.4-2); this
+## turns it into player HP (grunt bolt 1.0 -> 5 HP).
+@export var incoming_damage_scale := 5.0
+## Off = hits only count and flash (the old behaviour).
+@export var can_die := true
+@export_group("")
+var health := 100.0
+var armour := 0.0
 
 
 ## Target ground speed for a stick push of `amount` (0..1): walk, run or sprint.
@@ -111,7 +131,34 @@ func gait_speed(amount: float, sprinting: bool) -> float:
 ## Called by enemy weapons (DamageInfo.apply).
 func apply_damage(info: DamageInfo) -> void:
 	damage_taken += info.damage_amount
+	# The player's own black hole never hurts them (it never did).
+	if info.damage_type != DamageInfo.Type.SUPERNOVA and info.source != self:
+		var amount := info.damage_amount * incoming_damage_scale
+		var soak := minf(armour, amount * armour_absorb)
+		armour -= soak
+		health = maxf(health - (amount - soak), 0.0)
+		vitals_changed.emit()
 	damaged.emit(info)
+	if can_die and health <= 0.0:
+		died.emit()
+		respawn()
+
+
+## Pickups: add up to the maximum. Returns how much was actually added.
+func heal(amount: float) -> float:
+	var add := clampf(amount, 0.0, max_health - health)
+	health += add
+	if add > 0.0:
+		vitals_changed.emit()
+	return add
+
+
+func add_armour(amount: float) -> float:
+	var add := clampf(amount, 0.0, max_armour - armour)
+	armour += add
+	if add > 0.0:
+		vitals_changed.emit()
+	return add
 
 
 var external_velocity := Vector3.ZERO
@@ -121,6 +168,8 @@ var _fall_speed := 0.0
 
 
 func _ready() -> void:
+	health = max_health
+	armour = minf(start_armour, max_armour)
 	_gravity = 2.0 * jump_height / (time_to_apex * time_to_apex)
 	_jump_velocity = _gravity * time_to_apex
 	_air_jump_velocity = sqrt(2.0 * _gravity * air_jump_height)
@@ -303,3 +352,7 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	is_dodging = false
 	reset_physics_interpolation()
+	health = max_health
+	armour = minf(start_armour, max_armour)
+	vitals_changed.emit()
+	RecoveryDrops.clear_all(get_tree())
