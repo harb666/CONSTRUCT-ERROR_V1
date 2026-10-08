@@ -73,6 +73,7 @@ func _ready() -> void:
 	_light.omni_range = radius * 1.6
 	_light.shadow_enabled = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 	_update()
 
 

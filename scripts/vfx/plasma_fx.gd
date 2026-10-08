@@ -118,6 +118,7 @@ static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN, energy := 3
 		l.light_energy = 0.0
 		l.visible = false
 		_host(tree).add_child(l)
+		Vfx.tame_light(l)
 		_lights.append(l)
 		_light_t.append(0.0)
 	_light_next = (_light_next + 1) % _lights.size()

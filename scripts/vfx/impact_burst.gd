@@ -50,6 +50,7 @@ func _ready() -> void:
 	_light.omni_range = 5.0
 	_light.shadow_enabled = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 	_update()
 
 

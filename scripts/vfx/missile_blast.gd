@@ -155,6 +155,7 @@ func _ready() -> void:
 	_light.light_color = Color(1.0, 0.55, 0.2)
 	_light.shadow_enabled = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 	visible = false
 	set_process(false)
 

@@ -90,6 +90,7 @@ func _ready() -> void:
 	_light.visible = false
 	_light.position = Vector3(0.08, 0, 0)
 	add_child(_light)
+	Vfx.tame_light(_light)
 	if smoke:
 		_smoke = CPUParticles3D.new()
 		var q := QuadMesh.new()

@@ -3445,6 +3445,17 @@ func _weapon_audio_tests(main: Node) -> void:
 	await _ticks(1)
 	_check(gun.overheated and gun.cooldown_sounds == 2, "audio: overheating plays the cooldown")
 	_check(gun._flash.length >= 0.4 and gun.muzzle_flash_intensity >= 1.5, "machine gun: bigger, brighter muzzle flash")
+	_check(gun._fire_voices.size() == 3 and gun._fire_voices.filter(func(v: DynamicSound) -> bool: return v.max_polyphony == 1).size() == 3, "audio: overlapping bursts use separate single-voice players")
+	# Phones in the browser: effect lights light nothing.
+	var was := Vfx.effect_lights
+	Vfx.effect_lights = false
+	var l := OmniLight3D.new()
+	Vfx.tame_light(l)
+	_check(l.light_cull_mask == 0, "web on phones: effect lights switched off (they turn objects black on iOS)")
+	l.free()
+	Vfx.effect_lights = was
+	var hud := main.get_node_or_null("UI/VitalsHud") as Control
+	_check(hud != null and hud.position.y >= 80.0, "vitals bars sit below the two-line debug readout")
 	gun.queue_free()
 
 	# Skirmisher: burst sound by distance, glowing barrel ends.

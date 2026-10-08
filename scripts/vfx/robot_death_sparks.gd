@@ -85,6 +85,7 @@ func _ready() -> void:
 	_light.shadow_enabled = false
 	_light.visible = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 	_smoke = Vfx.particles("smoke", 0.32, 10, 1.6)
 	(_smoke.mesh as QuadMesh).material = Vfx.mix_material("smoke")  # dark smoke, not additive glow
 	_smoke.local_coords = false

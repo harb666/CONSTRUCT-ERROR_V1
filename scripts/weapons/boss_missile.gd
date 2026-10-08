@@ -160,6 +160,7 @@ func _ready() -> void:
 	_light.shadow_enabled = false
 	_light.position = Vector3(0, 0, -0.3 * L)
 	_engine.add_child(_light)
+	Vfx.tame_light(_light)
 	_trail = SmokeTrail.new()
 	_trail.start_width = 0.8 * L / 1.8
 	_trail.end_width = 3.2 * L / 1.8

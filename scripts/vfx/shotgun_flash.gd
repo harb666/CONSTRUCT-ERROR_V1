@@ -147,6 +147,7 @@ func _ready() -> void:
 	_light.visible = false
 	_light.position = _centre + Vector3(0.3, 0, 0)
 	add_child(_light)
+	Vfx.tame_light(_light)
 	set_process(false)
 
 

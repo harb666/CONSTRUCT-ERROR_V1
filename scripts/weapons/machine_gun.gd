@@ -126,6 +126,8 @@ var _kick_v := Vector3.ZERO
 var _aim_fix := Vector3.ZERO
 var _flash: MachineGunFlash
 var _fire_snd: DynamicSound
+var _fire_voices: Array[DynamicSound] = []
+var _voice := 0
 var _cool_snd: DynamicSound
 var _snd_t := 0.0
 ## Seconds of continuous fire (for the cooldown sound).
@@ -167,10 +169,14 @@ func _ready() -> void:
 	_flash.light_energy = 3.4
 	_flash.light_range = 4.0
 	_body.add_child(_flash)
-	_fire_snd = Sfx.emitter(self, Sfx.MG_FIRE, fire_volume_db, fire_near, fire_far)
-	_fire_snd.name = "FireSound"
-	_fire_snd.max_polyphony = 4
-	_fire_snd.position = _flash.position
+	# Overlapping bursts: a few plain players used in turn (one voice each;
+	# the browser's audio plays these reliably, unlike one restarted voice).
+	for i in 3:
+		var e := Sfx.emitter(self, Sfx.MG_FIRE, fire_volume_db, fire_near, fire_far)
+		e.name = "FireSound%d" % i
+		e.position = _flash.position
+		_fire_voices.append(e)
+	_fire_snd = _fire_voices[0]
 	_cool_snd = Sfx.emitter(self, Sfx.MG_COOLDOWN, cooldown_volume_db, fire_near, fire_far * 0.75)
 	_cool_snd.name = "CooldownSound"
 
@@ -299,7 +305,9 @@ func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
 	heat += heat_per_shot
 	if _flash:
 		_flash.fire(energy, muzzle_flash_intensity)
-	if _fire_snd and _snd_t <= 0.0 and _fire_snd.is_inside_tree():
+	if not _fire_voices.is_empty() and _snd_t <= 0.0 and _fire_voices[0].is_inside_tree():
+		_voice = (_voice + 1) % _fire_voices.size()
+		_fire_snd = _fire_voices[_voice]
 		_fire_snd.pitch_scale = (1.0 + 0.12 * spin) * randf_range(0.98, 1.02)
 		_fire_snd.play()
 		fire_sounds += 1

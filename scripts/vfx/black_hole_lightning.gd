@@ -96,6 +96,7 @@ func _ready() -> void:
 	_light.shadow_enabled = false
 	_light.light_energy = 0.0
 	add_child(_light)
+	Vfx.tame_light(_light)
 
 
 func _process(delta: float) -> void:

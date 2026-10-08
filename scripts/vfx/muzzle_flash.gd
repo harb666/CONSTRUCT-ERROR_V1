@@ -35,6 +35,7 @@ func _ready() -> void:
 	_light.light_energy = 3.0
 	_light.shadow_enabled = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 	_update()
 
 

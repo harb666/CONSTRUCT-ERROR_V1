@@ -128,6 +128,7 @@ func _ready() -> void:
 	_light.light_energy = 0.0
 	_light.visible = false
 	add_child(_light)
+	Vfx.tame_light(_light)
 
 
 ## One arc: two jagged segments, each a hot core streak plus a wide red glow.

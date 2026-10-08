@@ -52,6 +52,7 @@ func _ready() -> void:
 	_light.shadow_enabled = false
 	_light.position = Vector3(0, 0, 0.6)
 	add_child(_light)
+	Vfx.tame_light(_light)
 	visible = false
 	set_process(false)
 

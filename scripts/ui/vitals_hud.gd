@@ -15,7 +15,8 @@ var _font: Font
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	position = Vector2(60, 60)
+	# Below the debug readout (2 lines on the web build: FPS + build info).
+	position = Vector2(60, 84)
 	size = Vector2(260, 34)
 	_font = get_theme_default_font()
 

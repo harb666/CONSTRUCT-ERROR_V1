@@ -33,6 +33,30 @@ const HOT := Color(0.95, 0.8, 1.0)
 
 ## Global switch for the screen-distortion effect (costs a screen copy).
 static var distortion_enabled := true
+## Short-lived effect lights (muzzle flashes, impacts, blasts). Off on
+## phones/tablets in the browser: iOS WebGL renders objects those lights
+## touch black, and they cost a lot there. The flashes themselves are
+## sprites and still show. ?lights=1 forces them on (testing).
+static var effect_lights := true
+
+
+## Called once at startup (Main).
+static func configure_for_device() -> void:
+	var web_touch := OS.has_feature("web") and DisplayServer.is_touchscreen_available()
+	var force := StressTest._param("lights") == "1"
+	effect_lights = force or not web_touch
+	# The black hole's screen-space lens also reads the screen; same reason.
+	if web_touch and not force:
+		distortion_enabled = false
+
+
+## Every effect light goes through here: when effect lights are off it
+## lights nothing (no per-object light cost, nothing turns black).
+static func tame_light(l: Light3D) -> void:
+	if l and not effect_lights:
+		l.light_cull_mask = 0
+		l.light_energy = 0.0
+		l.set_meta(&"tamed", true)
 
 static var _cache := {}
 

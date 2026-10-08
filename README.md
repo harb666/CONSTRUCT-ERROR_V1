@@ -126,11 +126,14 @@ Sequence: `fire_at()` starts a 0.18 s charge (core swells/shudders, arcs frenzy,
 ## Black hole particles
 While travelling (and while stuck) `BlackHoleFlightVfx` adds purple glow motes and black dust orbiting the disc (local space) and a dark purple mist (`assets/vfx/smoke_puff.png`, alpha-blended via `Vfx.mix_material`) shed into the world so it trails and tumbles behind.
 
+## Phones in the browser
+`Vfx.configure_for_device()` (called by Main): on a touch device in the browser, effect lights (muzzle flashes, impacts, blasts - every `OmniLight3D` goes through `Vfx.tame_light`) light nothing and the black hole's screen lens is off. iOS WebGL drew objects those lights touched solid black (and they are expensive there); the flash sprites still show. `?lights=1` turns them back on for testing.
+
 ## Machine gun, skirmisher and pickup audio
 - `assets/audio/machine_gun/raptor_firing.ogg` (supplied Raptor_firing, normalised - the original clipped) and `raptor_cooldown.ogg` (supplied Raptor_cooldown.mp3 as OGG), via `Sfx.MG_FIRE` / `Sfx.MG_COOLDOWN`.
-- **Machine gun** (`MachineGun`, Audio group): the firing sound is a short burst with a tail; while the trigger is held it restarts every `fire_sound_interval` (0.34 s, shorter as the barrel spins up) on a 4-voice player, so bursts overlap and never cut off, pitch rising up to +12 % with spin. Letting go leaves the last tail ringing. After at least `cooldown_after` (0.45 s) of fire the cooldown plays, louder the hotter the gun; overheating always plays it at full volume.
+- **Machine gun** (`MachineGun`, Audio group): the firing sound is a short burst with a tail; while the trigger is held it restarts every `fire_sound_interval` (0.34 s, shorter as the barrel spins up) on three single-voice players used in turn (the browser's sample playback didn't play one restarted polyphonic voice), so bursts overlap and never cut off, pitch rising up to +12 % with spin. Letting go leaves the last tail ringing. After at least `cooldown_after` (0.45 s) of fire the cooldown plays, louder the hotter the gun; overheating always plays it at full volume.
 - **Skirmishers**: one Raptor firing sound per burst from each robot (`fire_sound_db`, full within `fire_sound_near` 3 m, fading with real distance to silence at `fire_sound_far` 48 m; slight random pitch).
-- **Weapon pickup**: `assets/audio/pickup/weapon_pickup.ogg` (generated: mechanical clack, rising charge, chime) plays at the pad when a weapon is collected (`WeaponSpawner.pickup_volume_db`).
+- **Weapon pickup**: `assets/audio/pickup/weapon_pickup.ogg` (generated cannon "lock and load": metal slam, deep boom dropping in pitch, heavy clunk, rumble) plays at the pad when a weapon is collected (`WeaponSpawner.pickup_volume_db`).
 - **Muzzle flashes**: machine gun `muzzle_flash_intensity` 1.7, flame 0.42 m, 45 ms, brighter light; skirmisher flashes 0.42 m / size 1.3 / intensity 1.35 / 50 ms.
 - **Skirmisher barrel glow**: each cannon's open barrel end is capped by a small solid hot-yellow core (`barrel_glow_core` 7.5 cm, unshaded, one shared mesh) sunk half into the mouth plus an additive halo (`barrel_glow_halo`), following the aimed muzzle every frame; it swells with each shot and drains away when the robot dies.
 
