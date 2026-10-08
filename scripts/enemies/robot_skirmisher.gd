@@ -316,6 +316,10 @@ func _make_barrel_glows() -> void:
 		core.add_child(halo)
 		_glows.append([core, halo])
 	_glow_pulse = [0.0, 0.0]
+	# Placed the moment the arms are posed, so they sit exactly on the
+	# barrel ends however the arms move.
+	if _aim and not _aim.posed.is_connected(_place_barrel_glows):
+		_aim.posed.connect(_place_barrel_glows)
 
 
 func _process(delta: float) -> void:
@@ -330,7 +334,6 @@ func _update_barrel_glows(delta: float) -> void:
 	var on := _glow_power > 0.01 and _visual.is_visible_in_tree()
 	for i in _glows.size():
 		var core: MeshInstance3D = _glows[i][0]
-		var halo: MeshInstance3D = _glows[i][1]
 		core.visible = on
 		if not on:
 			continue
@@ -338,6 +341,17 @@ func _update_barrel_glows(delta: float) -> void:
 		# Readable wind-up: the cannons swell just before a burst.
 		if alive and target and _burst_left == 0 and _cool_t < windup_glow_time and _aim.weight > 0.6:
 			_glow_pulse[i] = maxf(_glow_pulse[i], 0.55 * (1.0 - _cool_t / windup_glow_time))
+	_place_barrel_glows()
+
+
+func _place_barrel_glows() -> void:
+	if _glows.is_empty() or _aim == null:
+		return
+	for i in _glows.size():
+		var core: MeshInstance3D = _glows[i][0]
+		var halo: MeshInstance3D = _glows[i][1]
+		if not is_instance_valid(core) or not core.visible:
+			continue
 		var tip := _aim.muzzle_position(i)
 		var axis := (tip - _aim.elbow_position(i))
 		axis = axis.normalized() if axis.length_squared() > 1e-6 else Vector3.FORWARD

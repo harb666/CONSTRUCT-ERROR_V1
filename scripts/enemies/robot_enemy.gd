@@ -694,7 +694,9 @@ func _update_fire(delta: float, dist: float) -> void:
 		return
 	if _burst_left > 0:
 		_shot_t -= delta
-		if _shot_t <= 0.0:
+		# The cannon about to fire must be able to point at the target
+		# (chest turned far enough round); otherwise the burst waits.
+		if _shot_t <= 0.0 and _aim.on_target(_next_cannon):
 			_fire_one()
 			_burst_left -= 1
 			_shot_t = burst_interval
@@ -702,7 +704,7 @@ func _update_fire(delta: float, dist: float) -> void:
 				_cool_t = randf_range(burst_cooldown.x, burst_cooldown.y)
 		return
 	_cool_t -= delta
-	if _cool_t <= 0.0 and _aim.weight > 0.6:
+	if _cool_t <= 0.0 and _aim.on_target():
 		_burst_left = randi_range(burst_count.x, burst_count.y)
 		_shot_t = 0.0
 		_on_burst_start()
