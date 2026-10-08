@@ -163,7 +163,8 @@ func _process_modification() -> void:
 		# Height: the clip's lift over the floor under the foot, a planted
 		# ankle at its flat-foot (rest) height.
 		var floor_local := (inv * Vector3(world_t.x, l.floor_y, world_t.z)).y
-		t.y = floor_local + l.rest_ankle_y + (0.0 if stand else lift)
+		# (Planted: flat on the floor, the clip's heel rise left out.)
+		t.y = floor_local + l.rest_ankle_y + (0.0 if stand else lift * (1.0 - l.plant))
 		# Flat foot: the rest orientation (sole flat) turned to the clip's
 		# heading, tilted to the floor.
 		var flat := _flat_basis(l, fg.basis, inv)

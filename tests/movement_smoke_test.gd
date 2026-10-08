@@ -272,6 +272,11 @@ func _run() -> void:
 	var rig: CameraRig = main.get_node("CameraRig")
 	var tc2: TouchControls = main.get_node("UI/TouchControls")
 	var lock: TargetLock = p.get_node("TargetLock")
+	# These checks strafe / run past their targets; the off-screen release
+	# is tested in _combat3_tests.
+	var view_cam := lock.view_camera
+	for l: TargetLock in [lock, p.get_node("TargetLockLeft") as TargetLock]:
+		l.view_camera = null
 	var selector: TargetSelector = p.get_node("Input/TargetSelector")
 	var d1: RobotEnemy = main.get_node("Targets/Robot1")
 	var d2: RobotEnemy = main.get_node("Targets/Robot2")
@@ -441,6 +446,8 @@ func _run() -> void:
 	p.reset_physics_interpolation()
 	await _ticks(3)
 	_check(not lock.has_target(), "lock clears when the enemy is out of range")
+	for l: TargetLock in [lock, lock_l]:
+		l.view_camera = view_cam
 
 	await _gravity_well_tests(main, p, holder)
 	await _cooldown_audio_tests(main)
@@ -3517,6 +3524,9 @@ func _combat3_tests(main: Node) -> void:
 	h.equip(h.default_weapon, "Left")
 	sel.clear()
 	sel.forget_last_tap()
+	# (Off-screen release is tested on its own below.)
+	var cam_was := lock.view_camera
+	lock.view_camera = null
 	await _ticks(30)
 	# Phase A: cover. The head-high wall at x = 8 (z 11..17) between player and robot.
 	var r := _spawn_robot(main, Vector3(11, 0, 14))
@@ -3532,9 +3542,6 @@ func _combat3_tests(main: Node) -> void:
 	var shots0: int = h.weapon("Right").shots_fired
 	await _ticks(30)
 	_check(lock.has_clear_shot() and h.weapon("Right").shots_fired > shots0, "lock: clear line - fires as before")
-	# (Off-screen release is tested on its own below.)
-	var cam_was := lock.view_camera
-	lock.view_camera = null
 	# Step behind the wall: a brief cover moment holds the lock (firing
 	# suspended) ...
 	p.global_position = Vector3(4, 0.05, 14)
@@ -3859,9 +3866,11 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	sk.add_child(probe)
 	probe.feet = [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
 	var legs = r.get("_foot_ik")
+	legs.max_camera_distance = 1.0e6
 	var rest_y := [sk.get_bone_global_rest(probe.feet[0]).origin.y, sk.get_bone_global_rest(probe.feet[1]).origin.y]
 	var prev := [Vector3.ZERO, Vector3.ZERO]
 	var was := [false, false]
+	var held := [0, 0]
 	var slide := 0.0
 	var locked := 0
 	var total := 0
@@ -3874,9 +3883,12 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 			for i in 2:
 				var on: bool = legs._legs[i].planted if legs is RobotWalker else legs._legs[i].locked
 				total += 1
+				held[i] = held[i] + 1 if on else 0
 				if on:
 					locked += 1
-					max_h = maxf(max_h, cur[i].y - at.y - rest_y[i])
+					# (Touching down eases onto the floor over a few frames.)
+					if held[i] > 6:
+						max_h = maxf(max_h, cur[i].y - at.y - rest_y[i])
 					if was[i]:
 						slide += Vector2(cur[i].x - prev[i].x, cur[i].z - prev[i].z).length()
 				was[i] = on
