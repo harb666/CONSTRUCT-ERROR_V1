@@ -123,6 +123,17 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 ## Rounds per second at full spin; the barrels spin to match (one round per
 ## barrel passing).
 @export var chaingun_fire_rate := 10.0
+## Chaingun sound (Sfx.MINI_BOSS_MG, the owner's recording of continuous
+## fire, ~7 shots/s): every round fired plays ONE shot cut from it (a clean
+## shot at one of `chaingun_shot_starts` s into the file, `chaingun_shot_len`
+## s long with a short fade), so the sound always matches the real rate of
+## fire - spin-up, full rate and spin-down alike.
+@export var chaingun_sound_db := 0.0
+@export var chaingun_sound_near := 8.0
+@export var chaingun_sound_far := 70.0
+@export var chaingun_shot_starts: Array[float] = [2.631, 3.519, 4.005, 4.175, 4.475, 4.831]
+@export var chaingun_shot_len := 0.13
+@export var chaingun_shot_fade := 0.03
 ## Projectile speed (m/s).
 @export var chaingun_bullet_speed := 46.0
 @export var chaingun_damage := 0.4
@@ -193,6 +204,12 @@ var exposed := false
 ## Counters (tests / HUD).
 var missiles_fired := 0
 var bullets_fired := 0
+## Chaingun shot sounds started (tests).
+var chaingun_sounds := 0
+var _mg_voices: Array[DynamicSound] = []
+var _mg_left: Array[float] = []
+var _mg_next := 0
+var _mg_shot := 0
 ## Direction of the last chaingun round (tests).
 var last_shot_dir := Vector3.ZERO
 var core_hits := 0
@@ -899,8 +916,28 @@ func _fire_bullet() -> void:
 		bolt.size = chaingun_tracer_size
 		bolt.max_range = chaingun_range + 10.0
 	gun_flash.fire(_spin, 1.0)
+	_chaingun_sound()
 	last_shot_dir = dir
 	bullets_fired += 1
+
+
+## One shot from the owner's chaingun recording for this round (voices in
+## turn; each plays its short slice, then fades and stops in _process).
+func _chaingun_sound() -> void:
+	if _mg_voices.is_empty():
+		for i in 4:
+			var v := Sfx.emitter(chaingun_muzzle, Sfx.MINI_BOSS_MG, chaingun_sound_db, chaingun_sound_near, chaingun_sound_far)
+			v.name = "ChaingunShot%d" % i
+			_mg_voices.append(v)
+			_mg_left.append(0.0)
+	var v := _mg_voices[_mg_next]
+	if is_instance_valid(v) and v.is_inside_tree() and not chaingun_shot_starts.is_empty():
+		v.fade = 1.0
+		v.play(chaingun_shot_starts[_mg_shot % chaingun_shot_starts.size()])
+		_mg_left[_mg_next] = chaingun_shot_len
+		_mg_shot += 1
+		chaingun_sounds += 1
+	_mg_next = (_mg_next + 1) % _mg_voices.size()
 
 
 # --- missile ---
@@ -976,6 +1013,15 @@ func arc_points() -> Array:
 
 
 func _process(_delta: float) -> void:
+	for i in _mg_voices.size():
+		if _mg_left[i] > 0.0:
+			_mg_left[i] -= _delta
+			var v := _mg_voices[i]
+			if _mg_left[i] <= 0.0:
+				v.stop()
+				v.fade = 1.0
+			elif _mg_left[i] < chaingun_shot_fade:
+				v.fade = _mg_left[i] / chaingun_shot_fade
 	if core_fx and core:
 		core_fx.core_pos = core.global_position
 		core_fx.forward = _visual.global_basis.z.normalized()

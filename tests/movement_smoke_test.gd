@@ -486,6 +486,7 @@ func _run() -> void:
 	await _combat3_tests(main)
 	await _gait_tests(main)
 	await _shot_audio_tests(main)
+	await _death_sound_tests(main)
 	await _barrel_glow_tests(main)
 	await _turned_spawn_tests(main)
 	var t := Node3D.new()
@@ -3130,6 +3131,7 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 	p.reset_physics_interpolation()
 	var f0 := boss.gun_flash.flashes
 	var b0 := boss.bullets_fired
+	var cs0 := boss.chaingun_sounds
 	var lit := 0.0
 	var along := 180.0
 	for i in 300:
@@ -3140,6 +3142,10 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 		if boss.bullets_fired - b0 > 12:
 			break
 	_check(boss.bullets_fired > b0 and boss.gun_flash.flashes - f0 == boss.bullets_fired - b0, "boss: one muzzle flash per chaingun round (%d / %d)" % [boss.gun_flash.flashes - f0, boss.bullets_fired - b0])
+	_check(boss.chaingun_sounds - cs0 == boss.bullets_fired - b0 and boss._mg_voices.size() == 4 and boss._mg_voices[0].stream == Sfx.MINI_BOSS_MG, "boss: one shot of the owner's machine gun sound per chaingun round (%d / %d)" % [boss.chaingun_sounds - cs0, boss.bullets_fired - b0])
+	const MG_SHA := "8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978"
+	if FileAccess.file_exists("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3") == MG_SHA, "audio: mini boss machine gun sound file is the owner's original, unchanged")
 	_check(along < boss.chaingun_spread_deg * 2.0 + 0.5, "boss: flash points the way the rounds go (%.1f deg)" % along)
 	_check(lit > 1.0 and boss.gun_flash.light_energy >= 5.0 and boss.gun_flash.size >= 3.0, "boss: big flash that lights the robot up")
 	boss.always_active = false
@@ -4030,6 +4036,51 @@ func _shot_audio_tests(main: Node) -> void:
 	RobotEnemy.ai_enabled = was_ai
 	r.queue_free()
 	lock.view_camera = cam_was
+	await _ticks(3)
+
+
+## Grunt death sound: only for weapon-fire kills that don't break it apart.
+func _death_sound_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var at := Vector3(-40, 0, -30)
+	var right := 0
+	var wrong := 0
+	var weapon_sounds := 0
+	for t in [DamageInfo.Type.BULLET, DamageInfo.Type.ENERGY, DamageInfo.Type.BULLET, DamageInfo.Type.ENERGY, DamageInfo.Type.EXPLOSION, DamageInfo.Type.SUPERNOVA]:
+		var r := _spawn_robot(main, at)
+		await _ticks(5)
+		var info := DamageInfo.make(999, t, at, Vector3.FORWARD, 0.0, 30.0 if t == DamageInfo.Type.EXPLOSION else (42.0 if t == DamageInfo.Type.SUPERNOVA else 0.0))
+		r.apply_damage(info)
+		await _ticks(2)
+		var weapon_fire: bool = t == DamageInfo.Type.BULLET or t == DamageInfo.Type.ENERGY
+		var want := 1 if weapon_fire and r.last_destruction == BreakApart.Level.NONE else 0
+		if r.death_sounds == want: right += 1
+		else: wrong += 1
+		if weapon_fire: weapon_sounds += r.death_sounds
+		r.queue_free()
+		await _ticks(2)
+	_check(wrong == 0 and weapon_sounds > 0, "grunt death sound: plays for weapon-fire kills, not for explosions / supernova (%d ok, %d wrong)" % [right, wrong])
+	# A black hole swallow kill: no death sound.
+	var r2 := _spawn_robot(main, at)
+	await _ticks(5)
+	var bh := DamageInfo.make(999, DamageInfo.Type.ENERGY, at, Vector3.FORWARD)
+	bh.weapon = &"black_hole"
+	r2.apply_damage(bh)
+	await _ticks(2)
+	_check(not r2.alive and r2.death_sounds == 0, "grunt death sound: not played for a black hole kill")
+	r2.queue_free()
+	var s := _spawn_skirmisher(main, at)
+	await _ticks(5)
+	s.apply_damage(DamageInfo.make(999, DamageInfo.Type.BULLET, at, Vector3.FORWARD))
+	await _ticks(2)
+	_check(not s.alive and s.death_sounds == 0, "grunt death sound: grunts only (skirmishers stay as they were)")
+	s.queue_free()
+	_check(Sfx.SMALL_ROBOT_DEATH.resource_path.ends_with("small_robot_death.mp3"), "grunt death sound: uses the owner's small robot death file")
+	const SRD_SHA := "ea1e3439974adfbb32416bff3afc2b551b9ea5f45ab8a71ccc1dcabaf6a8683b"
+	if FileAccess.file_exists("res://assets/audio/enemies/small_robot_death.mp3"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/small_robot_death.mp3") == SRD_SHA, "audio: small robot death sound file is the owner's original, unchanged")
+	RobotEnemy.ai_enabled = was_ai
 	await _ticks(3)
 
 

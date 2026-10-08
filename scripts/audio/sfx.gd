@@ -26,6 +26,11 @@ const SHOTGUN_FIRING := preload("res://assets/audio/plasma/shotgun_firing.mp3")
 ## cannons. MACHINE_DEATH: the robot boss starting to die.
 const ENEMY_TROOP_1_FIRING := preload("res://assets/audio/enemies/enemy_troop_1_firing.mp3")
 const MACHINE_DEATH := preload("res://assets/audio/enemies/machine_death.wav")
+## SMALL_ROBOT_DEATH: a grunt killed by weapon fire (not when it breaks
+## apart). MINI_BOSS_MG: the robot boss's chaingun - a recording of
+## continuous fire; RobotBoss plays one shot out of it per round fired.
+const SMALL_ROBOT_DEATH := preload("res://assets/audio/enemies/small_robot_death.mp3")
+const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3")
 ## The generated cannon shot (no longer used by the grunts) and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")

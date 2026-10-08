@@ -74,6 +74,13 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var shot_sound_near := 3.0
 @export var shot_sound_far := 40.0
 @export var shot_sound_pitch := Vector2(0.95, 1.05)
+## Death sound (Sfx.SMALL_ROBOT_DEATH, the owner's own sound) when killed by
+## weapon fire and it doesn't break apart (none for black holes, explosions
+## or any break-up). Grunts only (the skirmisher turns it off).
+@export var weapon_death_sound := true
+@export var death_sound_db := 0.0
+@export var death_sound_near := 3.0
+@export var death_sound_far := 40.0
 ## Drops a health/armour shard on death (RecoveryDrops).
 @export var drops_recovery := true
 ## Split-fire suppression (Suppression): hits from a player whose arms are on
@@ -167,6 +174,8 @@ var _anim_backwards := false
 var _backing := false
 ## Shot sounds started (tests).
 var shot_sounds := 0
+## Death sounds started (tests).
+var death_sounds := 0
 var _shot_voices: Array[DynamicSound] = []
 var _shot_voice := 0
 
@@ -881,6 +890,11 @@ func die(info: DamageInfo) -> void:
 	_play_death(info)
 	# How violently it dies depends on the killing hit.
 	last_destruction = _breaker.choose_level(info)
+	if weapon_death_sound and last_destruction == BreakApart.Level.NONE and info \
+			and info.damage_type != DamageInfo.Type.EXPLOSION and info.damage_type != DamageInfo.Type.SUPERNOVA \
+			and info.weapon != &"black_hole":
+		Sfx.play_at(get_parent(), Sfx.SMALL_ROBOT_DEATH, global_position + Vector3.UP, death_sound_db, death_sound_near, death_sound_far)
+		death_sounds += 1
 	if last_destruction == BreakApart.Level.NONE:
 		_failure_sparks()
 	else:

@@ -23,6 +23,16 @@
   to die, supplied by the owner (sha256
   87429e38c8a4d01b44147f426b68fd629685e4e7ebd7cffc06d50613d84902b2). `RobotBoss.die()` plays it via `Sfx.MACHINE_DEATH`.
 
+- `assets/audio/enemies/small_robot_death.mp3` - grunts killed by weapon fire
+  (not when they break apart: black holes, explosions), supplied by the owner
+  (sha256 ea1e3439974adfbb32416bff3afc2b551b9ea5f45ab8a71ccc1dcabaf6a8683b).
+  `RobotEnemy.die()` plays it via `Sfx.SMALL_ROBOT_DEATH`.
+- `assets/audio/enemies/mini_boss_machine_gun_firing.mp3` - the robot boss's
+  chaingun, supplied by the owner (sha256
+  8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978). A recording of
+  continuous fire: `RobotBoss` plays one shot cut from it per round fired
+  (`chaingun_shot_starts`), so it matches the real rate of fire.
+
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
   their muzzle flashes stay on. The player's machine gun effects (barrel heat

@@ -179,6 +179,7 @@ func _init() -> void:
 	walk_speed = 1.4
 	# Ground speeds (m/s) of the planted feet in the walk/run clips at 1x
 	# (tools/measure_gait.gd), so the feet keep pace with the ground.
+	weapon_death_sound = false  # (grunts only)
 	walk_anim_speed = 0.94
 	run_anim_speed = 2.12
 	run_above = 1.4
