@@ -12,11 +12,19 @@ signal target_lost(reason: String)
 ## command's target_id, "Left" its target_id_left.
 @export var side := "Right"
 
-## Line of sight: the lock is kept while the target is behind cover, but
-## weapons hold fire (no firing solution). Hidden longer than
-## `cover_memory` s, the lock is dropped ("obstructed").
+## Line of sight: weapons hold fire while level geometry hides the target
+## (no firing solution); hidden longer than `cover_memory` s (a short grace
+## so a thin pillar sweeping past doesn't break it), the lock is dropped
+## ("obstructed").
 @export var line_of_sight := true
-@export var cover_memory := 1.25
+@export var cover_memory := 0.3
+## Out of the player's view: a target off screen (outside `view_camera`'s
+## view, e.g. behind the player) for longer than `off_screen_grace` s is
+## dropped ("off_screen"). Local players only (main.gd sets the camera).
+var view_camera: Camera3D
+@export var off_screen_grace := 0.25
+## Screen-edge margin (fraction of the screen) still counting as in view.
+@export var screen_margin := 0.02
 ## Seconds between line-of-sight rays (one short ray per lock).
 @export var los_interval := 0.1
 ## Eye height the line of sight is checked from (m above the player's feet).
@@ -28,6 +36,8 @@ var _player: Node3D
 var clear := true
 ## Seconds the current target has been hidden.
 var obstructed_for := 0.0
+## Seconds the current target has been off screen.
+var off_screen_for := 0.0
 var _los_t := 0.0
 ## Target dropped for being hidden: not re-locked until the player taps again.
 var _dropped_id := 0
@@ -67,6 +77,24 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 		if obstructed_for > cover_memory:
 			_dropped_id = current.target_id
 			_set_target(null, "obstructed")
+	if current != null and view_camera and is_instance_valid(view_camera):
+		off_screen_for = 0.0 if in_view(current.get_aim_point()) else off_screen_for + _delta
+		if off_screen_for > off_screen_grace:
+			_dropped_id = current.target_id
+			_set_target(null, "off_screen")
+
+
+## `p` is on screen for `view_camera` (in front of it, inside the view).
+func in_view(p: Vector3) -> bool:
+	if view_camera == null or not view_camera.is_inside_tree():
+		return true
+	if view_camera.is_position_behind(p):
+		return false
+	var vp := view_camera.get_viewport()
+	var size := vp.get_visible_rect().size
+	var sp := view_camera.unproject_position(p)
+	var m := size * screen_margin
+	return sp.x >= -m.x and sp.y >= -m.y and sp.x <= size.x + m.x and sp.y <= size.y + m.y
 
 
 ## A firing solution exists (target held and not behind cover).
@@ -126,6 +154,7 @@ func _set_target(t: Targetable, reason: String) -> void:
 	current = t
 	clear = true
 	obstructed_for = 0.0
+	off_screen_for = 0.0
 	_los_t = 0.0
 	if t:
 		target_locked.emit(t)

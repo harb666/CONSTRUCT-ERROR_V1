@@ -410,17 +410,21 @@ func _run() -> void:
 	_check(lock_l.current == d1.get_node("Targetable") and lock.current == d2.get_node("Targetable"), "second enemy goes to the LEFT slot, RIGHT keeps the first")
 
 	# Left slot's enemy dies: only that slot clears; its firing stops.
-	# (The right one's robot patrols past a pillar during this long wait;
-	# hold its lock through cover here - cover rules are tested in
-	# _combat3_tests.)
-	lock.cover_memory = 999.0
+	# (The robots patrol past pillars / the screen edge during this long
+	# wait; hold both locks through cover and off screen here - those rules
+	# are tested in _combat3_tests.)
+	for l: TargetLock in [lock, lock_l]:
+		l.cover_memory = 999.0
+		l.off_screen_grace = 999.0
 	for i in 900:
 		await _ticks(1)
 		if not lock_l.has_target():
 			break
 	_check(d1.health <= 0 and not lock_l.has_target(), "left lock clears when its enemy dies")
 	_check(selector.selected_left == null and selector.selected == d2.get_node("Targetable") and lock.has_target(), "only the left selection clears; right stays locked")
-	lock.cover_memory = 1.25
+	for l: TargetLock in [lock, lock_l]:
+		l.cover_memory = 0.3
+		l.off_screen_grace = 0.25
 	var shots_dead := left_shots.size()
 	await _ticks(60)
 	_check(left_shots.size() == shots_dead, "left cannon stops firing after the kill")
@@ -457,6 +461,7 @@ func _run() -> void:
 	await _hit_feedback_tests(main)
 	await _weapon_audio_tests(main)
 	await _combat3_tests(main)
+	await _gait_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -987,6 +992,12 @@ func _dual_wield_tests(main: Node) -> void:
 	var lock_r: TargetLock = p.get_node("TargetLock")
 	var lock_l: TargetLock = p.get_node("TargetLockLeft")
 	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
+	# Locks held while the targets leave the screen here (running past them,
+	# rigged camera angles); the off-screen release is tested in
+	# _combat3_tests.
+	var view_cam := lock_r.view_camera
+	lock_r.view_camera = null
+	lock_l.view_camera = null
 	sel.clear()
 	sel.forget_last_tap()
 	# Swap back: the RIGHT slot returns to the default cannon.
@@ -1158,6 +1169,8 @@ func _dual_wield_tests(main: Node) -> void:
 	await _ticks(3)
 	for r in [ra, rb, rc]:
 		r.queue_free()
+	lock_r.view_camera = view_cam
+	lock_l.view_camera = view_cam
 
 
 ## Five-barrel shotgun: pad (orange, separate from the BHG pad), pickup into
@@ -3519,25 +3532,29 @@ func _combat3_tests(main: Node) -> void:
 	var shots0: int = h.weapon("Right").shots_fired
 	await _ticks(30)
 	_check(lock.has_clear_shot() and h.weapon("Right").shots_fired > shots0, "lock: clear line - fires as before")
-	# Step behind the wall.
+	# (Off-screen release is tested on its own below.)
+	var cam_was := lock.view_camera
+	lock.view_camera = null
+	# Step behind the wall: a brief cover moment holds the lock (firing
+	# suspended) ...
 	p.global_position = Vector3(4, 0.05, 14)
 	p.reset_physics_interpolation()
-	await _ticks(12)
+	await _ticks(8)
 	shots0 = h.weapon("Right").shots_fired
-	await _ticks(30)
-	_check(lock.has_target() and not lock.clear and h.weapon("Right").shots_fired == shots0, "lock: target behind cover - lock held, firing suspended")
-	# Back into view inside the memory window: fires again.
+	await _ticks(4)
+	_check(lock.has_target() and not lock.clear and h.weapon("Right").shots_fired == shots0, "lock: target just went behind cover - held for a moment, firing suspended")
+	# ... back into view inside it: fires again.
 	p.global_position = Vector3(11, 0.05, 6)
 	p.reset_physics_interpolation()
 	await _ticks(40)
-	_check(lock.has_target() and lock.clear and h.weapon("Right").shots_fired > shots0, "lock: visible again within 1.25 s - firing resumes")
-	# Hidden too long: dropped, and not re-locked by itself.
+	_check(lock.has_target() and lock.clear and h.weapon("Right").shots_fired > shots0, "lock: visible again within 0.3 s - firing resumes")
+	# Out of view longer: dropped, and not re-locked by itself.
 	p.global_position = Vector3(4, 0.05, 14)
 	p.reset_physics_interpolation()
 	var lost := [""]
 	lock.target_lost.connect(func(reason: String) -> void: lost[0] = reason, CONNECT_ONE_SHOT)
-	await _ticks(int(60 * 1.6))
-	_check(not lock.has_target() and lost[0] == "obstructed" and sel.get_selected("Right") == null, "lock: hidden longer than 1.25 s - lock dropped")
+	await _ticks(int(60 * 0.6))
+	_check(not lock.has_target() and lost[0] == "obstructed" and sel.get_selected("Right") == null, "lock: hidden behind cover - lock turns off")
 	p.global_position = Vector3(11, 0.05, 6)
 	p.reset_physics_interpolation()
 	await _ticks(20)
@@ -3545,6 +3562,26 @@ func _combat3_tests(main: Node) -> void:
 	sel.tap_target(r.get_node("Targetable"))
 	await _ticks(5)
 	_check(lock.has_target() and lock.clear, "lock: tapping it again re-locks")
+	# Off screen: the camera looks away from the target -> lock turns off.
+	var cam := Camera3D.new()
+	main.add_child(cam)
+	cam.global_position = p.global_position + Vector3(0, 2, 0)
+	cam.look_at(r.global_position + Vector3.UP)
+	lock.view_camera = cam
+	await _ticks(20)
+	_check(lock.has_target() and lock.in_view(r.get_node("Targetable").get_aim_point()), "lock: target on screen - held")
+	cam.look_at(cam.global_position + (cam.global_position - r.global_position))
+	lost[0] = ""
+	lock.target_lost.connect(func(reason: String) -> void: lost[0] = reason, CONNECT_ONE_SHOT)
+	await _ticks(6)
+	_check(lock.has_target(), "lock: just off screen - a moment's grace")
+	await _ticks(20)
+	_check(not lock.has_target() and lost[0] == "off_screen" and sel.get_selected("Right") == null, "lock: target out of view - lock turns off")
+	cam.look_at(r.global_position + Vector3.UP)
+	await _ticks(10)
+	_check(not lock.has_target(), "lock: back on screen - not re-locked without a new tap")
+	cam.queue_free()
+	lock.view_camera = cam_was
 	sel.clear()
 	await _ticks(3)
 
@@ -3785,4 +3822,111 @@ func _combat3_tests(main: Node) -> void:
 		q.queue_free()
 	await _ticks(3)
 	p.can_die = true
+	RobotEnemy.ai_enabled = was_ai
+
+
+## Final (after every leg modifier) foot positions, for the gait tests.
+class FootProbe extends SkeletonModifier3D:
+	var feet: Array = []
+	var pos: Array = [Vector3.ZERO, Vector3.ZERO]
+
+	func _process_modification() -> void:
+		var sk := get_skeleton()
+		for i in feet.size():
+			pos[i] = sk.global_transform * sk.get_bone_global_pose(feet[i]).origin
+
+
+## Walks a robot along +X at `speed` for `frames` rendered frames; returns
+## [planted-foot slide (m, summed over locked frames after touch-down),
+##  locked share of foot-frames, min lateral foot separation (m),
+##  max planted-foot height above its rest height (m)].
+func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: int) -> Array:
+	var r: RobotEnemy = load(scene).instantiate()
+	r.combat_enabled = false
+	r.patrol_distance = 60.0
+	r.patrol_axis = Vector3.RIGHT
+	r.walk_speed = speed
+	r.walk_accel = 20.0
+	r.respawn_time = -1.0
+	main.add_child(r)
+	r.global_position = at
+	r.reset_physics_interpolation()
+	await physics_frame
+	r.set("_dir", 1.0)
+	r.linear_velocity = Vector3(speed, 0, 0)
+	var sk := r.get_skeleton()
+	var probe := FootProbe.new()
+	sk.add_child(probe)
+	probe.feet = [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
+	var legs = r.get("_foot_ik")
+	var rest_y := [sk.get_bone_global_rest(probe.feet[0]).origin.y, sk.get_bone_global_rest(probe.feet[1]).origin.y]
+	var prev := [Vector3.ZERO, Vector3.ZERO]
+	var was := [false, false]
+	var slide := 0.0
+	var locked := 0
+	var total := 0
+	var min_sep := INF
+	var max_h := 0.0
+	for f in frames + 40:
+		await process_frame
+		var cur: Array = probe.pos.duplicate()
+		if f >= 40:
+			for i in 2:
+				var on: bool = legs._legs[i].planted if legs is RobotWalker else legs._legs[i].locked
+				total += 1
+				if on:
+					locked += 1
+					max_h = maxf(max_h, cur[i].y - at.y - rest_y[i])
+					if was[i]:
+						slide += Vector2(cur[i].x - prev[i].x, cur[i].z - prev[i].z).length()
+				was[i] = on
+			var right: Vector3 = sk.global_basis.x
+			min_sep = minf(min_sep, absf((cur[0] - cur[1]).dot(right.normalized())))
+		prev = cur
+	r.queue_free()
+	await _ticks(2)
+	return [slide, float(locked) / maxf(total, 1), min_sep, max_h]
+
+
+func _gait_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var spot := Vector3(-30, 0.05, -30)
+	var grunt := "res://scenes/enemies/robot_enemy.tscn"
+	var skirm := "res://scenes/enemies/robot_skirmisher.tscn"
+	# Clip rates match the measured ground speed of the planted feet.
+	var g := _spawn_robot(main, spot)
+	await _ticks(5)
+	g.call("_set_move_anim", 1.1)
+	_check(g._anim.current_animation == "Walking" and absf(g._anim.speed_scale - 1.1 / g.walk_anim_speed) < 0.01,
+		"gait: walk clip plays at body speed / its measured stride speed (%.2fx)" % g._anim.speed_scale)
+	g.call("_set_move_anim", 2.6)
+	_check(g._anim.current_animation == "Running" and absf(g._anim.speed_scale - 2.6 / g.run_anim_speed) < 0.01, "gait: run clip likewise")
+	g.call("_set_move_anim", 0.05)
+	_check(g._anim.current_animation == "Stand", "gait: (nearly) stopped - stands still instead of stepping on the spot")
+	g.queue_free()
+	await _ticks(2)
+	for c in [[grunt, 1.1], [grunt, 2.6], [skirm, 1.4], [skirm, 4.6]]:
+		var res: Array = await _walk_feet(main, c[0], spot, c[1], 150)
+		var name := "grunt" if c[0] == grunt else "skirmisher"
+		_check(res[1] > 0.12, "gait: %s at %.1f m/s - feet planted %d%% of the time" % [name, c[1], roundi(res[1] * 100.0)])
+		_check(res[0] < 0.01, "gait: %s at %.1f m/s - planted feet don't slide (%.3f m)" % [name, c[1], res[0]])
+		_check(res[3] < 0.03, "gait: %s at %.1f m/s - planted feet on the floor (max %.3f m up)" % [name, c[1], res[3]])
+		if c[0] == skirm:
+			_check(res[2] > 0.3, "gait: skirmisher at %.1f m/s - legs never cross (min %.2f m apart)" % [c[1], res[2]])
+	# Standing: both feet down, flat, still.
+	var s := _spawn_skirmisher(main, spot)
+	await _ticks(90)
+	var w: RobotWalker = s.get("_foot_ik")
+	_check(s._anim.current_animation == "Stand" and w._legs[0].planted and w._legs[1].planted, "gait: skirmisher standing - both feet planted")
+	var steps := w.steps
+	await _ticks(30)
+	_check(w.steps == steps, "gait: standing still - no stepping on the spot")
+	# Turned on the spot: a foot steps round to settle.
+	s.set("_yaw", s.get("_yaw") + 1.2)
+	s._visual.rotation.y = s.get("_yaw")
+	await _ticks(60)
+	_check(w.steps > steps, "gait: turned on the spot - feet step round to follow")
+	s.queue_free()
+	await _ticks(2)
 	RobotEnemy.ai_enabled = was_ai

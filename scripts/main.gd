@@ -71,6 +71,7 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		var lock_left := player.get_node("TargetLockLeft") as TargetLock
 		selector.max_range = lock.max_range
 		for l: TargetLock in [lock, lock_left]:
+			l.view_camera = rig.camera
 			var side := l.side
 			l.target_lost.connect(func(_reason: String) -> void: selector.clear_side(side))
 		var marker := $UI/TargetMarker

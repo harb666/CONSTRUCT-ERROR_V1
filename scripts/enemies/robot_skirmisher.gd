@@ -172,11 +172,13 @@ func _init() -> void:
 	max_health = 1.4
 	section_set = SKIRMISHER_SECTIONS
 	walk_speed = 1.4
-	# Ground speeds (m/s) the walk/run clips match at 1x (the first robot's
-	# clips retargeted, stride scaled to these legs - the build tool prints
-	# them), so the feet don't slide.
-	walk_anim_speed = 1.0
-	run_anim_speed = 2.835
+	# Ground speeds (m/s) of the planted feet in the walk/run clips at 1x
+	# (tools/measure_gait.gd), so the feet keep pace with the ground.
+	walk_anim_speed = 0.94
+	run_anim_speed = 2.12
+	run_above = 1.4
+	runs_backwards = true
+	anim_rate_limits = Vector2(0.4, 1.75)
 	combat_speed = 4.6
 	detect_range = 30.0
 	lose_range = 42.0
@@ -212,6 +214,26 @@ func _ready() -> void:
 
 func _model_scene() -> PackedScene:
 	return SKIRMISHER_MODEL
+
+
+## Measured on the re-fitted rig (tools/measure_gait.gd).
+func _gaits() -> Dictionary:
+	return {
+		&"Walking": {"speed": walk_anim_speed, "ankle_min": 0.29},
+		&"Running": {"speed": run_anim_speed, "ankle_min": 0.327},
+		&"Stand": {"stand": true, "ankle_min": 0.29},
+	}
+
+
+func _stand_time() -> float:
+	return 0.852
+
+
+## Procedural legs: the retargeted walk / run clips don't fit its legs
+## (bowed, crossing, rolling feet), so the legs step on their own; the clips
+## still drive the hips, torso and arms.
+func _make_legs() -> SkeletonModifier3D:
+	return RobotWalker.new()
 
 
 func _far_scene() -> PackedScene:
@@ -574,19 +596,6 @@ func _drive(want_v: Vector3, delta: float, player_yaw := NAN) -> void:
 	# them), so the feet don't slide.
 	var along := absf(hv.dot(Vector3(sin(_yaw), 0, cos(_yaw))))
 	_set_move_anim(along, backwards)
-
-
-## Runs backwards too (the first robot only walks backwards).
-func _set_move_anim(speed: float, backwards := false) -> void:
-	# Runs from 1.4 m/s (the walk clip can't keep up beyond ~1.6), with a
-	# little hysteresis so it doesn't flicker between the two.
-	var run := speed > (1.2 if _move_anim == &"Running" else 1.4)
-	var a := &"Running" if run else &"Walking"
-	if a != _move_anim or backwards != _anim_backwards:
-		_move_anim = a
-		_anim_backwards = backwards
-		_anim.play(a, 0.15, -1.0 if backwards else 1.0)
-	_anim.speed_scale = clampf(speed / (run_anim_speed if run else walk_anim_speed), 0.4, 1.75)
 
 
 func _aim_at_target(player_yaw: float) -> void:

@@ -21,8 +21,10 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 
 @export_group("Patrol")
 @export var walk_speed := 1.1
-## Walking clip plays at 1x at this speed (m/s).
-@export var walk_anim_speed := 1.2
+## Ground speed (m/s) of the walking clip's planted feet at 1x (measured by
+## tools/measure_gait.gd): the clip plays at body speed / this, so the feet
+## keep pace with the ground (RobotFootIK plants them exactly).
+@export var walk_anim_speed := 0.98
 ## Walks back and forth this far (m) along `patrol_axis` (0 = stands still).
 @export var patrol_distance := 4.0
 @export var patrol_axis := Vector3.RIGHT
@@ -38,7 +40,17 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 ## Distance band it tries to fight from (advances / backs off outside it).
 @export var preferred_range := Vector2(7.0, 14.0)
 @export var combat_speed := 2.6
-@export var run_anim_speed := 3.4
+## Ground speed (m/s) of the running clip's planted feet at 1x (measured).
+@export var run_anim_speed := 2.59
+## Runs above this speed (m/s), walks below.
+@export var run_above := 1.6
+## Runs backwards too (otherwise only walks backwards).
+@export var runs_backwards := false
+## Fastest / slowest the walk and run clips play (shorter / longer steps
+## make up the rest - RobotFootIK stride warping).
+@export var anim_rate_limits := Vector2(0.4, 1.6)
+## Below this speed (m/s) it stops and stands, feet planted.
+@export var stand_below := 0.15
 ## Most the upper body turns from the legs before it walks backwards
 ## (facing the target) instead.
 @export var max_twist_deg := 105.0
@@ -111,6 +123,9 @@ var _visual: Node3D
 var _model: Node3D
 var _skeleton: Skeleton3D
 var _anim: AnimationPlayer
+## Leg modifier: RobotFootIK (plants the clip's feet) or RobotWalker
+## (procedural legs); both have `enabled`.
+var _foot_ik: SkeletonModifier3D
 var _breaker: BreakApart
 var _targetable: Targetable
 var _spawn_xf: Transform3D
@@ -183,10 +198,16 @@ func _build_model() -> void:
 	for a in [&"Walking", &"Running"]:
 		if _anim.has_animation(a):
 			_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
+	_make_stand_clip()
 	_anim.play(&"Walking")
 	_anim.seek(_phase * _anim.current_animation_length, true)
 	_move_anim = &"Walking"
 	_anim_backwards = false
+	# Legs first (before the arm aim modifier).
+	_foot_ik = _make_legs()
+	_foot_ik.name = "FootIK"
+	_skeleton.add_child(_foot_ik)
+	_foot_ik.call(&"setup", _skeleton, _anim, _gaits(), self)
 	_aim = RobotArmAim.new()
 	_aim.name = "ArmAim"
 	_skeleton.add_child(_aim)
@@ -211,6 +232,54 @@ func _build_model() -> void:
 
 
 # --- Model (a robot with another model overrides these) ---
+
+## RobotFootIK gait table for this model's clips (tools/measure_gait.gd).
+func _gaits() -> Dictionary:
+	return {
+		&"Walking": {"speed": walk_anim_speed, "ankle_min": 0.137},
+		&"Running": {"speed": run_anim_speed, "ankle_min": 0.175},
+		&"Stand": {"stand": true, "ankle_min": 0.137},
+	}
+
+
+## Where in the walking clip both feet are down (the standing pose).
+func _stand_time() -> float:
+	return 0.859
+
+
+## The leg modifier: the clip's own steps with the feet planted.
+func _make_legs() -> SkeletonModifier3D:
+	var ik := RobotFootIK.new()
+	ik.knee_forward = 0.15
+	return ik
+
+
+## "Stand": the walking clip's double-support pose held still (made once
+## per model, shared by every robot using it).
+func _make_stand_clip() -> void:
+	if _anim.has_animation(&"Stand") or not _anim.has_animation(&"Walking"):
+		return
+	var src := _anim.get_animation(&"Walking")
+	var t := _stand_time()
+	var a := Animation.new()
+	a.length = 1.0
+	a.loop_mode = Animation.LOOP_LINEAR
+	for i in src.get_track_count():
+		var ty := src.track_get_type(i)
+		if ty != Animation.TYPE_POSITION_3D and ty != Animation.TYPE_ROTATION_3D and ty != Animation.TYPE_SCALE_3D:
+			continue
+		var j := a.add_track(ty)
+		a.track_set_path(j, src.track_get_path(i))
+		match ty:
+			Animation.TYPE_POSITION_3D:
+				a.position_track_insert_key(j, 0.0, src.position_track_interpolate(i, t))
+			Animation.TYPE_ROTATION_3D:
+				a.rotation_track_insert_key(j, 0.0, src.rotation_track_interpolate(i, t))
+			Animation.TYPE_SCALE_3D:
+				a.scale_track_insert_key(j, 0.0, src.scale_track_interpolate(i, t))
+	var lib := _anim.get_animation_library(&"")
+	if lib:
+		lib.add_animation(&"Stand", a)
 
 func _model_scene() -> PackedScene:
 	return MODEL
@@ -447,7 +516,11 @@ func _behave(delta: float) -> void:
 		_anim.speed_scale = 0.4
 		if _aim:
 			_aim.target_weight = 0.0
+		if _foot_ik:
+			_foot_ik.set(&"enabled", false)
 		return
+	if _foot_ik:
+		_foot_ik.set(&"enabled", true)
 	_think_t -= delta
 	if _think_t <= 0.0:
 		_think_t = 0.25 + randf() * 0.05
@@ -581,14 +654,28 @@ func _combat(delta: float) -> void:
 	_update_fire(delta, d)
 
 
+## Walk / run clip at the rate the body's speed needs (feet keep pace with
+## the ground; RobotFootIK plants them), or stand still when (nearly)
+## stopped. A little hysteresis on each switch so it doesn't flicker.
 func _set_move_anim(speed: float, backwards := false) -> void:
-	var run := speed > 1.9 and not backwards
-	var a := &"Running" if run else &"Walking"
+	var a: StringName
+	if speed < (stand_below * 2.0 if _move_anim == &"Stand" else stand_below) and _anim.has_animation(&"Stand"):
+		a = &"Stand"
+		backwards = false
+	elif (not backwards or runs_backwards) and speed > (run_above * 0.85 if _move_anim == &"Running" else run_above):
+		a = &"Running"
+	else:
+		a = &"Walking"
 	if a != _move_anim or backwards != _anim_backwards:
+		var blend := 0.3 if a == &"Stand" or _move_anim == &"Stand" else 0.2
 		_move_anim = a
 		_anim_backwards = backwards
-		_anim.play(a, 0.2, -1.0 if backwards else 1.0)
-	_anim.speed_scale = clampf(speed / (run_anim_speed if run else walk_anim_speed), 0.5, 1.6)
+		_anim.play(a, blend, -1.0 if backwards else 1.0)
+	if a == &"Stand":
+		_anim.speed_scale = 1.0
+	else:
+		var clip_speed := run_anim_speed if a == &"Running" else walk_anim_speed
+		_anim.speed_scale = clampf(speed / clip_speed, anim_rate_limits.x, anim_rate_limits.y)
 
 
 func _update_fire(delta: float, dist: float) -> void:
@@ -654,10 +741,6 @@ func _patrol(delta: float) -> void:
 		return
 	if freeze:
 		return  # held by something (e.g. captured in a gravity well)
-	if _move_anim != &"Walking" or _anim_backwards:
-		_move_anim = &"Walking"
-		_anim_backwards = false
-		_anim.play(&"Walking", 0.25)
 	if _aim:
 		_aim.twist = 0.0
 	var axis := Vector3(patrol_axis.x, 0, patrol_axis.z).normalized()
@@ -679,7 +762,7 @@ func _patrol(delta: float) -> void:
 	if face.length_squared() > 0.04:
 		_yaw = lerp_angle(_yaw, atan2(face.x, face.z), clampf(turn_speed * delta, 0.0, 1.0))
 		_visual.rotation.y = _yaw
-	_anim.speed_scale = clampf(hv.length() / walk_anim_speed, 0.0, 1.6) if patrol_distance > 0.01 else 0.0
+	_set_move_anim(hv.length())
 
 
 # --- Damage ---
@@ -763,6 +846,8 @@ func die(info: DamageInfo) -> void:
 	# Death reaction: one of the model's clips, or a procedural variation
 	# layered on one.
 	_anim.speed_scale = 1.0
+	if _foot_ik:
+		_foot_ik.set(&"enabled", false)
 	_play_death(info)
 	# How violently it dies depends on the killing hit.
 	last_destruction = _breaker.choose_level(info)
