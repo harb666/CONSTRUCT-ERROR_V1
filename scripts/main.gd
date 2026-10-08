@@ -15,6 +15,11 @@ var players := {}  # player_id -> PlayerController
 
 
 func _ready() -> void:
+	# ?level=toxic (or -- --level=toxic) plays Toxic Arena instead of the
+	# default battle arena.
+	if StressTest._param("level") == "toxic" and get_node_or_null("ToxicArena") == null and get_tree().current_scene == self:
+		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
+		return
 	spawn_player(1, true)
 	var stress := StressTest.robot_count()
 	if stress > 0:

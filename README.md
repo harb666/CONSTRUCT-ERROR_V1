@@ -22,6 +22,9 @@ The HUD shows the branch/commit of the running build.
 
 Gaits from the stick (`PlayerController`): pushed up to `walk_zone` (0.5) it walks (up to `walk_speed` 4 m/s), further it blends into a run (`run_min_speed` 6.2 .. `run_speed` 8.5 m/s), and from `sprint_zone` (0.9) it sprints at `sprint_speed` 11.5 m/s until the push drops below `sprint_exit` (0.82; no flicker at the edge). Speeds line up with the Walking / Running / RunFast clips.
 
+## Level: Battle Arena (default)
+The game starts in `scenes/battle_arena.tscn`: the original box test arena (`scripts/world/test_arena.gd`, 80 x 80 m with steps, pillars, cover walls, ramps and the weapon pads) filled by `scripts/world/battle_spawner.gd` with 30 enemies: 2 robot bosses in the far corners (sizes 4 and 3.2) and 14 grunts + 14 skirmishers spread over the floor (fixed-seed layout, clear of the blocks, at least 16 m from the player spawn). `total`, `bosses` and `min_spawn_distance` are exports on its `Targets` node. Toxic Arena is still there: open the game with `?level=toxic`. (`scenes/test_arena.tscn` stays as the automated tests' arena.)
+
 ## Level: Toxic Arena
 The game runs in **Toxic Arena** (`assets/levels/toxic_arena/level.glb`, made by [image-to-level](https://github.com/harb666/image-to-level), imported unchanged at 1:1 scale). `scripts/world/toxic_arena.gd` adds what it needs to be played: collision from its named meshes (boxes, plus convex hulls for the ramps, stairs and the chamfered central platform; none on decoration), a HazardFluid kill volume (player back to spawn, robots die; a hidden basin floor catches debris) and an out-of-bounds volume below the level. Players spawn on the central platform. The old box test arena lives on in `scenes/test_arena.tscn`, used only by the automated tests.
 

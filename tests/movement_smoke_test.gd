@@ -463,6 +463,7 @@ func _run() -> void:
 	main.queue_free()
 	await _ticks(5)
 	await _toxic_arena_tests()
+	await _battle_arena_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -3375,3 +3376,32 @@ func _hit_feedback_tests(main: Node) -> void:
 	drops.clear()
 	p.can_die = true
 	RobotEnemy.ai_enabled = was_ai
+
+
+## The default level: the original test arena with 30 mixed robots.
+func _battle_arena_tests() -> void:
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/battle_arena.tscn", "battle: the battle arena is the game's level")
+	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(30)
+	var t := main.get_node("Targets")
+	var bosses := 0
+	var grunts := 0
+	var skirm := 0
+	var low := 99.0
+	var high := -99.0
+	var nearest := 999.0
+	var p: PlayerController = main.players[1]
+	for c in t.get_children():
+		if c is RobotBoss: bosses += 1
+		elif c is RobotSkirmisher: skirm += 1
+		elif c is RobotEnemy: grunts += 1
+		low = minf(low, c.global_position.y)
+		high = maxf(high, c.global_position.y)
+		nearest = minf(nearest, c.global_position.distance_to(p.global_position))
+	_check(t.get_child_count() == 30 and bosses == 2 and grunts == 14 and skirm == 14, "battle: 30 enemies - %d bosses, %d grunts, %d skirmishers" % [bosses, grunts, skirm])
+	_check(low > -0.1 and high < 0.1, "battle: every enemy stands on the arena floor (y %.2f..%.2f)" % [low, high])
+	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
+	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
+	main.queue_free()
+	await _ticks(5)
