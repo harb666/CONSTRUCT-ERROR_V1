@@ -37,6 +37,10 @@ const PLASMA_YELLOW := Color(1.0, 0.82, 0.06)
 const PLASMA_HOT := Color(1.0, 0.97, 0.62)
 const PLASMA_TRAIL := Color(1.0, 0.55, 0.05)
 const FLASH_POOL := 6
+## Where the left foot is mid-stance in each locomotion clip (fraction of
+## the clip; measured on the built model): the clip is played in step with
+## the procedural legs from there (RobotWalker.clip_time).
+const CLIP_MID_LEFT := {&"Walking": 0.61, &"Running": 0.41}
 
 enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 
@@ -66,6 +70,9 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 @export var backpedal_deg := 95.0
 ## Top speed running backwards (m/s).
 @export var backpedal_speed := 3.6
+## A sidestep / jump / dive swings the legs round to their new direction
+## at this rate (rad/s) instead of in one frame.
+@export var snap_turn_rate := 14.0
 ## Firing positions are reached moving at most this far off straight
 ## towards / away from the target (deg): an in-and-out zig-zag, never a
 ## long sideways strafe (that needs a 90-degree twist at the waist).
@@ -76,9 +83,11 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 @export var jump_height := 0.8
 @export var jump_speed := 5.0
 @export var jump_anim_speed := 1.3
+## Jump_Run clip time (s) at which it's back on its feet and the legs take over.
+@export var jump_land_time := 0.62
 ## Dive: Jumping_Punch from `dive_clip_range.x` to `.y` s (leap to
 ## recovered), played this much faster, the body following its travel.
-@export var dive_clip_range := Vector2(0.2, 2.45)
+@export var dive_clip_range := Vector2(0.2, 1.62)
 @export var dive_anim_speed := 1.45
 @export var dive_travel_scale := 1.15
 
@@ -144,7 +153,12 @@ var _act_clip := &""
 var _turn_from := 0.0
 var _turn_amount := 0.0
 var _turn_window := Vector2.ZERO
+var _turn_spd := 1.0
 var _prev_ct := 0.0
+## Facing the body is turning to at `snap_turn_rate` (NAN: none) - quick and
+## mechanical, never in a single frame.
+var _yaw_goal := NAN
+var _locked_clip := &""
 var _pending := -1.0
 var _pending_dir := Vector3.ZERO
 var _evade_cd := 0.0
@@ -249,6 +263,11 @@ func _gaits() -> Dictionary:
 		&"Walking": {"speed": walk_anim_speed, "ankle_min": 0.29},
 		&"Running": {"speed": run_anim_speed, "ankle_min": 0.327},
 		&"Stand": {"stand": true, "ankle_min": 0.29},
+		# Turn clips: the legs keep stepping procedurally (feet planted,
+		# stepping round) - the clips' own legs don't fit this body.
+		&"Idle_Turn_Left": {"turn": true}, &"Idle_Turn_Right": {"turn": true},
+		&"Run_Turn_Left": {"turn": true}, &"Run_Turn_Right": {"turn": true},
+		&"Walk_Turn_Left": {"turn": true}, &"Walk_Turn_Right": {"turn": true},
 	}
 
 
@@ -260,7 +279,12 @@ func _stand_time() -> float:
 ## (bowed, crossing, rolling feet), so the legs step on their own; the clips
 ## still drive the hips, torso and arms.
 func _make_legs() -> SkeletonModifier3D:
-	return RobotWalker.new()
+	var w := RobotWalker.new()
+	# Steps sized to its legs (~1.1 m at twice size): about one leg length
+	# per step at a full run, shorter walking - quick, short, heavy steps
+	# rather than lunges the legs can't reach.
+	w.cadence = Vector2(0.9, 2.1)
+	return w
 
 
 func _far_scene() -> PackedScene:
@@ -626,6 +650,7 @@ func _leg_turn(legs_yaw: float, player_yaw: float) -> float:
 ## while they swing round), body velocity follows quickly. With the target
 ## known (`player_yaw`), moving away from it runs backwards facing it.
 func _drive(want_v: Vector3, delta: float, player_yaw := NAN) -> void:
+	var slewing := _slew_yaw(delta)  # (finishing a sidestep / jump's swing)
 	var v := linear_velocity
 	var hv := Vector3(v.x, 0, v.z)
 	var backwards := false
@@ -643,7 +668,8 @@ func _drive(want_v: Vector3, delta: float, player_yaw := NAN) -> void:
 		# Legs turn fast from a standstill, slower at speed (it curves round
 		# like a runner rather than pivoting on the spot at full tilt).
 		var rate := leg_turn_rate / (1.0 + 0.5 * hv.length())
-		_yaw += clampf(err, -rate * delta, rate * delta)
+		if not slewing:
+			_yaw += clampf(err, -rate * delta, rate * delta)
 		# The body only ever moves along the legs (forwards, or backwards
 		# when backing off): while they swing round it curves with them
 		# and slows, and the feet grip - sideways momentum dies at once, so
@@ -750,7 +776,7 @@ func _start_sidestep(dir: Vector3) -> void:
 		var to := target.global_position - global_position
 		player_yaw = atan2(to.x, to.z)
 	var legs: Array = _legs_for(atan2(dir.x, dir.z), player_yaw)
-	_yaw = _yaw + _leg_turn(legs[0], player_yaw)
+	_yaw_goal = _yaw + _leg_turn(legs[0], player_yaw)
 	_backing = legs[1]
 	_anim.play(&"Running", 0.08, -2.4 if _backing else 2.4)
 	var v := linear_velocity
@@ -767,7 +793,7 @@ func _start_jump(dir: Vector3) -> void:
 	evades += 1
 	_evade_cd = randf_range(evade_cooldown.x, evade_cooldown.y)
 	_jump_cd = randf_range(jump_cooldown.x, jump_cooldown.y)
-	_yaw = atan2(dir.x, dir.z)
+	_yaw_goal = _yaw + wrapf(atan2(dir.x, dir.z) - _yaw, -PI, PI)
 	_anim.play(&"Jump_Run", 0.1, jump_anim_speed)
 	_anim.seek(0.0, true)
 	_prev_ct = 0.0
@@ -782,7 +808,7 @@ func _start_dive(dir: Vector3) -> void:
 	_evade_cd = randf_range(evade_cooldown.x, evade_cooldown.y) + 0.6
 	_dive_cd = randf_range(dive_cooldown.x, dive_cooldown.y)
 	_jump_cd = maxf(_jump_cd, 1.5)
-	_yaw = atan2(dir.x, dir.z)
+	_yaw_goal = _yaw + wrapf(atan2(dir.x, dir.z) - _yaw, -PI, PI)
 	_burst_left = 0
 	_aim.target_weight = 0.0
 	_anim.play(&"Jumping_Punch", 0.12, dive_anim_speed)
@@ -818,10 +844,14 @@ func _start_turn(clip: StringName, amount: float, time: float) -> void:
 	_turn_from = _yaw
 	_turn_amount = amount
 	_turn_window = Vector2(t0, t1)
+	_turn_spd = spd
+	_yaw_goal = NAN
 	_turn_cd = randf_range(run_turn_cooldown.x, run_turn_cooldown.y)
 	turns += 1
-	_anim.play(clip, 0.12, spd)
-	_anim.seek(t0, true)
+	# The turn clips' own legs and hips step for a human's feet, not these
+	# procedural ones (it crossed its legs): the body turns along the clip's
+	# heading curve while the walk / run / stand clip plays and the legs
+	# step round (RobotWalker).
 
 
 func _start_stagger() -> void:
@@ -829,8 +859,19 @@ func _start_stagger() -> void:
 	_burst_left = 0
 
 
+## Swing the facing on towards `_yaw_goal` (true while it still is).
+func _slew_yaw(delta: float) -> bool:
+	if is_nan(_yaw_goal):
+		return false
+	_yaw = move_toward(_yaw, _yaw_goal, snap_turn_rate * delta)
+	if is_equal_approx(_yaw, _yaw_goal):
+		_yaw_goal = NAN
+	return true
+
+
 func _update_action(delta: float) -> void:
 	_act_t += delta
+	_slew_yaw(delta)
 	var v := linear_velocity
 	var player_yaw := _yaw
 	if target:
@@ -861,7 +902,9 @@ func _update_action(delta: float) -> void:
 			if _prev_ct < 0.55 and ct >= 0.55:
 				_land()
 			_prev_ct = ct
-			if _act_t >= _act_len:
+			# Down on both feet: the legs take over (the rest of the clip
+			# runs on its own feet, which would slide under the body).
+			if _act_t >= _act_len or ct >= jump_land_time:
 				_air_y = 0.0
 				_end_action()
 		Act.DIVE:
@@ -880,7 +923,7 @@ func _update_action(delta: float) -> void:
 				_end_action()
 		Act.TURN:
 			var curve: Array = RobotSkirmisherMotion.TURN_YAW.get(_act_clip, [])
-			var ct := _anim.current_animation_position if _anim.current_animation == _act_clip else _turn_window.y
+			var ct := minf(_turn_window.x + _act_t * _turn_spd, _turn_window.y)
 			var c0 := RobotSkirmisherMotion.sample(curve, _turn_window.x)
 			var c1 := RobotSkirmisherMotion.sample(curve, _turn_window.y)
 			var f := clampf((RobotSkirmisherMotion.sample(curve, ct) - c0) / (c1 - c0), 0.0, 1.0) if absf(c1 - c0) > 1e-3 else 1.0
@@ -889,6 +932,7 @@ func _update_action(delta: float) -> void:
 			var hv := Vector3(v.x, 0, v.z)
 			var head := Vector3(sin(_yaw), 0, cos(_yaw)) * hv.length() * (1.0 - 1.8 * delta)
 			linear_velocity = Vector3(head.x, v.y, head.z)
+			_set_move_anim(head.length(), false)
 			if target:
 				_aim_at_target(player_yaw)
 				_update_fire(delta, (target.global_position - global_position).length())
@@ -933,6 +977,7 @@ func _end_action() -> void:
 
 func _reset_action() -> void:
 	action = Act.NONE
+	_yaw_goal = NAN
 	_pending = -1.0
 	_air_y = 0.0
 	_lift = 0.0
@@ -957,6 +1002,31 @@ func _apply_visual(delta: float) -> void:
 	var fwd := Vector3(sin(_yaw), 0, cos(_yaw))
 	_visual.position = Vector3(0, _air_y - _land_dip, 0) - fwd * _recoil * 0.035 * size_scale
 	_visual.rotation = Vector3(_lean.x - _jolt.x - _recoil * 0.03, _yaw + _jolt.y, _lean.y)
+	_lock_gait_clip()
+
+
+## One clock for the whole body: the walk / run clip (hips, torso, arm
+## swing) plays at the procedural legs' step rate, in phase with them, so
+## the body bobs and sways with the steps actually being taken.
+func _lock_gait_clip() -> void:
+	var w := _foot_ik as RobotWalker
+	var a := StringName(_anim.current_animation)
+	if w == null or w.weight < 0.5 or w.cadence_now <= 0.0 or not CLIP_MID_LEFT.has(a) or _anim.speed_scale <= 0.0:
+		_locked_clip = &""
+		return
+	var length := _anim.current_animation_length
+	var custom := _anim.get_playing_speed() / _anim.speed_scale
+	if absf(custom) < 1e-3:
+		return
+	var back := custom < 0.0
+	var want := w.clip_time(length, CLIP_MID_LEFT[a], back)
+	if a != _locked_clip:
+		_locked_clip = a
+		_anim.seek(want, true)
+		return
+	var err := wrapf(want - _anim.current_animation_position, -length * 0.5, length * 0.5)
+	var rate := (-1.0 if back else 1.0) * w.cadence_now * length + err * 4.0
+	_anim.speed_scale = maxf(rate / custom, 0.05)
 
 
 # --- Cannons ---

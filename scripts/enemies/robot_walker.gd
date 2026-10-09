@@ -49,6 +49,8 @@ var weight := 0.0
 ## Most the hips drop (m) beyond the crouch so a leg can reach.
 @export var max_hip_drop := 0.18
 @export var max_camera_distance := 40.0
+## Standing (turning on the spot, settling a foot): steps per cycle-second.
+@export var settle_cadence := 1.5
 
 var phase := 0.0
 ## Steps taken (tests).
@@ -61,6 +63,15 @@ var _moving := false
 ## The model's scale (a scaled-up robot): world-space step sizes grow with
 ## it and its steps come slower, so a bigger robot strides like a big one.
 var _k := 1.0
+## The cycle's current rate (cycles/s, 0 standing) and planted share: the
+## clip's playback is locked to them (clip_time) so the hips, torso and
+## arms move in step with these legs - one clock for the whole body.
+var cadence_now := 0.0
+## Body heading rate (rad/s, smoothed): turning on the spot keeps stepping
+## and plants each foot where the body will be facing.
+var _yaw_rate := 0.0
+var _prev_yaw := NAN
+var duty_now := 0.5
 
 
 class WLeg:
@@ -139,6 +150,10 @@ func _process_modification() -> void:
 	fwd.y = 0.0
 	fwd = fwd.normalized() if fwd.length_squared() > 1e-6 else Vector3.BACK
 	var body_yaw := atan2(fwd.x, fwd.z)
+	if not is_nan(_prev_yaw) and dt > 0.0:
+		_yaw_rate = lerpf(_yaw_rate, wrapf(body_yaw - _prev_yaw, -PI, PI) / dt, minf(dt * 12.0, 1.0))
+	_prev_yaw = body_yaw
+	var turning := absf(_yaw_rate) > 0.8
 	var vel := body.linear_velocity if body else Vector3.ZERO
 	vel.y = 0.0
 	var speed := vel.length()
@@ -151,16 +166,19 @@ func _process_modification() -> void:
 	for i in 2:
 		var l := _legs[i]
 		if not l.placed:
-			l.pos = _on_floor(l, home[i])
+			# Taking over (spawn, or back from a jump / dive / turn clip):
+			# from where the clip has the foot, so nothing pops.
+			l.pos = _on_floor(l, xf * skel.get_bone_global_pose(l.foot).origin)
 			l.yaw = body_yaw
 			l.planted = true
 			l.placed = true
 	# Cycle: runs while moving; standing, it runs only to finish a step or
 	# to settle a foot that's out of place.
-	var f := lerpf(cadence.x, cadence.y, s) / _k
+	var f := lerpf(cadence.x, cadence.y, s)
 	var d := lerpf(duty.x, duty.y, s)
+	duty_now = d
 	_moving = speed > (0.12 if _moving else 0.25)
-	var settle := false
+	var settle := turning and not _moving
 	if not _moving:
 		for i in 2:
 			var l := _legs[i]
@@ -169,7 +187,8 @@ func _process_modification() -> void:
 				settle = true
 	var any_swing := not _legs[0].planted or not _legs[1].planted
 	if _moving or settle or any_swing:
-		phase = fposmod(phase + dt * maxf(f, 1.1 if not _moving else f), 1.0)
+		phase = fposmod(phase + dt * maxf(f, settle_cadence if not _moving else f), 1.0)
+	cadence_now = f if _moving else 0.0
 	var stance_time := d / maxf(f, 0.1)
 	for i in 2:
 		var l := _legs[i]
@@ -179,7 +198,7 @@ func _process_modification() -> void:
 			# Standing and in place: stay down (the other foot settles).
 			if not _moving and not any_swing and not settle:
 				continue
-			if not _moving and Vector2(l.pos.x - home[i].x, l.pos.z - home[i].z).length() < settle_distance * _k * 0.5 \
+			if not _moving and not turning and Vector2(l.pos.x - home[i].x, l.pos.z - home[i].z).length() < settle_distance * _k * 0.5 \
 					and absf(wrapf(l.yaw - body_yaw, -PI, PI)) < settle_yaw * 0.5:
 				continue
 			l.planted = false
@@ -192,16 +211,25 @@ func _process_modification() -> void:
 			# stance.
 			var left := (1.0 - t) * (1.0 - d) / maxf(f, 0.1)
 			var lead := vel * (left + stance_time * 0.5) if _moving else Vector3.ZERO
-			var to := _on_floor(l, home[i] + lead)
+			var target_home := home[i]
+			var land_yaw := body_yaw
+			if turning and not _moving:
+				# Turning on the spot: step to where it'll be under the hip
+				# once the body has turned on a little.
+				var ahead := clampf(_yaw_rate * (left + 0.15), -0.9, 0.9)
+				var c := xf.origin
+				target_home = c + (home[i] - c).rotated(Vector3.UP, ahead)
+				land_yaw = body_yaw + ahead
+			var to := _on_floor(l, target_home + lead)
 			var e := t * t * (3.0 - 2.0 * t)
 			var p := l.from.lerp(to, e)
 			p.y = lerpf(l.from.y, to.y, e) + sin(PI * t) * lerpf(lift.x, lift.y, s) * _k
 			l.pos = p
-			l.yaw = lerp_angle(l.from_yaw, body_yaw, e)
+			l.yaw = lerp_angle(l.from_yaw, land_yaw, e)
 			if not swing or t >= 1.0:
 				l.planted = true
 				l.pos = to
-				l.yaw = body_yaw
+				l.yaw = land_yaw
 				steps += 1
 	# Hips: crouch with speed, bob (lowest as each foot lands), and drop
 	# further if a foot is out of reach.
@@ -225,6 +253,14 @@ func _process_modification() -> void:
 	# Legs.
 	for l in _legs:
 		_solve(skel, l, inv, body_yaw)
+
+
+## Clip time (s) for a locomotion clip of `length` s whose left foot is
+## mid-stance at `mid_left` (fraction of the clip): the matching point of
+## this step cycle (left leg = leg 0, mid-stance at duty / 2).
+func clip_time(length: float, mid_left: float, backwards := false) -> float:
+	var u := phase - duty_now * 0.5
+	return fposmod(mid_left + (-u if backwards else u), 1.0) * length
 
 
 func _on_floor(l: WLeg, p: Vector3) -> Vector3:

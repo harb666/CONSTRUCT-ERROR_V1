@@ -485,6 +485,7 @@ func _run() -> void:
 	await _weapon_audio_tests(main)
 	await _combat3_tests(main)
 	await _gait_tests(main)
+	await _skirmisher_leg_tests(main)
 	await _shot_audio_tests(main)
 	await _death_sound_tests(main)
 	await _barrel_glow_tests(main)
@@ -3943,6 +3944,79 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	r.queue_free()
 	await _ticks(2)
 	return [slide, float(locked) / maxf(total, 1), min_sep, max_h]
+
+
+## Skirmisher lower body: one clock (clip locked to the procedural steps),
+## legs stay procedural through turns, no one-frame facing snaps, the dive
+## ends on landing.
+func _skirmisher_leg_tests(main: Node) -> void:
+	var was_ai := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var s := _spawn_skirmisher(main, Vector3(-30, 0.05, -30))
+	s.set_physics_process(false)
+	var w: RobotWalker = s.get("_foot_ik")
+	w.max_camera_distance = 1.0e6
+	await _ticks(20)
+	var sk := s.get_skeleton()
+	var probe := FootProbe.new()
+	sk.add_child(probe)
+	probe.feet = [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
+	var dt := 1.0 / 60.0
+	# Running: the run clip plays in step with the legs.
+	var worst := 0.0
+	for i in 150:
+		s._drive(Vector3(4.6, 0, 0), dt)
+		s._apply_visual(dt)
+		await physics_frame
+		if i > 60 and s._anim.current_animation == "Running":
+			var L := s._anim.current_animation_length
+			var want := w.clip_time(L, RobotSkirmisher.CLIP_MID_LEFT[&"Running"])
+			worst = maxf(worst, absf(wrapf(want - s._anim.current_animation_position, -L * 0.5, L * 0.5)) / L)
+	_check(worst < 0.06 and w.cadence_now > 1.5, "skirmisher legs: the run clip is locked to the steps (off by %.0f%% of a cycle at most, %.1f steps/s)" % [worst * 100.0, w.cadence_now * 2.0])
+	# Turning on the spot: legs stay procedural and step round, feet planted.
+	for i in 30:
+		s._drive(Vector3.ZERO, dt)
+		s._apply_visual(dt)
+		await physics_frame
+	var steps0 := w.steps
+	s._start_turn(&"Idle_Turn_Left", PI * 0.5, 0.55)
+	var min_w := 1.0
+	var slide := 0.0
+	var prev := [probe.pos[0], probe.pos[1]]
+	var held := [0, 0]
+	for i in 70:
+		if s.action != RobotSkirmisher.Act.NONE:
+			s._update_action(dt)
+		else:
+			s._drive(Vector3.ZERO, dt)
+		s._apply_visual(dt)
+		await process_frame
+		min_w = minf(min_w, w.weight)
+		for k in 2:
+			held[k] = held[k] + 1 if w._legs[k].planted else 0
+			if held[k] > 3:
+				slide += Vector2(probe.pos[k].x - prev[k].x, probe.pos[k].z - prev[k].z).length()
+			prev[k] = probe.pos[k]
+	_check(min_w > 0.99 and w.steps - steps0 >= 2 and slide < 0.02, "skirmisher legs: turning on the spot it steps round on its own legs (%d steps, feet slid %.3f m)" % [w.steps - steps0, slide])
+	# Sidestep / jump: the facing swings round quickly, never in one frame.
+	s.target = main.players[1]
+	var jump := 0.0
+	var y0: float = s.get("_yaw")
+	s._start_sidestep(Vector3(-1, 0, 0))
+	for i in 20:
+		s._update_action(dt) if s.action != RobotSkirmisher.Act.NONE else s._drive(Vector3.ZERO, dt)
+		s._apply_visual(dt)
+		await physics_frame
+		var y1: float = s.get("_yaw")
+		jump = maxf(jump, absf(y1 - y0))
+		y0 = y1
+	_check(jump <= s.snap_turn_rate * dt + 0.001, "skirmisher legs: a sidestep turns it quickly but never in one frame (max %.2f rad/frame)" % jump)
+	s.target = null
+	_check(s.dive_clip_range.y <= 1.65, "skirmisher legs: the dive ends as its clip lands (no hovering lunge)")
+	probe.queue_free()
+	s.queue_free()
+	RobotEnemy.ai_enabled = was_ai
+	await _ticks(3)
 
 
 func _gait_tests(main: Node) -> void:
