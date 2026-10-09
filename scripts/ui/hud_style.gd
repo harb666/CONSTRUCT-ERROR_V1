@@ -86,6 +86,17 @@ static func brackets(ci: CanvasItem, r: Rect2, col := CYAN, arm := 14.0, gap := 
 		ci.draw_polyline(PackedVector2Array([p + Vector2(0, d.y * arm), p, p + Vector2(d.x * arm, 0)]), col, width)
 
 
+## One corner bracket at `corner` whose two arms run along unit directions
+## `u` and `v` (the shape's edges there), pushed `gap` outward - for
+## slanted / non-rectangular frames.
+static func slant_corner(ci: CanvasItem, corner: Vector2, u: Vector2, v: Vector2, col: Color, gap := 6.0, arm := 18.0, width := 3.0) -> void:
+	# Outward = away from both edges (miter direction).
+	var out := -(u + v).normalized()
+	# A fixed distance out (a true miter flies far off at sharp corners).
+	var c := corner + out * gap * 1.3
+	ci.draw_polyline(PackedVector2Array([c + u * arm, c, c + v * arm]), col, width, true)
+
+
 ## Slanted stripe ticks ("////"), `at` = left end of the group's baseline.
 static func stripes(ci: CanvasItem, at: Vector2, n: int, col: Color, h := 5.0, step := 6.0) -> void:
 	for i in n:

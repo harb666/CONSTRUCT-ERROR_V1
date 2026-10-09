@@ -284,6 +284,8 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 		y += 5.0
 	var outline := art.duplicate()
 	outline.append(art[0])
+	if sel:
+		draw_polyline(outline, Color(def.accent_color, (0.25 + 0.1 * sin(_t * 5.0)) * a), 8.0, true)
 	draw_polyline(outline, Color(HudStyle.CYAN if sel else HudStyle.CYAN_DIM, a), 3.0 if sel else 1.5, true)
 	# Name plate continuing the slant below the art.
 	var step := sw / ah
@@ -301,7 +303,16 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 	HudStyle.text(self, tf, Vector2(px + 12.0, py + PLATE_H - 8.0), def.display_name, fs, Color(HudStyle.BG if sel else HudStyle.TEXT, a))
 	HudStyle.stripes(self, Vector2(px + pw - 44.0, py + PLATE_H - 8.0), 5, Color(HudStyle.BG if sel else HudStyle.CYAN, 0.8 * a))
 	if sel:
-		HudStyle.brackets(self, Rect2(p, Vector2(cr.size.x, ah)), Color(def.accent_color, a), 16.0, 5.0 + 2.0 * sin(_t * 5.0), 3.0)
+		# Corner brackets that follow the card's slant: the art's top-left,
+		# top-right and bottom-right corners and the name plate's
+		# bottom-left, each made of its two edges' directions.
+		var col := Color(def.accent_color, a)
+		var gap := 6.0 + 2.5 * sin(_t * 5.0)
+		var down := Vector2(-sw, ah).normalized()
+		HudStyle.slant_corner(self, art[0], Vector2.RIGHT, down, col, gap)
+		HudStyle.slant_corner(self, art[1], Vector2.LEFT, down, col, gap)
+		HudStyle.slant_corner(self, art[2], Vector2.LEFT, -down, col, gap)
+		HudStyle.slant_corner(self, plate[3], Vector2.RIGHT, -down, col, gap)
 
 func _draw() -> void:
 	_buttons.clear()
