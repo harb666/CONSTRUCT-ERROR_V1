@@ -43,6 +43,9 @@ extends Node3D
 ## From the socket to the open end of the forearm gauntlet (m), where ARM_END
 ## weapons plug in (measured from this character's mesh).
 @export var arm_end_offset := 0.34
+## The right arm's open end is this much further from its elbow than the
+## left's (m), for rigs whose elbow joints aren't symmetric (Harbinger).
+@export var arm_end_right_extra := 0.0
 
 @export_group("Recoil")
 ## Spring that drives the procedural recoil (fast kick, rebound, settle).
@@ -114,6 +117,11 @@ var recoil: float:
 		return recoil_side.Right if absf(recoil_side.Right) >= absf(recoil_side.Left) else recoil_side.Left
 ## Target lock per arm (the "TargetLock" node drives the right arm).
 const LOCK_NODES := {"Right": "TargetLock", "Left": "TargetLockLeft"}
+
+
+## Socket -> open end of the gauntlet on `side` (m).
+func arm_end_for(side: String) -> float:
+	return arm_end_offset + (arm_end_right_extra if side == "Right" else 0.0)
 
 
 func _ready() -> void:

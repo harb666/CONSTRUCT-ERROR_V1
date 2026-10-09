@@ -507,6 +507,7 @@ func _run() -> void:
 	await _toxic_arena_tests()
 	await _battle_arena_tests()
 	await _front_end_tests()
+	await _harbinger_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -3656,11 +3657,170 @@ func _battle_arena_tests() -> void:
 	await _ticks(5)
 
 
+## Harbinger: playable like the Grinch (same player, her model), arm ends
+## cut and sealed, weapons on both arms, soles flat, picked in the front end.
+func _harbinger_tests() -> void:
+	var roster := CharacterRoster.load_default()
+	var hdef := roster.find(&"harbinger")
+	var main: Node = load("res://scenes/test_arena.tscn").instantiate()
+	main.front_end_mode = 1
+	root.add_child(main)
+	await _ticks(3)
+	var fe: FrontEnd = main.front_end
+	fe.press_start()
+	await process_frame
+	var card: Rect2 = fe._buttons.get("char:harbinger", Rect2())
+	var xf := root.get_final_transform()
+	for pressed in [true, false]:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 4321
+		ev.pressed = pressed
+		ev.position = xf * card.get_center()
+		Input.parse_input_event(ev)
+		await process_frame
+		await process_frame
+	_check(fe.selected == hdef and fe._preview_def == hdef, "harbinger: tapping her card picks her (3D preview switches)")
+	fe.press_deploy()
+	await _ticks(30)
+	var p: PlayerController = main.players[1]
+	var vis := p.get_node_or_null("Visual/HarbingerVisual") as CharacterAnimator
+	_check(p.character == hdef and vis != null and p.get_node("Visual").get_child_count() == 1, "harbinger: DEPLOY spawns her (her model only)")
+	var grinch: PlayerController = preload("res://scenes/player.tscn").instantiate()
+	var same := true
+	for prop in grinch.get_property_list():
+		if prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and prop.usage & PROPERTY_USAGE_STORAGE and prop.name != "character":
+			if typeof(grinch.get(prop.name)) in [TYPE_FLOAT, TYPE_INT, TYPE_BOOL] and grinch.get(prop.name) != p.get(prop.name) and prop.name != "player_id" and prop.name != "can_die":
+				same = false
+				print("  differs: ", prop.name)
+	grinch.free()
+	_check(same, "harbinger: plays like the Grinch (same movement / health settings)")
+	var ap := vis.get_node("Model").find_child("AnimationPlayer", true, false) as AnimationPlayer
+	var clips := ["Idle 9", "Walking", "Running", "RunFast", "Regular Jump", "slide right", "Dead", "Fall1", "Fall2",
+		"Idle Turn Left", "Idle Turn Right", "Run Sharp Turn Right", "Climb Attempt and Fall 5"]
+	_check(clips.all(func(c: String) -> bool: return ap.has_animation(c)), "harbinger: has every clip the animator uses")
+	_check(vis.anim_tree != null and vis.current_state == "Locomotion", "harbinger: animation tree runs (%s)" % vis.current_state)
+	# Arm ends cut: no geometry past each gauntlet's open end.
+	var mi := vis.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	var sk := vis.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	var holder := p.get_node("WeaponHolder") as WeaponHolder
+	var furthest := {"Left": -INF, "Right": -INF}
+	var arrays := mi.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	for side in ["Left", "Right"]:
+		var fa := sk.get_bone_global_rest(sk.find_bone("mixamorig_%sForeArm" % side))
+		var hd := sk.get_bone_global_rest(sk.find_bone("mixamorig_%sHand" % side))
+		var ax := (hd.origin - fa.origin).normalized()
+		for i in range(0, verts.size(), 3):
+			var v := verts[i]
+			if v.x * (1.0 if side == "Left" else -1.0) > 0.55:
+				furthest[side] = maxf(furthest[side], (v - fa.origin).dot(ax))
+	_check(furthest.Left < 0.375 and furthest.Right < 0.403, "harbinger: arm ends cut at the gauntlets (%.3f / %.3f m past the elbows)" % [furthest.Left, furthest.Right])
+	_check(mi.mesh.get_surface_count() >= 1 and vis.mesh_caps != null and vis.mesh_caps.caps.size() > 0, "harbinger: gauntlet openings sealed (caps)")
+	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.028), "harbinger: each arm's open end measured separately")
+	# Every weapon mounts on both arms.
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var mounted := 0
+	for def in reg.weapons:
+		holder.equip(def, "Right")
+		holder.equip(def, "Left")
+		await _ticks(3)
+		var ok := true
+		for side in ["Left", "Right"]:
+			var w := holder.weapon(side)
+			var sl := holder.slot(side)
+			if w == null or not w.is_inside_tree():
+				ok = false
+				continue
+			if def.mount_mode == WeaponDefinition.MountMode.ARM_END:
+				# The weapon's rear sits at the gauntlet's open end.
+				var rear := INF
+				var box := sl.socket_node.global_transform.affine_inverse() * w.global_transform * w.get_local_aabb()
+				rear = box.position.x
+				if absf(rear - sl.trim_x()) > 0.03:
+					ok = false
+					print("  %s %s rear %.3f vs end %.3f" % [def.id, side, rear, sl.trim_x()])
+		if ok:
+			mounted += 1
+	_check(mounted == reg.weapons.size(), "harbinger: every weapon mounts on both arms at the gauntlet ends (%d/%d)" % [mounted, reg.weapons.size()])
+	holder.unequip("Left")
+	holder.equip(reg.find(&"default_cannon"), "Right")
+	# Soles flat on the ground while standing.
+	await _ticks(60)
+	var tilt := 0.0
+	var low := INF
+	for side in ["Left", "Right"]:
+		var r := _sole(mi, sk, arrays, side)
+		tilt = maxf(tilt, r[0])
+		low = minf(low, r[1] - p.global_position.y)
+	_check(tilt < 6.0 and low > -0.06 and low < 0.02, "harbinger: standing, soles flat on the ground (tilt %.1f deg, lowest %.3f m)" % [tilt, low])
+	# Moves like the Grinch.
+	Input.action_press("move_forward")
+	await _ticks(60)
+	var sp := Vector2(p.velocity.x, p.velocity.z).length()
+	Input.action_release("move_forward")
+	_check(sp > 7.0 and vis.current_state == "Locomotion", "harbinger: runs (%.1f m/s)" % sp)
+	await _ticks(40)
+	Input.action_press("jump")
+	await _ticks(2)
+	Input.action_release("jump")
+	await _ticks(12)
+	_check(not p.is_on_floor() and vis.current_state in ["Jump", "AirJump"], "harbinger: jumps (%s)" % vis.current_state)
+	await _ticks(90)
+	_check(p.is_on_floor(), "harbinger: lands")
+	main.queue_free()
+	await _ticks(5)
+
+
+## [tilt (deg) from level, lowest point (world y)] of one boot's sole as drawn.
+func _sole(mi: MeshInstance3D, sk: Skeleton3D, arrays: Array, side: String) -> Array:
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var per := bones.size() / verts.size()
+	var pts: Array[Vector3] = []
+	var foot := [sk.find_bone("mixamorig_%sFoot" % side), sk.find_bone("mixamorig_%sToeBase" % side)]
+	for i in verts.size():
+		if verts[i].y > 0.012:
+			continue
+		var top := 0
+		for k in per:
+			if weights[i * per + k] > weights[i * per + top]:
+				top = k
+		var bn := mi.skin.get_bind_name(bones[i * per + top])
+		var b := sk.find_bone(bn) if bn != "" else mi.skin.get_bind_bone(bones[i * per + top])
+		if not b in foot:
+			continue
+		var out := Vector3.ZERO
+		for k in per:
+			var w := weights[i * per + k]
+			if w <= 0.0:
+				continue
+			var bi := bones[i * per + k]
+			var bname := mi.skin.get_bind_name(bi)
+			var bone := sk.find_bone(bname) if bname != "" else mi.skin.get_bind_bone(bi)
+			out += (sk.get_bone_global_pose(bone) * mi.skin.get_bind_pose(bi) * verts[i]) * w
+		pts.append(sk.global_transform * out)
+	# Least-squares plane y = a x + b z + c.
+	var sxx := 0.0; var sxz := 0.0; var szz := 0.0; var sx := 0.0; var sz := 0.0
+	var sxy := 0.0; var szy := 0.0; var sy := 0.0
+	var low := INF
+	for q in pts:
+		sxx += q.x * q.x; sxz += q.x * q.z; szz += q.z * q.z; sx += q.x; sz += q.z
+		sxy += q.x * q.y; szy += q.z * q.y; sy += q.y
+		low = minf(low, q.y)
+	var n := float(pts.size())
+	var m := Basis(Vector3(sxx, sxz, sx), Vector3(sxz, szz, sz), Vector3(sx, sz, n))
+	var abc := m.inverse() * Vector3(sxy, szy, sy)
+	var normal := Vector3(-abc.x, 1.0, -abc.y).normalized()
+	return [rad_to_deg(acos(normal.y)), low]
+
+
 ## Title "TAP TO START" -> character select -> DEPLOY, and the HUD.
 func _front_end_tests() -> void:
 	var roster := CharacterRoster.load_default()
-	_check(roster != null and roster.characters.size() == 1 and roster.characters[0].id == &"grinch" and roster.characters[0].portrait != null
-		and roster.characters[0].player_scene == preload("res://scenes/player.tscn"), "front end: roster has the Grinch (portrait, player scene)")
+	_check(roster != null and roster.characters.size() == 2 and roster.characters[0].id == &"grinch" and roster.characters[1].id == &"harbinger"
+		and roster.characters.all(func(c: CharacterDefinition) -> bool: return c.portrait != null and c.player_scene == preload("res://scenes/player.tscn")),
+		"front end: roster has the Grinch and Harbinger (portraits, same player scene)")
 	_check(HudStyle.title_font() is FontFile and HudStyle.label_font() is FontFile and HudStyle.num_font() is FontFile, "HUD: Orbitron / Rajdhani fonts load")
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	main.front_end_mode = 1

@@ -131,7 +131,7 @@ func socket_offset() -> float:
 
 
 func arm_end_offset() -> float:
-	return animator.arm_end_offset if animator else DEFAULT_ARM_END
+	return animator.arm_end_for(side) if animator else DEFAULT_ARM_END
 
 
 func equip(def: WeaponDefinition, player: Node) -> Weapon:

@@ -1,7 +1,7 @@
 extends SceneTree
 ## Finds the open holes (boundary loops) in a model's meshes and writes a
 ## MeshCaps resource with a minimal cap for each:
-##   godot --headless --path . -s tools/build_mesh_caps.gd
+##   godot --headless --path . -s tools/build_mesh_caps.gd  (ONLY=harbinger: just that one)
 ## Vertices are welded by position first (UV/normal seams aren't holes), all
 ## surfaces of a mesh count together (a hole already closed by another
 ## surface, e.g. the robot's interior caps, is left alone), and only real
@@ -24,12 +24,17 @@ const STRAY_MARGIN := 0.012
 ##  opaque material hint]
 const MODELS := [
 	["res://assets/characters/grinch/grinch.glb", "res://assets/characters/grinch/grinch_caps.res", "", Vector2(0.7422, 0.584), ""],
+	["res://assets/characters/harbinger/harbinger.glb", "res://assets/characters/harbinger/harbinger_caps.res", "", Vector2(0.5586, 0.1523), ""],
 	["res://assets/characters/robot/robot_enemy.glb", "res://assets/characters/robot/robot_caps.res", "Interior", Vector2.ZERO, "Interior"],
 ]
 
 
 func _init() -> void:
+	# ONLY=<text> rebuilds just the models whose path contains it.
+	var only := OS.get_environment("ONLY")
 	for m in MODELS:
+		if only != "" and not (m[0] as String).contains(only):
+			continue
 		var scene: Node = (load(m[0]) as PackedScene).instantiate()
 		var res := MeshCaps.new()
 		res.opaque_material_hint = m[4]

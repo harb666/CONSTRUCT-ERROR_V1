@@ -1,8 +1,9 @@
-[gd_resource type="Resource" script_class="CharacterRoster" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="CharacterRoster" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/character/character_roster.gd" id="1"]
 [ext_resource type="Resource" path="res://resources/characters/grinch.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/characters/harbinger.tres" id="3"]
 
 [resource]
 script = ExtResource("1")
-characters = Array[Resource("res://scripts/character/character_definition.gd")]([ExtResource("2")])
+characters = Array[Resource("res://scripts/character/character_definition.gd")]([ExtResource("2"), ExtResource("3")])

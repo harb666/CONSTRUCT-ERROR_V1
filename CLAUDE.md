@@ -94,10 +94,16 @@
 
 - Front end (owner asked): TAP TO START title (the tap turns sound on; the
   arena prepares behind it, meant to end the iPhone start-up silence) ->
-  character select (roster: Grinch only for now; Harbinger coming next;
+  character select (roster: Grinch and Harbinger;
   4-player co-op squad shown with open slots until online play exists) ->
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
+
+- Harbinger (owner's model) plays exactly like the Grinch (same player
+  scene, only her visual swapped). Her arm-end blasters are cut off at the
+  end of the blue gauntlets so weapons plug in like the Grinch's; her foot
+  angle is corrected in her clips so her soles sit flat; her clips play a
+  little slower (longer legs) so her feet don't slide.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this

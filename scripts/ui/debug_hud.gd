@@ -89,7 +89,8 @@ func _process(delta: float) -> void:
 		var hv := Vector2(player.velocity.x, player.velocity.z).length()
 		var state := "DODGE" if player.is_dodging else ("GROUND" if player.is_on_floor() else "AIR")
 		t += "   speed %.1f   %s%s" % [hv, state, "  SPRINT" if player.is_sprinting else ""]
-		var anim := player.get_node_or_null("Visual/GrinchVisual") as CharacterAnimator
+		var vis := player.get_node_or_null("Visual")
+		var anim := vis.get_child(0) as CharacterAnimator if vis and vis.get_child_count() > 0 else null
 		if anim:
 			t += "   anim " + anim.current_state
 		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
