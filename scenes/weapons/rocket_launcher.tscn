@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/rocket_launcher.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/weapons/rocket_launcher/rocket_launcher.glb" id="2"]
+
+[node name="RocketLauncher" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Model" parent="." instance=ExtResource("2")]
+transform = Transform3D(-0.47, 0, 0, 0, 0.47, 0, 0, 0, -0.47, 0, 0, 0)
+
+[node name="Arm_Socket_Attachment" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.447, 0.0008, 0)
+
+[node name="Muzzle_Exit" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.447, -0.0188, 0)

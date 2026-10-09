@@ -480,6 +480,7 @@ func _run() -> void:
 	await _weapon_socket_tests(main)
 	await _weapon_switch_tests(main)
 	await _machine_gun_tests(main)
+	await _rocket_launcher_tests(main)
 	await _mesh_cap_tests(main)
 	await _recovery_tests(main)
 	await _hit_feedback_tests(main)
@@ -1787,9 +1788,10 @@ func _weapon_fit_tests(main: Node) -> void:
 	sel.clear()
 	var base := Vector3(-14, 0, 33)
 	var defs := {"cannon": h.default_weapon, "shotgun": load("res://resources/weapons/shotgun.tres"), "bhg": load("res://resources/weapons/black_hole_generator.tres"),
-		"mg": load("res://resources/weapons/machine_gun.tres")}
+		"mg": load("res://resources/weapons/machine_gun.tres"), "rl": load("res://resources/weapons/rocket_launcher.tres")}
 	var combos := [["cannon", "cannon"], ["shotgun", "cannon"], ["shotgun", "shotgun"], ["mg", "mg"], ["mg", "cannon"],
-		["cannon", "mg"], ["mg", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"], ["mg", "bhg"]]
+		["cannon", "mg"], ["mg", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"], ["mg", "bhg"],
+		["rl", "rl"], ["rl", "cannon"], ["cannon", "rl"], ["rl", "mg"], ["shotgun", "rl"], ["bhg", "rl"], ["rl", "bhg"]]
 	var ta := _spawn_robot(main, base + Vector3(0, 0, -10))
 	var tb := _spawn_robot(main, base + Vector3(-7, 0, -7))
 	var tc := _spawn_robot(main, base + Vector3(7, 0, -7))
@@ -1878,6 +1880,124 @@ func _wait_black_holes() -> void:
 				and get_root().find_children("*", "GravityWell", true, false).is_empty():
 			return
 		await _ticks(1)
+
+
+## Rocket launcher: red pad (other pads unchanged), registered for the
+## wheel/unlock system, pickup into the RIGHT slot, mounted on either arm like
+## the other arm weapons, one or two at once with each arm aiming at its own
+## target. Rockets aren't made yet: it never fires.
+func _rocket_launcher_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var lo: WeaponLoadout = p.get_node("WeaponLoadout")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var sk: Skeleton3D = p.find_children("*", "Skeleton3D", true, false)[0]
+	sel.clear()
+	sel.forget_last_tap()
+	var pad: WeaponSpawnPad = main.get_node("RocketLauncherSpawnPad")
+	var spawner: WeaponSpawner = pad.get_node("WeaponSpawner")
+	var rl: WeaponDefinition = pad.weapon
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	lo.relock(rl)
+	await _wait_black_holes()
+	if spawner.display == null:
+		spawner.spawn_display()
+	await _ticks(5)
+	_check(rl.id == &"rocket_launcher" and (load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry).weapons.has(rl) and rl.icon != null,
+		"rocket launcher is a registered weapon with a wheel icon")
+	_check(spawner.display is RocketLauncher, "rocket launcher floats above its own pad")
+	var ring: Color = (pad.get_node("GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	_check(ring.r > 0.9 and ring.g < 0.3 and ring.b < 0.3, "rocket launcher pad glows red (%s)" % ring)
+	var bh_ring: Color = (main.get_node("WeaponSpawnPad/GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	var sg_ring: Color = (main.get_node("ShotgunSpawnPad/GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	var mg_ring: Color = (main.get_node("MachineGunSpawnPad/GlowRing").get_active_material(0) as StandardMaterial3D).albedo_color
+	_check(bh_ring.b > 0.9 and sg_ring.g < 0.6 and sg_ring.g > 0.3 and mg_ring.g > 0.75, "other pads keep their own colours")
+	var tris := 0
+	for mi: MeshInstance3D in spawner.display.find_children("*", "MeshInstance3D", true, false):
+		if mi.mesh is ArrayMesh:
+			for k in mi.mesh.get_surface_count():
+				tris += (mi.mesh.surface_get_arrays(k)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+	_check(tris > 0 and tris < 60000, "rocket launcher model reduced for phones (%d triangles, source 537k)" % tris)
+
+	# Walk onto the pad: RIGHT slot, LEFT untouched.
+	var left_before := h.weapon("Left")
+	p.global_position = pad.global_position + Vector3(0, 0.05, 3.0)
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(10)
+	Input.action_press("move_forward")
+	for i in 80:
+		await _ticks(1)
+		if h.weapon("Right") is RocketLauncher:
+			break
+	Input.action_release("move_forward")
+	await _ticks(10)
+	_check(h.weapon("Right") is RocketLauncher and lo.is_unlocked(rl), "walking onto the pad unlocks the rocket launcher into the RIGHT slot")
+	_check(h.weapon("Left") == left_before, "LEFT slot keeps its weapon")
+	_check(lo.available_for("Left").has(rl) and lo.available_for("Right").has(rl), "unlocked, it's in the weapon wheel for both arms")
+
+	# Mounted like the other arm weapons, either arm; one or two at once.
+	var base := Vector3(-14, 0, 33)
+	var ok := lo.equip("Left", rl)
+	await _ticks(30)
+	p.global_position = base
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	await _ticks(15)
+	var R := h.weapon("Right") as RocketLauncher
+	var L := h.weapon("Left") as RocketLauncher
+	_check(ok and R != null and L != null and R != L, "two rocket launchers at once (one per arm)")
+	await sk.skeleton_updated
+	var g := sk.get_global_transform_interpolated()
+	for side in ["Right", "Left"]:
+		var w := h.weapon(side)
+		if w == null:
+			continue
+		var fb := g * sk.get_bone_global_pose(sk.find_bone("mixamorig_%sForeArm" % side))
+		var axis := fb.basis.y.normalized()
+		var mz := w.find_marker(Weapon.MUZZLE_MARKER).global_position - fb.origin
+		_check((w.get_parent() as BoneAttachment3D).bone_name == "mixamorig_%sForeArm" % side and h.slot(side).definition.mount_mode == WeaponDefinition.MountMode.ARM_END
+			and w.get_barrel_direction().angle_to(axis) < deg_to_rad(3.0) and mz.dot(axis) > 0.7,
+			"%s arm: on the arm-end socket, barrel along the forearm (%.1f deg), muzzle out in front (%.2f m)" % [side, rad_to_deg(w.get_barrel_direction().angle_to(axis)), mz.dot(axis)])
+
+	# Each arm aims at its own target with the existing lock-on; no rockets yet.
+	var ra := _spawn_robot(main, base + Vector3(-6, 0, -9))
+	var rb := _spawn_robot(main, base + Vector3(6, 0, -9))
+	for r: RobotEnemy in [ra, rb]:
+		r.max_health = 99999.0
+		r.health = 99999.0
+	await _ticks(10)
+	var fired := [0]
+	var count := func(_s: String, _w: Weapon) -> void: fired[0] += 1
+	h.slot_fired.connect(count)
+	var bolts0 := get_root().find_children("*", "PlasmaBolt", true, false).size()
+	sel.forget_last_tap()
+	sel.tap_target(rb.get_node("Targetable"))
+	sel.forget_last_tap()
+	sel.tap_target(ra.get_node("Targetable"))
+	await _ticks(60)
+	var ta: Targetable = h.slot("Right").lock.current if h.slot("Right").lock else null
+	var tb: Targetable = h.slot("Left").lock.current if h.slot("Left").lock else null
+	var aims := []
+	for side in ["Right", "Left"]:
+		var sl := h.slot(side)
+		var w := h.weapon(side)
+		if sl.lock and sl.lock.current and w:
+			aims.append(rad_to_deg(w.get_barrel_direction().angle_to(sl.lock.get_aim_point() - w.find_marker(Weapon.MUZZLE_MARKER).global_position)))
+	_check(ta != null and tb != null and ta != tb and aims.size() == 2 and aims.max() < 20.0,
+		"dual rocket launchers: each arm locks and aims at its own target (%s deg)" % [aims])
+	_check(fired[0] == 0 and get_root().find_children("*", "PlasmaBolt", true, false).size() == bolts0, "no rockets yet: it never fires")
+	h.slot_fired.disconnect(count)
+	sel.clear()
+	for r in [ra, rb]:
+		r.queue_free()
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	lo.relock(rl)
+	await _ticks(5)
 
 
 ## Plasma machine gun: yellow pad (other pads unchanged), pickup into the

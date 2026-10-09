@@ -2,6 +2,7 @@ extends SceneTree
 ## Renders a transparent icon for every weapon in the registry:
 ##   godot --path . --rendering-driver opengl3 -s tools/render_weapon_icons.gd
 ## (needs a display, e.g. xvfb-run). Writes assets/ui/weapon_icons/<id>.png.
+## ONLY=<id> renders just that weapon's icon (the others are left as they are).
 
 const SIZE := 256
 const OUT := "res://assets/ui/weapon_icons/"
@@ -13,7 +14,10 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var reg: WeaponRegistry = load("res://resources/weapons/weapon_registry.tres")
+	var only := OS.get_environment("ONLY")
 	for def in reg.weapons:
+		if only != "" and String(def.id) != only:
+			continue
 		var vp := SubViewport.new()
 		vp.size = Vector2i(SIZE, SIZE)
 		vp.transparent_bg = true
