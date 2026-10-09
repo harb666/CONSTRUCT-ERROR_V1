@@ -12,8 +12,10 @@ extends Resource
 ## character can share the Grinch's player (same movement, health,
 ## weapons) with only its look changed.
 @export var visual_scene: PackedScene
-## Head-and-shoulders picture (HUD, character select, squad slots).
+## Face picture (HUD corner ring, squad slots).
 @export var portrait: Texture2D
+## Character select card art (slanted, transparent outside the slant).
+@export var banner: Texture2D
 @export var accent_color := Color(0.27, 0.86, 0.96)
 
 @export_group("Preview")

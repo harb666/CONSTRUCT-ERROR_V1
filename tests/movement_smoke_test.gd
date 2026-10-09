@@ -3819,8 +3819,8 @@ func _sole(mi: MeshInstance3D, sk: Skeleton3D, arrays: Array, side: String) -> A
 func _front_end_tests() -> void:
 	var roster := CharacterRoster.load_default()
 	_check(roster != null and roster.characters.size() == 2 and roster.characters[0].id == &"grinch" and roster.characters[1].id == &"harbinger"
-		and roster.characters.all(func(c: CharacterDefinition) -> bool: return c.portrait != null and c.player_scene == preload("res://scenes/player.tscn")),
-		"front end: roster has the Grinch and Harbinger (portraits, same player scene)")
+		and roster.characters.all(func(c: CharacterDefinition) -> bool: return c.portrait != null and c.banner != null and c.player_scene == preload("res://scenes/player.tscn")),
+		"front end: roster has the Grinch and Harbinger (banner art, portraits, same player scene)")
 	_check(HudStyle.title_font() is FontFile and HudStyle.label_font() is FontFile and HudStyle.num_font() is FontFile, "HUD: Orbitron / Rajdhani fonts load")
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	main.front_end_mode = 1

@@ -26,6 +26,7 @@ var _circle := PackedVector2Array()
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	size = Vector2(360, 230)
 	for i in 32:
 		var v := Vector2.from_angle(TAU * i / 32.0)

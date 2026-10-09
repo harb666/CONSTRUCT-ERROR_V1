@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b3madt2t61r68"
-path="res://.godot/imported/grinch.png-f1199d0d3e2d064858457e4fb1de8d45.ctex"
+uid="uid://c7lmn5jokj0ma"
+path="res://.godot/imported/grinch_portrait.png-bc31c90fd2d233318258326689075114.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/portraits/grinch.png"
-dest_files=["res://.godot/imported/grinch.png-f1199d0d3e2d064858457e4fb1de8d45.ctex"]
+source_file="res://assets/ui/characters/grinch_portrait.png"
+dest_files=["res://.godot/imported/grinch_portrait.png-bc31c90fd2d233318258326689075114.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

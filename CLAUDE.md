@@ -94,7 +94,8 @@
 
 - Front end (owner asked): TAP TO START title (the tap turns sound on; the
   arena prepares behind it, meant to end the iPhone start-up silence) ->
-  character select (roster: Grinch and Harbinger;
+  character select (roster: Grinch and Harbinger; cards use the owner's
+  banner art in the cyan theme, HUD portrait = the face from that art;
   4-player co-op squad shown with open slots until online play exists) ->
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).

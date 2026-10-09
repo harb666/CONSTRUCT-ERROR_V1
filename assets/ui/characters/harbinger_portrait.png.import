@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bqocctc3kfgx2"
-path="res://.godot/imported/harbinger.png-43d65c7b8040c891f846d6b60c426baa.ctex"
+uid="uid://2ldsod3exl8l"
+path="res://.godot/imported/harbinger_portrait.png-25a1b318bb03befff35682588609158e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/ui/portraits/harbinger.png"
-dest_files=["res://.godot/imported/harbinger.png-43d65c7b8040c891f846d6b60c426baa.ctex"]
+source_file="res://assets/ui/characters/harbinger_portrait.png"
+dest_files=["res://.godot/imported/harbinger_portrait.png-25a1b318bb03befff35682588609158e.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

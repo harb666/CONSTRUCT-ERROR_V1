@@ -55,6 +55,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_start_ms = Time.get_ticks_msec()
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	if roster == null:
 		roster = CharacterRoster.load_default()
 	if selected == null and roster and not roster.characters.is_empty():
@@ -255,6 +256,53 @@ func _make_platform() -> Node3D:
 
 # --- Drawing ---
 
+## Character card: the owner's banner art (tools/build_character_art.py)
+## in the game's cyan frame, with scan lines and a name plate in the same
+## slant. Dimmed unless picked.
+const BANNER_ASPECT := 1024.0 / 291.0
+## The art's slanted sides move this share of its width from top to bottom.
+const BANNER_SLANT := 0.1889
+const PLATE_H := 30.0
+
+
+func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> void:
+	var ah := cr.size.x / BANNER_ASPECT
+	var sw := cr.size.x * BANNER_SLANT
+	var p := cr.position
+	var art := PackedVector2Array([p + Vector2(sw, 0), p + Vector2(cr.size.x, 0),
+		p + Vector2(cr.size.x - sw, ah), p + Vector2(0, ah)])
+	var dim := 1.0 if sel else 0.55
+	if def.banner:
+		draw_texture_rect(def.banner, Rect2(p, Vector2(cr.size.x, ah)), false, Color(dim, dim, dim, a))
+	else:
+		draw_colored_polygon(art, Color(HudStyle.FILL, a))
+	# Scan lines across the art.
+	var y := 3.0
+	while y < ah:
+		var k := y / ah
+		draw_line(p + Vector2(sw * (1.0 - k), y), p + Vector2(cr.size.x - sw * k, y), Color(HudStyle.CYAN, 0.07 * a), 1.0)
+		y += 5.0
+	var outline := art.duplicate()
+	outline.append(art[0])
+	draw_polyline(outline, Color(HudStyle.CYAN if sel else HudStyle.CYAN_DIM, a), 3.0 if sel else 1.5, true)
+	# Name plate continuing the slant below the art.
+	var step := sw / ah
+	var py := p.y + ah + 4.0
+	var pw := cr.size.x * 0.66
+	var px := p.x - step * 4.0
+	var plate := PackedVector2Array([Vector2(px, py), Vector2(px + pw, py),
+		Vector2(px + pw - step * PLATE_H, py + PLATE_H), Vector2(px - step * PLATE_H, py + PLATE_H)])
+	draw_colored_polygon(plate, Color(HudStyle.CYAN, 0.9 * a) if sel else Color(HudStyle.FILL_DARK, 0.9 * a))
+	var po := plate.duplicate()
+	po.append(plate[0])
+	draw_polyline(po, Color(HudStyle.CYAN, a), 1.5, true)
+	var tf := HudStyle.title_font()
+	var fs := HudStyle.fit(tf, def.display_name, pw - 40.0, 20)
+	HudStyle.text(self, tf, Vector2(px + 12.0, py + PLATE_H - 8.0), def.display_name, fs, Color(HudStyle.BG if sel else HudStyle.TEXT, a))
+	HudStyle.stripes(self, Vector2(px + pw - 44.0, py + PLATE_H - 8.0), 5, Color(HudStyle.BG if sel else HudStyle.CYAN, 0.8 * a))
+	if sel:
+		HudStyle.brackets(self, Rect2(p, Vector2(cr.size.x, ah)), Color(def.accent_color, a), 16.0, 5.0 + 2.0 * sin(_t * 5.0), 3.0)
+
 func _draw() -> void:
 	_buttons.clear()
 	var a := _fade
@@ -347,21 +395,17 @@ func _draw_select(a: float) -> void:
 	var rx := pr.end.x + 26.0
 	var rw := size.x - m - rx
 	HudStyle.text(self, lf, Vector2(rx, top + 16), "CHARACTERS", 20, Color(HudStyle.CYAN, a))
-	var card := Vector2(118, 132)
+	var n := maxi(roster.characters.size(), 1)
+	var cw := minf((rw - 16.0 * (n - 1)) / n, 440.0)
+	var card := Vector2(cw, cw / BANNER_ASPECT + PLATE_H + 4.0)
 	var cx := rx
 	for def in roster.characters:
-		var cr := Rect2(Vector2(cx, top + 26) + off, card)
-		var sel := def == selected
-		HudStyle.panel(self, cr, HudStyle.CYAN, HudStyle.FILL if sel else HudStyle.FILL_DARK, 12.0, a)
-		if sel:
-			HudStyle.brackets(self, cr, Color(def.accent_color, a), 14.0, 4.0 + 2.0 * sin(_t * 5.0), 3.0)
-		if def.portrait:
-			draw_texture_rect(def.portrait, Rect2(cr.position + Vector2(9, 8), Vector2(card.x - 18, card.x - 18)), false, Color(1, 1, 1, a))
-		HudStyle.text(self, lf, Vector2(cr.get_center().x, cr.end.y - 8), def.display_name, HudStyle.fit(lf, def.display_name, card.x - 12, 20), Color(HudStyle.TEXT, a), 0.5)
+		var cr := Rect2(Vector2(cx, top + 30) + off, card)
+		_draw_card(def, cr, def == selected, a)
 		_buttons["char:" + String(def.id)] = cr
-		cx += card.x + 14.0
+		cx += card.x + 16.0
 	# Squad: you + open slots for online co-op.
-	var sy := top + 26 + card.y + 34.0
+	var sy := top + 30 + card.y + 34.0
 	HudStyle.text(self, lf, Vector2(rx, sy - 8), "SQUAD  //  ONLINE CO-OP", 20, Color(HudStyle.CYAN, a))
 	var deploy := Rect2(Vector2(size.x - m - 280, bottom - 62) + off, Vector2(280, 62))
 	var row_h := clampf((deploy.position.y - 16.0 - sy) / CharacterRoster.MAX_PLAYERS - 8.0, 30.0, 52.0)
