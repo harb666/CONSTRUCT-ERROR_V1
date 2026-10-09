@@ -318,6 +318,8 @@ func _whole_mesh_skips(mat: Material) -> bool:
 
 func _build_model() -> void:
 	super._build_model()
+	corpse_settled = false
+	corpse_gap = 0.0
 	_model.scale = Vector3.ONE * size_scale
 	_model.position = _model_offset() * size_scale
 	_hips = _skeleton.find_bone(&"mixamorig_Hips")
@@ -1171,6 +1173,154 @@ func _death_sound() -> void:
 	if snd and starts[pick] > 0.0:
 		snd.play(starts[pick])
 	death_sounds += 1
+
+
+# --- Corpse grounding ---
+
+## Per section mesh: { bone index: PackedVector3Array } - each bone's
+## outermost vertices (bone space; every part is rigid to one bone).
+static var _hull_cache := {}
+## Directions the outermost points are taken along (26: axes, edges, corners).
+static var _hull_dirs: Array[Vector3] = []
+## The corpse settled onto the floor (tests), and how far its lowest part
+## was off the floor when the death clip ended (m).
+var corpse_settled := false
+var corpse_gap := 0.0
+var _settle_body: RigidBody3D
+var _settle_t := 0.0
+
+
+func _corpse(delta: float) -> void:
+	super._corpse(delta)
+	if _settle_body == null and not corpse_settled and not alive and _visual and _dead_t < corpse_time \
+			and _dead_t > 0.4 and (not _anim.is_playing() or _anim.current_animation_position >= _anim.current_animation_length - 0.05):
+		_settle_corpse()
+
+
+## The death clips were made for a human: at the end its arm lies on the
+## floor, but this robot's big forearm cannon props the body up like a
+## stand, the rest of it hovering. When the clip ends the body settles as
+## one rigid shape (the posed armour's outline) under gravity: it tips over
+## until it rests on the floor. The clip, rig and pose are untouched - only
+## the whole model is moved, like a dropped object coming to rest.
+func _settle_corpse() -> void:
+	var pts := PackedVector3Array()
+	for sec in _sections:
+		if not is_instance_valid(sec) or not sec.visible or sec.get_parent() != _skeleton:
+			continue
+		var hull := _section_hull(sec)
+		for b in hull:
+			var xf := _skeleton.global_transform * _skeleton.get_bone_global_pose(b)
+			for v in hull[b]:
+				pts.append(xf * v)
+	corpse_settled = true
+	if pts.size() < 4 or not is_inside_tree():
+		return
+	var low := INF
+	for p in pts:
+		low = minf(low, p.y)
+	corpse_gap = low - global_position.y
+	var vis := _visual.global_transform
+	# Start just touching the floor (the clip may end a little in or off it).
+	vis.origin.y -= corpse_gap - 0.003
+	var inv := vis.affine_inverse()
+	var local := PackedVector3Array()
+	for p in pts:
+		local.append(inv * (p - Vector3(0, corpse_gap - 0.003, 0)))
+	var rb := RigidBody3D.new()
+	rb.name = "CorpseSettle"
+	rb.collision_layer = 0
+	rb.collision_mask = 1
+	rb.mass = mass
+	rb.linear_damp = 1.5
+	rb.angular_damp = 3.0
+	var pm := PhysicsMaterial.new()
+	pm.friction = 1.0
+	pm.bounce = 0.0
+	rb.physics_material_override = pm
+	rb.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	var hips := _skeleton.find_bone(&"mixamorig_Hips")
+	rb.center_of_mass = inv * ((_skeleton.global_transform * _skeleton.get_bone_global_pose(hips)).origin - Vector3(0, corpse_gap - 0.003, 0)) if hips >= 0 else Vector3.ZERO
+	var cs := CollisionShape3D.new()
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = local
+	cs.shape = shape
+	rb.add_child(cs)
+	get_parent().add_child(rb)
+	rb.global_transform = vis
+	_visual.global_transform = vis
+	_settle_body = rb
+	_settle_t = 0.0
+	get_tree().physics_frame.connect(_follow_settle)
+
+
+func _follow_settle() -> void:
+	if not is_instance_valid(_settle_body) or _visual == null or not is_inside_tree():
+		if get_tree() and get_tree().physics_frame.is_connected(_follow_settle):
+			get_tree().physics_frame.disconnect(_follow_settle)
+		return
+	_settle_t += get_physics_process_delta_time()
+	_visual.global_transform = _settle_body.global_transform
+	var still := _settle_body.linear_velocity.length() < 0.03 and _settle_body.angular_velocity.length() < 0.05
+	if (still and _settle_t > 0.4) or _settle_t > 3.0 or _dead_t >= corpse_time:
+		get_tree().physics_frame.disconnect(_follow_settle)
+		_settle_body.queue_free()
+		_settle_body = null
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_settle_body):
+		_settle_body.queue_free()
+	if get_tree() and get_tree().physics_frame.is_connected(_follow_settle):
+		get_tree().physics_frame.disconnect(_follow_settle)
+
+
+func _section_hull(sec: MeshInstance3D) -> Dictionary:
+	var key := sec.mesh.get_instance_id()
+	if _hull_cache.has(key):
+		return _hull_cache[key]
+	if _hull_dirs.is_empty():
+		for x in [-1, 0, 1]:
+			for y in [-1, 0, 1]:
+				for z in [-1, 0, 1]:
+					if x != 0 or y != 0 or z != 0:
+						_hull_dirs.append(Vector3(x, y, z).normalized())
+	var best := {}  # bone -> [points by direction]
+	var skin := sec.skin
+	for k in sec.mesh.get_surface_count():
+		var arr := sec.mesh.surface_get_arrays(k)
+		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var bones = arr[Mesh.ARRAY_BONES]
+		var weights = arr[Mesh.ARRAY_WEIGHTS]
+		if bones == null or weights == null or skin == null:
+			continue
+		var per := (bones as Array).size() / maxi(verts.size(), 1)
+		for i in verts.size():
+			var bi := 0
+			for j in per:
+				if weights[i * per + j] > weights[i * per + bi]:
+					bi = j
+			var bind: int = bones[i * per + bi]
+			var bone := skin.get_bind_bone(bind)
+			if bone < 0:
+				bone = _skeleton.find_bone(skin.get_bind_name(bind))
+			if bone < 0:
+				continue
+			var p := skin.get_bind_pose(bind) * verts[i]
+			if not best.has(bone):
+				var init := []
+				for d in _hull_dirs:
+					init.append(p)
+				best[bone] = init
+			var pts: Array = best[bone]
+			for d in _hull_dirs.size():
+				if p.dot(_hull_dirs[d]) > (pts[d] as Vector3).dot(_hull_dirs[d]):
+					pts[d] = p
+	var out := {}
+	for b in best:
+		out[b] = PackedVector3Array(best[b])
+	_hull_cache[key] = out
+	return out
 
 
 func _death_options(info: DamageInfo) -> Array:

@@ -581,12 +581,20 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	main.get_node("CameraRig").yaw = 0.0
 	# This checks the pull, not obstacles: a loose prop the well dragged into
 	# the escape lane is moved aside first.
+	# Props near the lane are held where they are (or moved aside) for the
+	# sprint, so the well can't drag one back into the player's way.
+	var held_props: Array[RigidBody3D] = []
 	for prop in main.find_children("*", "RigidBody3D", true, false):
 		var b := prop as RigidBody3D
 		var rel := b.global_position - p.global_position
-		if not (b is RobotEnemy) and rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
+		if b is RobotEnemy or b.freeze:
+			continue
+		if rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
 			b.global_position += Vector3(4.0 * (1.0 if rel.x >= 0.0 else -1.0), 0, 0)
 			b.linear_velocity = Vector3.ZERO
+		if rel.z > -3.0 and rel.z < 11.0 and absf(rel.x) < 6.0:
+			b.freeze = true
+			held_props.append(b)
 	Input.action_press("move_back")
 	Input.action_press("sprint")
 	var z0 := p.global_position.z
@@ -601,6 +609,9 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 		print("escape blocked: well at ", spot, ", player ", p.global_position, ", pull ", p.external_velocity, ", velocity ", p.velocity, ", touching ", dbg, ", sprinting ", p.is_sprinting)
 	Input.action_release("move_back")
 	Input.action_release("sprint")
+	for b in held_props:
+		if is_instance_valid(b):
+			b.freeze = false
 	_check(p.global_position.z > z0 + 2.0, "player can still sprint out of the pull (%.1f m)" % (p.global_position.z - z0))
 	# Wait for collapse + supernova.
 	var saw_collapse := false
@@ -4013,6 +4024,21 @@ func _skirmisher_leg_tests(main: Node) -> void:
 	_check(jump <= s.snap_turn_rate * dt + 0.001, "skirmisher legs: a sidestep turns it quickly but never in one frame (max %.2f rad/frame)" % jump)
 	s.target = null
 	_check(s.dive_clip_range.y <= 1.65, "skirmisher legs: the dive ends as its clip lands (no hovering lunge)")
+	# Dead: the body comes to rest on the floor (the clips' end poses prop it
+	# up on a cannon; it settles over onto the floor).
+	s.set_physics_process(true)
+	s.corpse_time = 60.0
+	s.apply_damage(DamageInfo.make(999, DamageInfo.Type.BULLET, s.global_position + Vector3.UP, Vector3.FORWARD, 0.5, 0.0))
+	await _ticks(60 * 7)
+	var low := INF
+	for sec in s._sections:
+		if is_instance_valid(sec) and sec.visible:
+			var hull: Dictionary = s._section_hull(sec)
+			for b in hull:
+				var xf := sk.global_transform * sk.get_bone_global_pose(b)
+				for v in hull[b]:
+					low = minf(low, (xf * v).y)
+	_check(s.corpse_settled and absf(low - s.global_position.y) < 0.03, "skirmisher corpse: rests on the floor, not floating (lowest part %.3f m off it)" % (low - s.global_position.y))
 	probe.queue_free()
 	s.queue_free()
 	RobotEnemy.ai_enabled = was_ai

@@ -59,8 +59,16 @@
 - Skirmishers are twice as big (`RobotSkirmisher.size_scale = 2.0`): model,
   hitbox, target point, steps, jump and dive lunge scale; speeds, health and
   weapons don't.
+- Skirmisher movement / lower body is approved as of 536f448 - don't change
+  it: RobotWalker legs, the clip locked to the steps (CLIP_MID_LEFT),
+  cadence 0.9-2.1, turn stepping, snap_turn_rate, jump/dive hand-backs.
+- Dead skirmishers settle onto the floor after their death clip
+  (`_settle_corpse`: the posed body tips over as one rigid shape); the clips,
+  rig and skeleton are not changed for this.
 
 ## Approved save points
+- Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner
+  approved the skirmisher movement.
 - Branch `saved/approved-2026-10-09` (commit 730b224): the owner said
   everything is good. It's the known-good state to compare against or roll
   back to. Never push to, move or delete `saved/*` branches.
