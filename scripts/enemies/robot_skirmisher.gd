@@ -331,6 +331,9 @@ func _build_model() -> void:
 	_breaker.medium_breaks = Vector2i(1, 2)
 	_breaker.heavy_breaks = Vector2i(2, 3)
 	_breaker.extreme_keep = 1
+	# Broken-off parts collide with their own outline, so a detached arm
+	# lands on the floor instead of hovering on its bounding box.
+	_breaker.hull_shapes = true
 	_reset_action()
 	_engaged = false
 	_make_barrel_glows()

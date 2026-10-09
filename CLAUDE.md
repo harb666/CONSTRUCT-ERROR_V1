@@ -65,6 +65,9 @@
 - Dead skirmishers settle onto the floor after their death clip
   (`_settle_corpse`: the posed body tips over as one rigid shape); the clips,
   rig and skeleton are not changed for this.
+- Skirmisher break-off pieces collide with their own outline
+  (`BreakApart.hull_shapes`, skirmisher only), so a detached arm falls clear
+  and lies on the floor. Grunts / boss keep their box shapes.
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner

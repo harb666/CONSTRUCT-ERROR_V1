@@ -163,6 +163,9 @@ func add_armour(amount: float) -> float:
 
 var external_velocity := Vector3.ZERO
 @export var external_decay := 5.0
+## Sideways speed (m/s per frame of contact) given to a black-hole-pulled
+## prop the player is pressed against, so it can't pin them.
+@export var pulled_prop_shove := 1.5
 var _idle_face_yaw := 0.0
 var _fall_speed := 0.0
 
@@ -267,6 +270,7 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	velocity += ext
 	move_and_slide()
 	velocity -= ext
+	_shove_pulled_props()
 	if ext != Vector3.ZERO:
 		if is_on_wall():
 			external_velocity = external_velocity.slide(get_wall_normal())
@@ -296,6 +300,32 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	if global_position.y < -30.0:
 		respawn()
+
+
+## A prop a black hole is dragging can be pressed into the player and pin
+## them (the character can't push rigid bodies): when the player is moving
+## into one that's being pulled right now, it's knocked aside out of the way.
+func _shove_pulled_props() -> void:
+	var move := Vector3(velocity.x, 0.0, velocity.z)
+	if move.length_squared() < 1.0:
+		return
+	var dir := move.normalized()
+	var frame := Engine.get_physics_frames()
+	for k in get_slide_collision_count():
+		var c := get_slide_collision(k)
+		var b := c.get_collider() as RigidBody3D
+		if b == null or b.freeze or b.is_in_group(&"enemies") or frame - int(b.get_meta(&"gw_pulled_frame", -100)) > 2:
+			continue
+		var n := c.get_normal()
+		n.y = 0.0
+		if n.length_squared() < 1e-4 or dir.dot(-n.normalized()) < 0.3:
+			continue  # not in the way
+		var off := b.global_position - global_position
+		off.y = 0.0
+		var side := off - dir * off.dot(dir)
+		if side.length_squared() < 1e-4:
+			side = dir.cross(Vector3.UP)
+		b.linear_velocity += side.normalized() * pulled_prop_shove
 
 
 ## Face the aim direction (camera yaw) for `seconds`, e.g. while shooting.

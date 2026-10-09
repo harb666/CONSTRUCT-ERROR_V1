@@ -204,6 +204,8 @@ func _pull_body(b: RigidBody3D, delta: float) -> void:
 	v_t *= 1.0 - clampf(close * 0.8 * delta, 0.0, 0.2)
 	b.linear_velocity = (to_axis * v_rad + tangent * v_t + _axis * v_ax + v_rest).limit_length(max_speed)
 	b.sleeping = false
+	# (Lets a player pressed against it shove it aside - PlayerController.)
+	b.set_meta(&"gw_pulled_frame", Engine.get_physics_frames())
 	# Visual: shrink + spin faster as it nears the centre.
 	var id := b.get_instance_id()
 	_spin[id] = float(_spin.get(id, 0.0)) + max_spin_speed * close * close * delta

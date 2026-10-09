@@ -581,20 +581,12 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	main.get_node("CameraRig").yaw = 0.0
 	# This checks the pull, not obstacles: a loose prop the well dragged into
 	# the escape lane is moved aside first.
-	# Props near the lane are held where they are (or moved aside) for the
-	# sprint, so the well can't drag one back into the player's way.
-	var held_props: Array[RigidBody3D] = []
 	for prop in main.find_children("*", "RigidBody3D", true, false):
 		var b := prop as RigidBody3D
 		var rel := b.global_position - p.global_position
-		if b is RobotEnemy or b.freeze:
-			continue
-		if rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
+		if not (b is RobotEnemy) and rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
 			b.global_position += Vector3(4.0 * (1.0 if rel.x >= 0.0 else -1.0), 0, 0)
 			b.linear_velocity = Vector3.ZERO
-		if rel.z > -3.0 and rel.z < 11.0 and absf(rel.x) < 6.0:
-			b.freeze = true
-			held_props.append(b)
 	Input.action_press("move_back")
 	Input.action_press("sprint")
 	var z0 := p.global_position.z
@@ -609,9 +601,6 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 		print("escape blocked: well at ", spot, ", player ", p.global_position, ", pull ", p.external_velocity, ", velocity ", p.velocity, ", touching ", dbg, ", sprinting ", p.is_sprinting)
 	Input.action_release("move_back")
 	Input.action_release("sprint")
-	for b in held_props:
-		if is_instance_valid(b):
-			b.freeze = false
 	_check(p.global_position.z > z0 + 2.0, "player can still sprint out of the pull (%.1f m)" % (p.global_position.z - z0))
 	# Wait for collapse + supernova.
 	var saw_collapse := false
@@ -3834,13 +3823,16 @@ func _combat3_tests(main: Node) -> void:
 		if e2.action != RobotSkirmisher.Act.TURN:
 			break
 		await _ticks(1)
-	var start2 := e2.global_position
+	# Distance travelled (it may turn back mid-second; still moving).
+	var travelled := 0.0
+	var last2 := e2.global_position
 	for i in 60:
 		if i % 6 == 0:
 			e2.suppression.level = 1.0
 		await _ticks(1)
-		if i % 6 == 0: print("DBG ", i, " pos ", e2.global_position, " v ", e2.linear_velocity, " act ", e2.action, " anim ", e2._anim.current_animation, " ", e2.get("_steer_t"), " ", e2.get("_backing"))
-	_check(e2.global_position.distance_to(start2) > 1.0, "split: a suppressed skirmisher keeps moving (%.1f m in 1 s)" % e2.global_position.distance_to(start2))
+		travelled += Vector2(e2.global_position.x - last2.x, e2.global_position.z - last2.z).length()
+		last2 = e2.global_position
+	_check(travelled > 1.0, "split: a suppressed skirmisher keeps moving (%.1f m in 1 s)" % travelled)
 	RobotEnemy.ai_enabled = false
 	# Phase E feedback: concentrated hits spark harder; skirmisher wind-up tell.
 	var c0: int = e1.hit_fx.concentrated_hits
@@ -4039,6 +4031,40 @@ func _skirmisher_leg_tests(main: Node) -> void:
 				for v in hull[b]:
 					low = minf(low, (xf * v).y)
 	_check(s.corpse_settled and absf(low - s.global_position.y) < 0.03, "skirmisher corpse: rests on the floor, not floating (lowest part %.3f m off it)" % (low - s.global_position.y))
+	# A broken-off arm drops to the floor (collides with its own outline,
+	# not a bounding box far bigger than the limb).
+	var s2 := _spawn_skirmisher(main, Vector3(-36, 0.05, -30))
+	s2.corpse_time = 60.0
+	await _ticks(20)
+	var got_arm := []  # [piece, joint] (lambdas can't assign outer locals)
+	s2.get_breaker().piece_detached.connect(func(pc: DebrisPiece, sec: BreakSection, j: Vector3) -> void:
+		if String(sec.section_name).contains("Arm") and got_arm.is_empty():
+			got_arm.append_array([pc, j]))
+	s2.apply_damage(DamageInfo.make(999, DamageInfo.Type.BULLET, s2.global_position + Vector3.UP * 2.0, Vector3.FORWARD, 0.5, 0.0))
+	await _ticks(2)
+	if got_arm.is_empty():
+		var cut: Array[BreakSection] = []
+		for sec in s2.get_breaker().sections:
+			if sec.section_name == &"Left_Arm":
+				cut.append(sec)
+		s2.get_breaker().detach(cut, DamageInfo.make(1, DamageInfo.Type.BULLET, s2.global_position + Vector3.UP * 2.0, Vector3.FORWARD, 4.0, 0.0))
+	await _ticks(60 * 4)
+	var arm_piece: DebrisPiece = got_arm[0] if got_arm.size() == 2 else null
+	var arm_joint: Vector3 = got_arm[1] if got_arm.size() == 2 else Vector3.ZERO
+	var arm_low := INF
+	if is_instance_valid(arm_piece):
+		for mi in arm_piece.pose.get_children():
+			if mi is MeshInstance3D and mi.visible:
+				var hull: Dictionary = s2._section_hull(mi)
+				for b in hull:
+					var xf: Transform3D = arm_piece.pose.global_transform * arm_piece.pose.get_bone_global_pose(b)
+					for v in hull[b]:
+						arm_low = minf(arm_low, (xf * v).y)
+	_check(s2.get_breaker().hull_shapes and is_instance_valid(arm_piece) and absf(arm_low - s2.global_position.y) < 0.04 and arm_piece.global_position.distance_to(arm_joint) > 0.5,
+		"skirmisher: a broken-off arm falls clear and lies on the floor (lowest part %.3f m off it)" % (arm_low - s2.global_position.y))
+	if is_instance_valid(arm_piece):
+		arm_piece.queue_free()
+	s2.queue_free()
 	probe.queue_free()
 	s.queue_free()
 	RobotEnemy.ai_enabled = was_ai

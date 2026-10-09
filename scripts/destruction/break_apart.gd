@@ -45,6 +45,11 @@ var sections: Array[BreakSection] = []
 @export var upward_bias := 0.35
 ## Collision box = section bounds * this (smaller = no initial overlap).
 @export var shape_shrink := 0.8
+## Collide with the section's own outline (a convex hull of its mesh)
+## instead of its bounding box. A box round a long diagonal limb is far
+## bigger than the limb: it lands on the box's corner with the limb
+## hovering above the floor (the skirmisher's arms).
+@export var hull_shapes := false
 @export var density := 900.0
 @export var piece_mass_range := Vector2(2.0, 30.0)
 
@@ -55,6 +60,8 @@ var sections: Array[BreakSection] = []
 signal piece_detached(piece: DebrisPiece, section: BreakSection, joint_position: Vector3)
 
 var skeleton: Skeleton3D
+## Mesh -> its outermost vertices along 26 directions (mesh space).
+static var _outline_cache := {}
 var _by_name := {}
 ## Section name -> Skeleton3D currently carrying it (original or a piece's).
 var _carrier := {}
@@ -260,10 +267,27 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 		var sc := xf.basis.get_scale()
 		var size := (box.size * sc * shape_shrink).max(Vector3.ONE * 0.05)
 		var shape := CollisionShape3D.new()
-		var bs := BoxShape3D.new()
-		bs.size = size
-		shape.shape = bs
-		shape.transform = body_xf.affine_inverse() * Transform3D(xf.basis.orthonormalized(), xf * box.get_center())
+		var outline := PackedVector3Array()
+		if hull_shapes:
+			var to_body := body_xf.affine_inverse() * src.global_transform
+			for mn in s.mesh_names:
+				var m := src.get_node_or_null(NodePath(mn)) as MeshInstance3D
+				if m == null or m.mesh == null:
+					continue
+				var parts := _outline(m, src)
+				for b in parts:
+					var bx := to_body * src.get_bone_global_pose(b)
+					for v in parts[b]:
+						outline.append(bx * v)
+		if outline.size() >= 4:
+			var hs := ConvexPolygonShape3D.new()
+			hs.points = outline
+			shape.shape = hs
+		else:
+			var bs := BoxShape3D.new()
+			bs.size = size
+			shape.shape = bs
+			shape.transform = body_xf.affine_inverse() * Transform3D(xf.basis.orthonormalized(), xf * box.get_center())
 		piece.add_child(shape)
 		mass += size.x * size.y * size.z * density
 		# Move the section's meshes (still skinned) onto the frozen pose.
@@ -302,6 +326,57 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 		JointSparks.play_on_bone(parent_carrier, parent_carrier.find_bone(root.joint_bone), 0.85)
 	piece_detached.emit(piece, root, joint_world)
 	return piece
+
+
+## Per bone driving the mesh: its vertices' outermost points along 26
+## directions, in that bone's space (cached per mesh) - a small point set
+## whose hull hugs the part however its joints are bent.
+static func _outline(mi: MeshInstance3D, sk: Skeleton3D) -> Dictionary:
+	var key := mi.mesh.get_instance_id()
+	if _outline_cache.has(key):
+		return _outline_cache[key]
+	var dirs: Array[Vector3] = []
+	for x in [-1, 0, 1]:
+		for y in [-1, 0, 1]:
+			for z in [-1, 0, 1]:
+				if x != 0 or y != 0 or z != 0:
+					dirs.append(Vector3(x, y, z).normalized())
+	var best := {}
+	var skin := mi.skin
+	for k in mi.mesh.get_surface_count():
+		var arr := mi.mesh.surface_get_arrays(k)
+		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var bones = arr[Mesh.ARRAY_BONES]
+		var weights = arr[Mesh.ARRAY_WEIGHTS]
+		if skin == null or bones == null or weights == null or verts.is_empty():
+			continue
+		var per: int = (bones as Array).size() / verts.size()
+		for i in verts.size():
+			var bi := 0
+			for j in per:
+				if weights[i * per + j] > weights[i * per + bi]:
+					bi = j
+			var bind: int = bones[i * per + bi]
+			var bone := skin.get_bind_bone(bind)
+			if bone < 0:
+				bone = sk.find_bone(skin.get_bind_name(bind))
+			if bone < 0:
+				continue
+			var p := skin.get_bind_pose(bind) * verts[i]
+			if not best.has(bone):
+				var init := []
+				for d in dirs:
+					init.append(p)
+				best[bone] = init
+			var pts: Array = best[bone]
+			for d in dirs.size():
+				if p.dot(dirs[d]) > (pts[d] as Vector3).dot(dirs[d]):
+					pts[d] = p
+	var out := {}
+	for b in best:
+		out[b] = PackedVector3Array(best[b])
+	_outline_cache[key] = out
+	return out
 
 
 func _joint_position(s: BreakSection, sk: Skeleton3D) -> Vector3:
