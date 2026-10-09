@@ -1,7 +1,6 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/characters/grinch_visual.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/weapons/weapon_holder.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/targeting/target_lock.gd" id="4"]
 [ext_resource type="Resource" path="res://resources/weapons/default_cannon.tres" id="5"]
@@ -22,8 +21,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("shape")
 
 [node name="Visual" type="Node3D" parent="."]
-
-[node name="GrinchVisual" parent="Visual" instance=ExtResource("2")]
 
 [node name="WeaponHolder" type="Node" parent="."]
 script = ExtResource("3")

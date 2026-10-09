@@ -111,6 +111,20 @@ jobs:
             && [ "$R1" -eq 0 ] && [ "$R2" -eq 0 ]
         timeout-minutes: 15
 
+      - name: Name the game package after the build
+        # Phones keep files in their cache; after a crash Safari reloads the
+        # page and could pair it with an older cached index.pck (an earlier
+        # build). Each build's package gets its own file name, so a page can
+        # only ever load the package it was published with.
+        run: |
+          set -euo pipefail
+          cd build/web
+          PCK="index-${GITHUB_SHA::7}.pck"
+          mv index.pck "$PCK"
+          sed -i "s/\"fileSizes\":{\"index.pck\"/\"mainPack\":\"$PCK\",\"fileSizes\":{\"$PCK\"/" index.html
+          grep -q "\"mainPack\":\"$PCK\"" index.html
+          test -s "$PCK"
+
       - name: Publish to gh-pages
         run: |
           set -euo pipefail

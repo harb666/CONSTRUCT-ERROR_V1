@@ -1,9 +1,7 @@
-[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/character/character_definition.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://scenes/characters/harbinger_visual.tscn" id="6"]
-[ext_resource type="PackedScene" path="res://assets/characters/harbinger/harbinger.glb" id="3"]
 [ext_resource type="Resource" path="res://assets/characters/harbinger/harbinger_caps.res" id="4"]
 [ext_resource type="Texture2D" path="res://assets/ui/characters/harbinger_portrait.png" id="5"]
 [ext_resource type="Texture2D" path="res://assets/ui/characters/harbinger_banner.png" id="7"]
@@ -13,10 +11,10 @@ script = ExtResource("1")
 id = &"harbinger"
 display_name = "HARBINGER"
 player_scene = ExtResource("2")
-visual_scene = ExtResource("6")
+visual_scene_path = "res://scenes/characters/harbinger_visual.tscn"
 portrait = ExtResource("5")
 banner = ExtResource("7")
 accent_color = Color(0.3, 0.6, 1, 1)
-preview_model = ExtResource("3")
+preview_model_path = "res://assets/characters/harbinger/harbinger.glb"
 preview_caps = ExtResource("4")
 preview_animation = "Idle 9"

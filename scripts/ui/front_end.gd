@@ -168,7 +168,7 @@ func press_character(id: StringName) -> void:
 # --- 3D preview of the picked character ---
 
 func _make_preview() -> void:
-	if selected == null or selected == _preview_def or selected.preview_model == null:
+	if selected == null or selected == _preview_def or selected.preview_model_path == "":
 		return
 	_preview_def = selected
 	if _preview_vp == null:
@@ -203,7 +203,7 @@ func _make_preview() -> void:
 		_preview_pivot.queue_free()
 	_preview_pivot = Node3D.new()
 	_preview_vp.add_child(_preview_pivot)
-	var model: Node3D = selected.preview_model.instantiate()
+	var model: Node3D = (load(selected.preview_model_path) as PackedScene).instantiate()
 	model.rotation_degrees.y = selected.preview_yaw_degrees
 	_preview_pivot.add_child(model)
 	if selected.preview_caps:

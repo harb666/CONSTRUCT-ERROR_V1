@@ -3,7 +3,6 @@ extends Node3D
 ## spawn_player() per peer, giving remote players a network-fed PlayerInput
 ## and only creating a camera/touch UI for the local one.
 
-const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const CAMERA_RIG_SCENE := preload("res://scenes/camera_rig.tscn")
 
 @onready var players_root: Node3D = $Players
@@ -86,7 +85,7 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	if character == null:
 		var roster := CharacterRoster.load_default()
 		character = roster.characters[0] if roster and not roster.characters.is_empty() else null
-	var player: PlayerController = character.instantiate_player() if character and character.player_scene else PLAYER_SCENE.instantiate()
+	var player: PlayerController = character.instantiate_player()
 	player.player_id = player_id
 	player.name = "Player%d" % player_id
 	var spawn: Node3D = spawn_points.get_child((player_id - 1) % spawn_points.get_child_count())
