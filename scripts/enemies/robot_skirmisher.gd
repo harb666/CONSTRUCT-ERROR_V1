@@ -334,6 +334,13 @@ func _build_model() -> void:
 	# Broken-off parts collide with their own outline, so a detached arm
 	# lands on the floor instead of hovering on its bounding box.
 	_breaker.hull_shapes = true
+	# Dying: the human death clips throw the arms high and wide; on this
+	# robot the upper arm is a thin rod, so the cannon then looks detached
+	# and floating beside the shoulder. Keep them tucked in (deaths only),
+	# applied to the pose itself right after the clip each frame - so the
+	# corpse's settling and any arm that breaks off use the same pose.
+	if not _anim.mixer_applied.is_connected(_on_mixer_applied):
+		_anim.mixer_applied.connect(_on_mixer_applied)
 	_breaker.piece_detached.connect(func(piece: DebrisPiece, _s: BreakSection, _j: Vector3) -> void:
 		_ignore_characters(piece))
 	_reset_action()
@@ -1180,6 +1187,45 @@ func _death_sound() -> void:
 	death_sounds += 1
 
 
+# --- Dying: arms kept in ---
+
+## Swing each upper arm back in towards hanging down so it is raised at most
+## `max_raise` (rad) from the chest's down axis; `w` blends it in.
+static func _limit_arms(sk: Skeleton3D, max_raise: float, w: float) -> void:
+	if w <= 0.001:
+		return
+	var chest := sk.find_bone(&"mixamorig_Spine2")
+	if chest < 0:
+		return
+	var down := -(sk.get_bone_global_pose(chest).basis * Vector3.UP).normalized()
+	for side in ["Left", "Right"]:
+		var arm := sk.find_bone("mixamorig_%sArm" % side)
+		var fore := sk.find_bone("mixamorig_%sForeArm" % side)
+		if arm < 0 or fore < 0:
+			continue
+		var parent := sk.get_bone_parent(arm)
+		var pg := sk.get_bone_global_pose(parent) if parent >= 0 else Transform3D.IDENTITY
+		var ag := pg * sk.get_bone_pose(arm)
+		var dir := (ag * sk.get_bone_pose(fore).origin) - ag.origin
+		if dir.length_squared() < 1e-8:
+			continue
+		var ang := down.angle_to(dir)
+		if ang <= max_raise:
+			continue
+		var axis := down.cross(dir)
+		if axis.length_squared() < 1e-8:
+			continue
+		var fix := Basis(axis.normalized(), -(ang - max_raise) * w)
+		var local := pg.affine_inverse() * Transform3D(fix * ag.basis, ag.origin)
+		sk.set_bone_pose_rotation(arm, local.basis.get_rotation_quaternion())
+
+
+func _on_mixer_applied() -> void:
+	if alive or _skeleton == null:
+		return
+	_limit_arms(_skeleton, deg_to_rad(death_arm_raise_max), clampf(_dead_t / 0.15, 0.0, 1.0))
+
+
 # --- Corpse grounding ---
 
 ## Per section mesh: { bone index: PackedVector3Array } - each bone's
@@ -1193,6 +1239,8 @@ var corpse_settled := false
 var corpse_gap := 0.0
 var _settle_body: RigidBody3D
 var _settle_t := 0.0
+## Dying: how far (deg) an upper arm may be raised from hanging down.
+@export var death_arm_raise_max := 75.0
 
 
 func _corpse(delta: float) -> void:

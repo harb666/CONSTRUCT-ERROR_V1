@@ -269,14 +269,14 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 		var shape := CollisionShape3D.new()
 		var outline := PackedVector3Array()
 		if hull_shapes:
-			var to_body := body_xf.affine_inverse() * src.global_transform
+			# From the piece's own frozen pose (what it will be drawn in).
 			for mn in s.mesh_names:
 				var m := src.get_node_or_null(NodePath(mn)) as MeshInstance3D
 				if m == null or m.mesh == null:
 					continue
 				var parts := _outline(m, src)
 				for b in parts:
-					var bx := to_body * src.get_bone_global_pose(b)
+					var bx := pose.transform * pose.get_bone_global_pose(b)
 					for v in parts[b]:
 						outline.append(bx * v)
 		if outline.size() >= 4:

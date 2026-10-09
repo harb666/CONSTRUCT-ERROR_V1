@@ -70,6 +70,11 @@
   and lies on the floor. Grunts / boss keep their box shapes. They (and the
   settling corpse) pass through robots' and players' capsules
   (`_ignore_characters`), so they can't be left resting on one in mid-air.
+- Dying skirmishers keep their arms tucked in (owner chose this): during
+  deaths only, each upper arm is held to at most `death_arm_raise_max` (75
+  deg) from hanging down (`_limit_arms`, applied to the pose right after
+  the clip each frame); the human death clips otherwise fling the arms out
+  and the thin upper-arm rod makes the cannon look detached.
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner

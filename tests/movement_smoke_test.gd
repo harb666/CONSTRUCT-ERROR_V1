@@ -1250,6 +1250,7 @@ func _shotgun_tests(main: Node) -> void:
 	p.global_position = pad.global_position + Vector3(0, 0.05, 3.0)
 	p.velocity = Vector3.ZERO
 	p.reset_physics_interpolation()
+	main.get_node("CameraRig").yaw = 0.0  # "forward" = towards the pad
 	await _ticks(10)
 	Input.action_press("move_forward")
 	for i in 60:
@@ -4031,6 +4032,24 @@ func _skirmisher_leg_tests(main: Node) -> void:
 				for v in hull[b]:
 					low = minf(low, (xf * v).y)
 	_check(s.corpse_settled and absf(low - s.global_position.y) < 0.03, "skirmisher corpse: rests on the floor, not floating (lowest part %.3f m off it)" % (low - s.global_position.y))
+	# Dying, its arms are kept tucked in (the human death clips fling them
+	# out; on this robot the cannon then looks detached from the shoulder).
+	var s3 := _spawn_skirmisher(main, Vector3(-33, 0.05, -24))
+	await _ticks(10)
+	s3.apply_damage(DamageInfo.make(999, DamageInfo.Type.ENERGY, s3.global_position + Vector3.UP * 2.0, Vector3.BACK, 0.2, 0.0))
+	var raise := 0.0
+	var sk3 := s3.get_skeleton()
+	for f in 150:
+		await process_frame
+		if f < 15:
+			continue
+		var down := -(sk3.get_bone_global_pose(sk3.find_bone("mixamorig_Spine2")).basis * Vector3.UP).normalized()
+		for side in ["Left", "Right"]:
+			var a3 := sk3.get_bone_global_pose(sk3.find_bone("mixamorig_%sArm" % side))
+			var f3 := sk3.get_bone_global_pose(sk3.find_bone("mixamorig_%sForeArm" % side))
+			raise = maxf(raise, rad_to_deg(down.angle_to(f3.origin - a3.origin)))
+	_check(raise <= s3.death_arm_raise_max + 1.0, "skirmisher death: arms kept tucked in at the shoulder (raised %.0f deg at most, limit %.0f; %s)" % [raise, s3.death_arm_raise_max, s3._anim.current_animation])
+	s3.queue_free()
 	# A broken-off arm drops to the floor (collides with its own outline,
 	# not a bounding box far bigger than the limb).
 	var s2 := _spawn_skirmisher(main, Vector3(-36, 0.05, -30))
