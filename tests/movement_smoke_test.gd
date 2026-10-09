@@ -1644,8 +1644,10 @@ func _skirmisher_tests(main: Node) -> void:
 	var twists: Array[float] = []
 	var crabs: Array[float] = []
 	var back_runs := 0
+	var jumps0 := 0  # (the jump test above makes one jump on purpose)
 	for q in squad:
 		shots0 += q.shots_fired
+		jumps0 += q.jumps
 	for i in Engine.physics_ticks_per_second * 9:
 		await _ticks(1)
 		# The player keeps firing at them (some evade).
@@ -1680,7 +1682,7 @@ func _skirmisher_tests(main: Node) -> void:
 					muzzle_ok += 1
 	var shots := -shots0
 	var evades := 0
-	var jumps := 0
+	var jumps := -jumps0
 	var turns := 0
 	for q: RobotSkirmisher in squad:
 		shots += q.shots_fired
@@ -1688,6 +1690,7 @@ func _skirmisher_tests(main: Node) -> void:
 		jumps += q.jumps
 		turns += q.turns
 	_check(squad.all(func(q: RobotSkirmisher) -> bool: return q.target == p), "skirmishers engage the player")
+	_check(jumps == 0 and evades > 0, "skirmishers never jump (owner turned it off; %d evades: sidesteps / dives)" % evades)
 	_check(max_speed > 4.2, "skirmishers are fast (top %.1f m/s; first robot 2.6)" % max_speed)
 	_check(samples > 0 and float(still) / samples < 0.15, "skirmishers keep moving while fighting (%.0f%% of the time still)" % (100.0 * still / maxf(samples, 1)))
 	twists.sort()

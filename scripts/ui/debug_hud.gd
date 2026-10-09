@@ -15,6 +15,10 @@ var _rec_t := 0.0
 var _session_t := 0.0
 var _last_session := ""
 var _last_session_t := 0.0
+## Web only, first minute: when the game was ready and when its sounds could
+## first play (seconds since the page opened), to check start-up audio.
+var _ready_at := -1.0
+var _audio_text := ""
 
 
 func _ready() -> void:
@@ -28,6 +32,7 @@ func _ready() -> void:
 			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, weapon %s, build %s" % [
 				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
 				int(d.get("nodes", 0)), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
 
@@ -73,6 +78,8 @@ func _process(delta: float) -> void:
 			t += "   weapon " + holder.current_definition.display_name
 	if _build:
 		t += "\nbuild " + _build
+	if _audio_text != "" and _session_t < 60.0:
+		t += "\n" + _audio_text
 	if _last_session != "" and _last_session_t < 90.0:
 		_last_session_t += delta
 		t += "\n" + _last_session
@@ -94,7 +101,16 @@ func _record(delta: float) -> void:
 		var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
 		if holder and holder.current_definition:
 			weapon = holder.current_definition.display_name
+	if _session_t < 60.0:
+		var a = JSON.parse_string(str(JavaScriptBridge.eval("JSON.stringify(window.__ceAudio || {})")))
+		if a is Dictionary and a.has("running"):
+			_audio_text = "audio: game start %s, audio on %s, first sound %s, helper %s" % [
+				_secs(_ready_at), _secs(a.running), _secs(a.firstSound), _secs(a.posReady)]
 	var d := {"t": snappedf(_session_t, 0.1), "fps": Engine.get_frames_per_second(), "robots": alive,
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"weapon": weapon, "build": _build, "ended": 0}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
+
+
+static func _secs(v) -> String:
+	return "-" if float(v) < 0.0 else "%.1fs" % float(v)

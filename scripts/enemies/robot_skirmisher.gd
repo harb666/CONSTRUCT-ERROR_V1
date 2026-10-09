@@ -98,6 +98,9 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 @export var evade_reaction := Vector2(0.12, 0.38)
 @export var evade_cooldown := Vector2(1.4, 2.6)
 @export var jump_cooldown := Vector2(3.0, 5.5)
+## Owner turned jumping off (a new character will do the jumping): evades
+## are sidesteps and dives only. The jump itself is kept, unused.
+@export var jumps_enabled := false
 @export var dive_cooldown := Vector2(7.0, 11.0)
 ## Chance a hit that doesn't kill it makes it evade.
 @export var hit_evade_chance := 0.35
@@ -757,7 +760,7 @@ func _evade(from_dir: Vector3, unprompted := false) -> void:
 	var slant := deg_to_rad(randf_range(30.0, 45.0))
 	var fwd_dir := (dir * cos(slant) + dir_to * sin(slant)).normalized()
 	var back_dir := (dir * cos(slant) - dir_to * sin(slant)).normalized()
-	if _jump_cd <= 0.0 and r < (0.5 if not unprompted else 0.75) and _side_free(fwd_dir, 2.4):
+	if jumps_enabled and _jump_cd <= 0.0 and r < (0.5 if not unprompted else 0.75) and _side_free(fwd_dir, 2.4):
 		_start_jump(fwd_dir)
 		return
 	if unprompted and randf() < 0.5:

@@ -83,6 +83,9 @@
   each section's open edge at shoulders, hips, neck, waist;
   `_whole_mesh_skips` returns false), so a bent joint can't be seen through.
   Mesh, rig and animations unchanged.
+- Skirmishers never jump (`jumps_enabled = false`; owner will design a new
+  jumping character). Their evades are sidesteps and dives; the jump code
+  is kept, unused.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
