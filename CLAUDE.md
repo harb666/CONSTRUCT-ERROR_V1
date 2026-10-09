@@ -34,6 +34,13 @@
   owner's other two grunt death sounds. Each such death plays one of the
   three at random (never the same twice running); `_2` starts 0.15 s in
   (it opens with 0.2 s of silence).
+- `assets/audio/enemies/skirmisher_death_1.mp3` (sha256
+  fc3851afdc35059268d9f56767a08cc1b541c60ebba3cc436682ed4f9c6d8eaa) and
+  `assets/audio/enemies/skirmisher_death_2.mp3` (sha256
+  7ca7ef836bf83eff88afdb56b8ec51517600ae7d3b4f6234400d7951c6f11732) - the
+  owner's skirmisher death sounds. Every skirmisher death plays one of the
+  two at random (`RobotSkirmisher._death_sound()`); `_1` starts 0.3 s in
+  (`skirmisher_death_1_start`, past its faint build-up).
 - `assets/audio/enemies/mini_boss_machine_gun_firing.mp3` - the robot boss's
   chaingun, supplied by the owner (sha256
   8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978). A recording of

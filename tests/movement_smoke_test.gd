@@ -4094,7 +4094,7 @@ func _death_sound_tests(main: Node) -> void:
 	await _ticks(5)
 	s.apply_damage(DamageInfo.make(999, DamageInfo.Type.BULLET, at, Vector3.FORWARD))
 	await _ticks(2)
-	_check(not s.alive and s.death_sounds == 0, "grunt death sound: grunts only (skirmishers stay as they were)")
+	_check(not s.alive and s.death_sounds == 1 and (s.last_death_sound == Sfx.SKIRMISHER_DEATH_1 or s.last_death_sound == Sfx.SKIRMISHER_DEATH_2), "grunt death sound: grunts only (a skirmisher plays its own)")
 	s.queue_free()
 	_check(Sfx.SMALL_ROBOT_DEATH.resource_path.ends_with("small_robot_death.mp3"), "grunt death sound: uses the owner's small robot death file")
 	const SRD_SHA := "ea1e3439974adfbb32416bff3afc2b551b9ea5f45ab8a71ccc1dcabaf6a8683b"
@@ -4122,6 +4122,28 @@ func _death_sound_tests(main: Node) -> void:
 		g.queue_free()
 		await _ticks(1)
 	_check(heard.size() == 3 and heard.has(Sfx.SMALL_ROBOT_DEATH) and heard.has(Sfx.SMALL_ROBOT_DEATH_2) and heard.has(Sfx.SMALL_ROBOT_DEATH_3) and repeats == 0, "grunt death sound: picks one of the owner's 3 at random, never the same twice running (%d heard, %d repeats)" % [heard.size(), repeats])
+	# Skirmishers: one of the owner's two death sounds at random, every death.
+	const SKD_SHAS := {"skirmisher_death_1.mp3": "fc3851afdc35059268d9f56767a08cc1b541c60ebba3cc436682ed4f9c6d8eaa", "skirmisher_death_2.mp3": "7ca7ef836bf83eff88afdb56b8ec51517600ae7d3b4f6234400d7951c6f11732"}
+	for f in SKD_SHAS:
+		if FileAccess.file_exists("res://assets/audio/enemies/" + f):
+			_check(FileAccess.get_sha256("res://assets/audio/enemies/" + f) == SKD_SHAS[f], "audio: %s is the owner's original, unchanged" % f)
+	var sk_heard := {}
+	var sk_ok := 0
+	var kinds := [DamageInfo.Type.BULLET, DamageInfo.Type.ENERGY, DamageInfo.Type.EXPLOSION, DamageInfo.Type.SUPERNOVA]
+	for k in 12:
+		var sq := _spawn_skirmisher(main, at + Vector3(k % 4, 0.05, 3))
+		await _ticks(3)
+		var hit := DamageInfo.make(999, kinds[k % 4], at, Vector3.FORWARD, 0.0, 30.0 if kinds[k % 4] == DamageInfo.Type.EXPLOSION else 0.0)
+		if k == 5:
+			hit.weapon = &"black_hole"
+		sq.apply_damage(hit)
+		await _ticks(1)
+		if sq.death_sounds == 1 and (sq.last_death_sound == Sfx.SKIRMISHER_DEATH_1 or sq.last_death_sound == Sfx.SKIRMISHER_DEATH_2):
+			sk_ok += 1
+			sk_heard[sq.last_death_sound] = true
+		sq.queue_free()
+		await _ticks(1)
+	_check(sk_ok == 12 and sk_heard.size() == 2, "skirmisher death sound: one of the owner's 2 at random on every death (%d/12, %d different)" % [sk_ok, sk_heard.size()])
 	RobotEnemy.ai_enabled = was_ai
 	await _ticks(3)
 

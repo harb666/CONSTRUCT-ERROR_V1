@@ -45,6 +45,8 @@ enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 ## big). Model, hitbox, target point, leg steps, jump and dive lunge all
 ## scale with it; ground speeds, health and weapons stay the same.
 @export var size_scale := 2.0
+## Where the first death sound starts (s; past its faint build-up).
+@export var skirmisher_death_1_start := 0.3
 
 @export_group("Mobility")
 ## Seconds between picking a new firing position round the target.
@@ -1079,11 +1081,26 @@ func die(info: DamageInfo) -> void:
 		_visual.position = Vector3.ZERO
 		_visual.rotation = Vector3(0, _yaw, 0)
 	super.die(info)
+	_death_sound()
 	if died_airborne and _visual:
 		# Falls the rest of the way from where it was hit.
 		_visual.position.y = maxf(air - 0.6, 0.0)
 		create_tween().tween_property(_visual, "position:y", 0.0, 0.25).set_ease(Tween.EASE_IN)
 	# Electrical failure, kill burst and scrap: RobotEnemy.die() -> HitFeedback.
+
+
+## Every death: one of the owner's two skirmisher death sounds, at random.
+## The first opens with a faint ~0.4 s build-up; it starts 0.3 s in so its
+## hit lands with the death.
+func _death_sound() -> void:
+	var sounds: Array[AudioStream] = [Sfx.SKIRMISHER_DEATH_1, Sfx.SKIRMISHER_DEATH_2]
+	var starts: Array[float] = [skirmisher_death_1_start, 0.0]
+	var pick := randi() % sounds.size()
+	last_death_sound = sounds[pick]
+	var snd := Sfx.play_at(get_parent(), sounds[pick], global_position + Vector3.UP * size_scale, death_sound_db, death_sound_near, death_sound_far)
+	if snd and starts[pick] > 0.0:
+		snd.play(starts[pick])
+	death_sounds += 1
 
 
 func _death_options(info: DamageInfo) -> Array:
