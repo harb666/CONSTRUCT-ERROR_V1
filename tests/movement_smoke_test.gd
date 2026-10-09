@@ -4035,6 +4035,7 @@ func _skirmisher_leg_tests(main: Node) -> void:
 	# not a bounding box far bigger than the limb).
 	var s2 := _spawn_skirmisher(main, Vector3(-36, 0.05, -30))
 	s2.corpse_time = 60.0
+	var nb := _spawn_skirmisher(main, Vector3(-38.5, 0.05, -30))
 	await _ticks(20)
 	var got_arm := []  # [piece, joint] (lambdas can't assign outer locals)
 	s2.get_breaker().piece_detached.connect(func(pc: DebrisPiece, sec: BreakSection, j: Vector3) -> void:
@@ -4060,6 +4061,9 @@ func _skirmisher_leg_tests(main: Node) -> void:
 					var xf: Transform3D = arm_piece.pose.global_transform * arm_piece.pose.get_bone_global_pose(b)
 					for v in hull[b]:
 						arm_low = minf(arm_low, (xf * v).y)
+	var exc: Array = arm_piece.get_collision_exceptions() if is_instance_valid(arm_piece) else []
+	_check(exc.has(nb) and exc.has(main.players[1]), "skirmisher: broken-off parts pass through robots' and players' capsules (never left resting on one in mid-air)")
+	nb.queue_free()
 	_check(s2.get_breaker().hull_shapes and is_instance_valid(arm_piece) and absf(arm_low - s2.global_position.y) < 0.04 and arm_piece.global_position.distance_to(arm_joint) > 0.5,
 		"skirmisher: a broken-off arm falls clear and lies on the floor (lowest part %.3f m off it)" % (arm_low - s2.global_position.y))
 	if is_instance_valid(arm_piece):

@@ -334,6 +334,8 @@ func _build_model() -> void:
 	# Broken-off parts collide with their own outline, so a detached arm
 	# lands on the floor instead of hovering on its bounding box.
 	_breaker.hull_shapes = true
+	_breaker.piece_detached.connect(func(piece: DebrisPiece, _s: BreakSection, _j: Vector3) -> void:
+		_ignore_characters(piece))
 	_reset_action()
 	_engaged = false
 	_make_barrel_glows()
@@ -1250,11 +1252,23 @@ func _settle_corpse() -> void:
 	cs.shape = shape
 	rb.add_child(cs)
 	get_parent().add_child(rb)
+	_ignore_characters(rb)
 	rb.global_transform = vis
 	_visual.global_transform = vis
 	_settle_body = rb
 	_settle_t = 0.0
 	get_tree().physics_frame.connect(_follow_settle)
+
+
+## Broken-off parts and the settling corpse fall to the floor through the
+## robots' and players' movement capsules (invisible, and at twice size much
+## wider than the body) instead of coming to rest against one in mid-air.
+func _ignore_characters(body: PhysicsBody3D) -> void:
+	if not is_inside_tree():
+		return
+	for n in get_tree().get_nodes_in_group(&"enemies") + get_tree().get_nodes_in_group(&"players"):
+		if n is PhysicsBody3D and n != body:
+			body.add_collision_exception_with(n)
 
 
 func _follow_settle() -> void:

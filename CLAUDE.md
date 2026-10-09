@@ -67,7 +67,9 @@
   rig and skeleton are not changed for this.
 - Skirmisher break-off pieces collide with their own outline
   (`BreakApart.hull_shapes`, skirmisher only), so a detached arm falls clear
-  and lies on the floor. Grunts / boss keep their box shapes.
+  and lies on the floor. Grunts / boss keep their box shapes. They (and the
+  settling corpse) pass through robots' and players' capsules
+  (`_ignore_characters`), so they can't be left resting on one in mid-air.
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner
