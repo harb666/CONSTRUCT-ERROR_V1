@@ -94,8 +94,11 @@ jobs:
             --main-pack "$GITHUB_WORKSPACE/build/web/index.pck" -s "$GITHUB_WORKSPACE/tests/movement_smoke_test.gd") \
             > /tmp/test_package.log 2>&1 &
           P2=$!
-          wait $P1; R1=$?
-          wait $P2; R2=$?
+          # (|| keeps a failing run from ending the step before its log
+          # is printed - the shell runs with -e.)
+          R1=0; wait $P1 || R1=$?
+          R2=0; wait $P2 || R2=$?
+          echo "exit codes: project $R1, package $R2"
           for n in project package; do
             echo "::group::Tests: $n"; cat "/tmp/test_$n.log"; echo "::endgroup::"
           done
