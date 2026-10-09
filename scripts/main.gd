@@ -15,6 +15,13 @@ var players := {}  # player_id -> PlayerController
 ## Owner's testing setting: players can't die (hits still land and count).
 ## Set back to true to restore dying / respawning.
 @export var players_can_die := false
+## Title "TAP TO START" + character select before the match: 1 = always,
+## 0 = never, -1 = only when this level is the running game (not in tests).
+@export var front_end_mode := -1
+
+## The open front end (title / character select), if any.
+var front_end: FrontEnd
+var _menu_camera: Camera3D
 
 
 func _ready() -> void:
@@ -25,17 +32,64 @@ func _ready() -> void:
 	if StressTest._param("level") == "toxic" and get_node_or_null("ToxicArena") == null and get_tree().current_scene == self:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
-	spawn_player(1, true)
 	var stress := StressTest.robot_count()
 	if stress > 0:
 		StressTest.populate(self, stress)
 		print("stress test: %d robots" % stress)
 	debug_hud.set("show_perf", StressTest.perf_enabled())
+	if front_end_mode == 1 or (front_end_mode == -1 and get_tree().current_scene == self):
+		open_front_end()
+	else:
+		spawn_player(1, true)
 
 
-func spawn_player(player_id: int, is_local: bool) -> PlayerController:
-	var player: PlayerController = PLAYER_SCENE.instantiate()
+## Title + character select over the paused arena (a camera slowly circles
+## it behind the menus, so the phone prepares its graphics meanwhile).
+## DEPLOY spawns the local player as the picked character and un-pauses.
+func open_front_end() -> void:
+	get_tree().paused = true
+	touch_controls.visible = false
+	debug_hud.visible = false
+	_menu_camera = Camera3D.new()
+	_menu_camera.name = "MenuCamera"
+	_menu_camera.fov = 60.0
+	add_child(_menu_camera)
+	_menu_camera.make_current()
+	var layer := CanvasLayer.new()
+	layer.name = "FrontEndLayer"
+	layer.layer = 20
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	front_end = FrontEnd.new()
+	front_end.name = "FrontEnd"
+	front_end.orbit_camera = _menu_camera
+	var c := Vector3.ZERO
+	for sp: Node3D in spawn_points.get_children():
+		c += sp.global_position
+	front_end.orbit_center = c / maxf(spawn_points.get_child_count(), 1)
+	layer.add_child(front_end)
+	front_end.deployed.connect(_on_deployed)
+	front_end.tree_exited.connect(layer.queue_free)
+
+
+func _on_deployed(character: CharacterDefinition) -> void:
+	get_tree().paused = false
+	debug_hud.visible = true
+	touch_controls.visible = DisplayServer.is_touchscreen_available()
+	spawn_player(1, true, character)
+	if _menu_camera:
+		_menu_camera.queue_free()
+		_menu_camera = null
+
+
+func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition = null) -> PlayerController:
+	if character == null:
+		var roster := CharacterRoster.load_default()
+		character = roster.characters[0] if roster and not roster.characters.is_empty() else null
+	var scene: PackedScene = character.player_scene if character and character.player_scene else PLAYER_SCENE
+	var player: PlayerController = scene.instantiate()
 	player.player_id = player_id
+	player.character = character
 	player.name = "Player%d" % player_id
 	var spawn: Node3D = spawn_points.get_child((player_id - 1) % spawn_points.get_child_count())
 	player.transform = spawn.transform
@@ -88,6 +142,12 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 		vitals.name = "VitalsHud"
 		vitals.player = player
 		$UI.add_child(vitals)
+		var holder_hud := player.get_node_or_null("WeaponHolder") as WeaponHolder
+		if holder_hud:
+			var weapons := WeaponHud.new()
+			weapons.name = "WeaponHud"
+			weapons.holder = holder_hud
+			$UI.add_child(weapons)
 		# Weapon wheel (hold the weapon button, drag to an arm's weapon).
 		var loadout := player.get_node_or_null("WeaponLoadout") as WeaponLoadout
 		if loadout:

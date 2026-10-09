@@ -92,16 +92,16 @@
   flash, lots of smoke and heavy recoil (owner's spec). No sounds on it yet
   (owner said so) - don't add any until asked.
 
+- Front end (owner asked): TAP TO START title (the tap turns sound on; the
+  arena prepares behind it, meant to end the iPhone start-up silence) ->
+  character select (roster: Grinch only for now; Harbinger coming next;
+  4-player co-op squad shown with open slots until online play exists) ->
+  DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
+  layout (player panel top-left, arm weapons top-right).
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.
-
-## Saved for later (owner's decision)
-- Start-up silence on iPhone (~3-4 s): the phone is still finishing the
-  game's start-up (mostly graphics preparation) until ~6 s, so the first
-  sound plays then. Owner will fix it near the end of the project; the
-  likely fix is a "Tap to start" screen (loading finishes behind it, the tap
-  turns sound on). Don't add it before the owner asks.
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner

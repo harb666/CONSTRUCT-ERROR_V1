@@ -22,6 +22,17 @@ var _audio_text := ""
 
 
 func _ready() -> void:
+	# Small, top-centre between the player panel and the weapon panel.
+	if label_settings:
+		label_settings = label_settings.duplicate()
+		label_settings.font_size = 13
+		label_settings.font_color = Color(0.86, 0.98, 1.0, 0.8)
+		label_settings.outline_size = 3
+	horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place()
+	get_viewport().size_changed.connect(_place)
 	# Written by CI so you can confirm on the phone which build is running.
 	if FileAccess.file_exists("res://build_info.txt"):
 		_build = FileAccess.get_file_as_string("res://build_info.txt").strip_edges()
@@ -35,6 +46,14 @@ func _ready() -> void:
 		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
+
+
+func _place() -> void:
+	var w := get_viewport_rect().size.x
+	var width := clampf(w - 2.0 * (maxf(40.0, w * 0.03) + 372.0), 300.0, 760.0)
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	position = Vector2((w - width) * 0.5, 6.0)
+	size = Vector2(width, 40.0)
 
 
 func _process(delta: float) -> void:

@@ -41,7 +41,6 @@ var _button_last: Array[Vector2] = []
 var _hidden := {}
 ## finger index -> [start position, start time (s), distance moved]
 var _tap_track := {}
-var _font: Font
 ## The weapon-wheel button only exists when a wheel is connected.
 var wheel_enabled := false
 
@@ -49,7 +48,6 @@ var wheel_enabled := false
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_font = ThemeDB.fallback_font
 	_button_fingers.resize(BUTTONS.size())
 	_button_fingers.fill(-1)
 	_button_last.resize(BUTTONS.size())
@@ -212,17 +210,20 @@ func _set_axis(neg: String, pos: String, value: float) -> void:
 
 
 func _draw() -> void:
-	var base_col := Color(1, 1, 1, 0.18)
-	var edge_col := Color(1, 1, 1, 0.5)
+	# Owner's cyan HUD style (HudStyle); sizes / positions / touch areas as before.
+	var cyan := HudStyle.CYAN
 	# Move stick (shows a hint at rest).
 	if _move_finger != -1:
-		draw_circle(_stick_origin, stick_radius, base_col)
-		draw_arc(_stick_origin, stick_radius, 0, TAU, 48, edge_col, 2.0, true)
-		draw_circle(_stick_knob, 34.0, Color(1, 1, 1, 0.55))
+		draw_circle(_stick_origin, stick_radius, Color(HudStyle.FILL, 0.4))
+		draw_arc(_stick_origin, stick_radius, 0, TAU, 48, Color(cyan, 0.75), 2.0, true)
+		HudStyle.dashed_ring(self, _stick_origin, stick_radius + 7.0, 4, 0.18, Color(cyan, 0.8), 3.0, PI * 0.25 - 0.28)
+		draw_circle(_stick_knob, 34.0, Color(cyan, 0.35))
+		draw_arc(_stick_knob, 34.0, 0, TAU, 32, Color(cyan, 0.95), 2.0, true)
 	else:
 		var hint := Vector2(_safe_margins().x + 150.0, size.y - 160.0)
-		draw_arc(hint, stick_radius, 0, TAU, 48, Color(1, 1, 1, 0.22), 2.0, true)
-		_draw_label(hint, "MOVE", Color(1, 1, 1, 0.35))
+		draw_arc(hint, stick_radius, 0, TAU, 48, Color(cyan, 0.3), 2.0, true)
+		HudStyle.dashed_ring(self, hint, stick_radius + 7.0, 4, 0.18, Color(cyan, 0.35), 3.0, PI * 0.25 - 0.28)
+		_draw_label(hint, "MOVE", Color(HudStyle.TEXT, 0.4))
 	# Buttons.
 	for i in BUTTONS.size():
 		var b: Dictionary = BUTTONS[i]
@@ -230,12 +231,21 @@ func _draw() -> void:
 			continue
 		var c := _button_center(i)
 		var active: bool = _button_fingers[i] != -1
-		draw_circle(c, b.radius, Color(1, 0.75, 0.2, 0.45) if active else base_col)
-		draw_arc(c, b.radius, 0, TAU, 48, edge_col, 2.0, true)
-		_draw_label(c, b.label, Color(1, 1, 1, 0.9))
+		draw_button_ring(self, c, b.radius, active)
+		_draw_label(c, b.label, Color(HudStyle.TEXT, 0.95))
+
+
+## A round touch button in the HUD style (also used for the weapon button).
+static func draw_button_ring(ci: CanvasItem, c: Vector2, r: float, active: bool) -> void:
+	var cyan := HudStyle.CYAN
+	ci.draw_circle(c, r, Color(cyan, 0.42) if active else Color(HudStyle.FILL, 0.5))
+	ci.draw_arc(c, r, 0, TAU, 48, Color(cyan, 1.0 if active else 0.8), 2.0, true)
+	ci.draw_arc(c, r - 5.0, 0, TAU, 48, Color(cyan, 0.25), 1.0, true)
+	HudStyle.dashed_ring(ci, c, r + 5.0, 3, 0.2, Color(cyan, 0.9 if active else 0.6), 2.5, -PI * 0.5 - 0.2)
 
 
 func _draw_label(center: Vector2, text: String, color: Color) -> void:
-	var fs := 20
-	var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	draw_string(_font, center + Vector2(-w * 0.5, fs * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+	var fs := 21
+	var f := HudStyle.label_font()
+	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	draw_string(f, center + Vector2(-w * 0.5, fs * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)

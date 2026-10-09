@@ -506,6 +506,7 @@ func _run() -> void:
 	await _ticks(5)
 	await _toxic_arena_tests()
 	await _battle_arena_tests()
+	await _front_end_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -3655,6 +3656,79 @@ func _battle_arena_tests() -> void:
 	await _ticks(5)
 
 
+## Title "TAP TO START" -> character select -> DEPLOY, and the HUD.
+func _front_end_tests() -> void:
+	var roster := CharacterRoster.load_default()
+	_check(roster != null and roster.characters.size() == 1 and roster.characters[0].id == &"grinch" and roster.characters[0].portrait != null
+		and roster.characters[0].player_scene == preload("res://scenes/player.tscn"), "front end: roster has the Grinch (portrait, player scene)")
+	_check(HudStyle.title_font() is FontFile and HudStyle.label_font() is FontFile and HudStyle.num_font() is FontFile, "HUD: Orbitron / Rajdhani fonts load")
+	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	main.front_end_mode = 1
+	root.add_child(main)
+	await _ticks(5)
+	var fe: FrontEnd = main.front_end
+	_check(fe != null and paused and main.players.is_empty(), "front end: opens over the paused arena, no player yet")
+	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
+	var cam_from: Vector3 = main._menu_camera.global_position
+	await _wall_wait(func() -> bool: return fe.loaded, 12.0)
+	_check(fe.loaded and main._menu_camera.global_position.distance_to(cam_from) > 0.01, "front end: loading finishes, camera moves while paused")
+	# Tap anywhere: start.
+	var xf := root.get_final_transform()
+	for pressed in [true, false]:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 0
+		ev.pressed = pressed
+		ev.position = xf * Vector2(300, 300)
+		Input.parse_input_event(ev)
+		await process_frame
+		await process_frame
+	_check(fe.screen == FrontEnd.Screen.SELECT, "front end: a tap on the title opens character select")
+	await process_frame
+	await process_frame
+	var ap := fe._preview_vp.find_child("AnimationPlayer", true, false) as AnimationPlayer if fe._preview_vp else null
+	_check(fe.selected == roster.characters[0] and ap != null and ap.is_playing() and ap.current_animation == "Idle 9", "front end: the Grinch is picked, 3D preview plays its idle")
+	_check(fe._buttons.has("char:grinch") and fe._buttons.has("deploy"), "front end: character card and DEPLOY button laid out")
+	# Tap DEPLOY.
+	var dep: Rect2 = fe._buttons["deploy"]
+	for pressed in [true, false]:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 0
+		ev.pressed = pressed
+		ev.position = xf * dep.get_center()
+		Input.parse_input_event(ev)
+		await process_frame
+		await process_frame
+	var p: PlayerController = main.players.get(1)
+	_check(p != null and p.character == roster.characters[0] and not paused, "front end: DEPLOY spawns the Grinch and starts the match")
+	_check(p != null and main.get_viewport().get_camera_3d() != null and main.get_viewport().get_camera_3d().get_parent().get_parent() is CameraRig, "front end: the player's camera takes over")
+	await _wall_wait(func() -> bool: return not is_instance_valid(fe), 3.0)
+	_check(not is_instance_valid(fe) and main.get_node_or_null("FrontEndLayer") == null, "front end: fades out and is removed")
+	# HUD.
+	var vit := main.get_node("UI/VitalsHud") as VitalsHud
+	var wh := main.get_node("UI/WeaponHud") as WeaponHud
+	_check(vit.player == p and wh.holder == p.get_node("WeaponHolder"), "HUD: player panel and weapon panel follow the local player")
+	var h := p.get_node("WeaponHolder") as WeaponHolder
+	h.equip(load("res://resources/weapons/rocket_launcher.tres"), "Left")
+	await _ticks(2)
+	var rl := h.weapon("Left") as RocketLauncher
+	_check(WeaponHud.status_of(rl)[1] == "READY", "HUD: rocket launcher shows READY when loaded")
+	rl._cool = rl.fire_interval * 0.5
+	var st := WeaponHud.status_of(rl)
+	_check(st[1] == "RELOADING" and absf(st[0] - 0.5) < 0.05, "HUD: rocket launcher shows its reload (%.2f)" % st[0])
+	rl._cool = 0.0
+	p.health = p.max_health
+	await process_frame
+	p.health = p.max_health * 0.5
+	await process_frame
+	await process_frame
+	_check(vit._trail[0][0] > 0.9, "HUD: lost health shows as a draining chunk first")
+	await _wall_wait(func() -> bool: return vit._trail[0][0] <= 0.51, 3.0)
+	_check(vit._trail[0][0] <= 0.51, "HUD: the lost-health chunk drains away")
+	p.health = p.max_health
+	main.queue_free()
+	await _ticks(5)
+
+
 ## Machine-gun / skirmisher sounds, weapon pickup sound, skirmisher barrel glow.
 func _weapon_audio_tests(main: Node) -> void:
 	var pads := 0
@@ -3700,7 +3774,10 @@ func _weapon_audio_tests(main: Node) -> void:
 	l.free()
 	Vfx.effect_lights = was
 	var hud := main.get_node_or_null("UI/VitalsHud") as Control
-	_check(hud != null and hud.position.y >= 80.0, "vitals bars sit below the two-line debug readout")
+	var whud := main.get_node_or_null("UI/WeaponHud") as Control
+	var dbg := main.get_node("UI/DebugHud") as Control
+	_check(hud != null and whud != null and not dbg.get_rect().intersects(Rect2(hud.position, Vector2(352, 100))) and not dbg.get_rect().intersects(whud.get_rect()),
+		"HUD: debug readout sits top-centre, clear of the player panel and the weapon panel")
 	gun.queue_free()
 
 	# Skirmisher: burst sound by distance, glowing barrel ends.

@@ -14,6 +14,8 @@ signal landed(impact_speed: float)
 signal command_processed(cmd: PlayerCommand, delta: float)
 
 @export var player_id := 1
+## The character this player picked (HUD name / portrait); null = default.
+var character: CharacterDefinition
 
 @export_group("Ground")
 ## How far the move stick is pushed picks the gait (0..1 after the dead zone):

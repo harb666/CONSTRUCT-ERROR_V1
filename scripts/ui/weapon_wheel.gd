@@ -279,8 +279,7 @@ func _draw_button() -> void:
 		return
 	var c := touch.button_center("weapon_wheel")
 	var rad := touch.button_radius("weapon_wheel")
-	draw_circle(c, rad, Color(1, 0.75, 0.2, 0.45) if is_open else Color(1, 1, 1, 0.18))
-	draw_arc(c, rad, 0, TAU, 40, Color(1, 1, 1, 0.5), 2.0, true)
+	TouchControls.draw_button_ring(self, c, rad, is_open)
 	for side in SIDES:
 		var def := loadout.equipped(side)
 		if def and def.icon:
