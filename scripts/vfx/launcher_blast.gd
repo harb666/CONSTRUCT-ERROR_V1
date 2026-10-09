@@ -8,6 +8,13 @@ extends Node3D
 ## smoke stays where it was blown out while the arm moves on.
 
 @export var duration := 0.45
+## Smoke puff size and speed multipliers (1 = the boss's launch; the
+## player's rocket launcher uses bigger, slower, denser smoke).
+@export var smoke_scale := 1.0
+@export var smoke_speed := 1.0
+@export var smoke_amount := 1.0
+## Smoke colour over its life (null = the boss launch's fire-lit smoke).
+var smoke_ramp: Gradient
 
 var _t := 99.0
 var _scale := 1.0
@@ -44,8 +51,8 @@ func _ready() -> void:
 	_sparks.color_ramp = Vfx.ramp([Color(1, 0.97, 0.75, 1), Color(1, 0.55, 0.12, 1), Color(0.7, 0.15, 0.02, 0)], [0.0, 0.45, 1.0])
 	_sparks.emitting = false
 	add_child(_sparks)
-	_smoke = _make_smoke(36, 2.2, 1.5, 0.85, Vector2(3.0, 9.0), 35.0)
-	_cloud = _make_smoke(16, 4.0, 2.4, 0.95, Vector2(0.4, 1.8), 80.0)
+	_smoke = _make_smoke(roundi(36 * smoke_amount), 2.2, 1.5, 0.85, Vector2(3.0, 9.0) * smoke_speed, 35.0)
+	_cloud = _make_smoke(roundi(16 * smoke_amount), 4.0, 2.4, 0.95, Vector2(0.4, 1.8) * smoke_speed, 80.0)
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.6, 0.25)
 	_light.omni_range = 9.0
@@ -81,7 +88,7 @@ func _make_smoke(amount: int, life: float, size: float, explosive: float, vel: V
 	p.angular_velocity_min = -30.0
 	p.angular_velocity_max = 30.0
 	p.scale_amount_curve = Vfx.curve([Vector2(0, 0.45), Vector2(1, 2.2)])
-	p.color_ramp = Vfx.ramp([Color(1.0, 0.65, 0.35, 0.95), Color(0.36, 0.34, 0.32, 0.92), Color(0.3, 0.29, 0.28, 0.0)], [0.0, 0.12, 1.0])
+	p.color_ramp = smoke_ramp if smoke_ramp else Vfx.ramp([Color(1.0, 0.65, 0.35, 0.95), Color(0.36, 0.34, 0.32, 0.92), Color(0.3, 0.29, 0.28, 0.0)], [0.0, 0.12, 1.0])
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.emitting = false
 	add_child(p)
@@ -94,8 +101,9 @@ func fire(mouth: Transform3D, size := 1.0) -> void:
 	global_transform = Transform3D(mouth.basis.orthonormalized(), mouth.origin)
 	_scale = size
 	for p: CPUParticles3D in [_sparks, _smoke, _cloud]:
-		p.scale_amount_min = size
-		p.scale_amount_max = size * 1.2
+		var k := 1.0 if p == _sparks else smoke_scale
+		p.scale_amount_min = size * k
+		p.scale_amount_max = size * 1.2 * k
 		p.restart()
 		p.emitting = true
 	_t = 0.0

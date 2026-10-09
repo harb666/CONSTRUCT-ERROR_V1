@@ -1885,7 +1885,7 @@ func _wait_black_holes() -> void:
 ## Rocket launcher: red pad (other pads unchanged), registered for the
 ## wheel/unlock system, pickup into the RIGHT slot, mounted on either arm like
 ## the other arm weapons, one or two at once with each arm aiming at its own
-## target. Rockets aren't made yet: it never fires.
+## target and firing a rocket every 2.5 s (no sound yet).
 func _rocket_launcher_tests(main: Node) -> void:
 	var p: PlayerController = main.players[1]
 	var h: WeaponHolder = p.get_node("WeaponHolder")
@@ -1963,33 +1963,80 @@ func _rocket_launcher_tests(main: Node) -> void:
 			and w.get_barrel_direction().angle_to(axis) < deg_to_rad(3.0) and mz.dot(axis) > 0.7,
 			"%s arm: on the arm-end socket, barrel along the forearm (%.1f deg), muzzle out in front (%.2f m)" % [side, rad_to_deg(w.get_barrel_direction().angle_to(axis)), mz.dot(axis)])
 
-	# Each arm aims at its own target with the existing lock-on; no rockets yet.
+	# Each arm aims at its own target with the existing lock-on and fires a
+	# rocket every 2.5 s.
+	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
 	var ra := _spawn_robot(main, base + Vector3(-6, 0, -9))
 	var rb := _spawn_robot(main, base + Vector3(6, 0, -9))
 	for r: RobotEnemy in [ra, rb]:
 		r.max_health = 99999.0
 		r.health = 99999.0
 	await _ticks(10)
-	var fired := [0]
-	var count := func(_s: String, _w: Weapon) -> void: fired[0] += 1
+	var shots := {"Right": [], "Left": []}
+	var count := func(s: String, _w: Weapon) -> void: shots[s].append(Engine.get_physics_frames())
 	h.slot_fired.connect(count)
+	var hits0: Array = [ra.hits, rb.hits]
 	var bolts0 := get_root().find_children("*", "PlasmaBolt", true, false).size()
 	sel.forget_last_tap()
 	sel.tap_target(rb.get_node("Targetable"))
 	sel.forget_last_tap()
 	sel.tap_target(ra.get_node("Targetable"))
-	await _ticks(60)
+	var first_checked := false
+	# Launch point = the loaded warhead's base in the bore (checked at rest).
+	var lw := R.find_child("Warhead", true, false) as MeshInstance3D
+	var start_gap := (lw.global_transform * PlayerRocket.WARHEAD_BASE).distance_to(R.global_transform * RocketLauncher.WARHEAD_BASE)
+	var rocket_info := ""
+	var hidden_after := false
+	var flash_ok := false
+	var smoke_ok := false
+	var recoil_peak := 0.0
+	var rocket_ok := false
+	var aims := []
+	for i in Engine.physics_ticks_per_second * 6:
+		await _ticks(1)
+		recoil_peak = maxf(recoil_peak, absf(anim.recoil_side.Right))
+		if not first_checked and R.shots_fired > 0:
+			first_checked = true
+			var rk := R.last_rocket
+			hidden_after = not (R.find_child("Warhead", true, false) as Node3D).visible
+			flash_ok = R._blasts.any(func(b: LauncherBlast) -> bool: return b.visible)
+			smoke_ok = R._barrel_smoke.emitting and R._blasts.any(func(b: LauncherBlast) -> bool: return b._smoke.emitting)
+			var war := rk.find_child("Warhead", true, false) as MeshInstance3D if rk else null
+			var launcher_war := R.find_child("Warhead", true, false) as MeshInstance3D
+			var body := rk.find_child("Body", true, false) as MeshInstance3D if rk else null
+			var war_s: float = war.global_basis.get_scale().x if war else 0.0
+			var lw_s: float = launcher_war.global_basis.get_scale().x
+			var body_d: float = (body.mesh as CylinderMesh).top_radius * 2.0 if body else 0.0
+			var war_d: float = launcher_war.mesh.get_aabb().size.y * lw_s
+			rocket_info = "same mesh %s, scale %.3f / %.3f, width %.3f / %.3f m" % [war != null and war.mesh == launcher_war.mesh, war_s, lw_s, body_d, war_d]
+			rocket_ok = war != null and war.mesh == launcher_war.mesh and absf(war_s - lw_s) < 0.005 and absf(body_d - war_d) < 0.01
+		if i == 40:
+			for side in ["Right", "Left"]:
+				var sl := h.slot(side)
+				var w := h.weapon(side)
+				if sl.lock and sl.lock.current and w:
+					aims.append(rad_to_deg(w.get_barrel_direction().angle_to(sl.lock.get_aim_point() - w.find_marker(Weapon.MUZZLE_MARKER).global_position)))
 	var ta: Targetable = h.slot("Right").lock.current if h.slot("Right").lock else null
 	var tb: Targetable = h.slot("Left").lock.current if h.slot("Left").lock else null
-	var aims := []
-	for side in ["Right", "Left"]:
-		var sl := h.slot(side)
-		var w := h.weapon(side)
-		if sl.lock and sl.lock.current and w:
-			aims.append(rad_to_deg(w.get_barrel_direction().angle_to(sl.lock.get_aim_point() - w.find_marker(Weapon.MUZZLE_MARKER).global_position)))
 	_check(ta != null and tb != null and ta != tb and aims.size() == 2 and aims.max() < 20.0,
 		"dual rocket launchers: each arm locks and aims at its own target (%s deg)" % [aims])
-	_check(fired[0] == 0 and get_root().find_children("*", "PlasmaBolt", true, false).size() == bolts0, "no rockets yet: it never fires")
+	var gaps := []
+	for side in ["Right", "Left"]:
+		var t: Array = shots[side]
+		for k in range(1, t.size()):
+			gaps.append(snappedf((t[k] - t[k - 1]) / float(Engine.physics_ticks_per_second), 0.01))
+	_check(shots.Right.size() >= 2 and shots.Left.size() >= 2 and gaps.min() >= 2.45 and gaps.max() <= 2.75,
+		"each launcher fires one rocket every 2.5 s (%d + %d rockets, gaps %s s)" % [shots.Right.size(), shots.Left.size(), gaps])
+	_check(rocket_ok, "the rocket is the launcher's own loaded rocket: its warhead mesh and size, a body the same width (%s)" % rocket_info)
+	_check(start_gap < 0.03 and hidden_after, "it leaves from where it sat in the bore (%.3f m) and the bore is empty until reloaded" % start_gap)
+	_check(flash_ok and smoke_ok, "big muzzle flash and thick smoke out of the muzzle, the barrel keeps smoking")
+	_check(R.recoil_strength >= 1.0 and recoil_peak > 0.3, "heavy recoil kick on each rocket (strength %.1f, arm kick %.2f)" % [R.recoil_strength, recoil_peak])
+	_check(ra.hits > hits0[0] and rb.hits > hits0[1] and ra.health < 99999.0 and rb.health < 99999.0, "rockets fly to and hit each arm's target")
+	_check((R.find_child("Warhead", true, false) as Node3D).visible or R.reload_left() > 0.0, "the next rocket is back in the bore when it's ready")
+	var audio := 0
+	for n in [R, L] + get_root().find_children("*", "PlayerRocket", true, false):
+		audio += n.find_children("*", "AudioStreamPlayer3D", true, false).size() + n.find_children("*", "AudioStreamPlayer", true, false).size()
+	_check(audio == 0 and get_root().find_children("*", "PlasmaBolt", true, false).size() == bolts0, "no sounds on the launcher or its rockets yet; rockets only")
 	h.slot_fired.disconnect(count)
 	sel.clear()
 	for r in [ra, rb]:

@@ -5,6 +5,7 @@
 
 [node name="RocketLauncher" type="Node3D"]
 script = ExtResource("1")
+recoil_strength = 1.2
 
 [node name="Model" parent="." instance=ExtResource("2")]
 transform = Transform3D(-0.47, 0, 0, 0, 0.47, 0, 0, 0, -0.47, 0, 0, 0)

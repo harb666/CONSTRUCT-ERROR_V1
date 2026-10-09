@@ -87,8 +87,10 @@
   jumping character). Their evades are sidesteps and dives; the jump code
   is kept, unused.
 - Rocket Launcher (owner's model, red pad): mounted / dual-wielded like the
-  other arm weapons; it doesn't fire yet - the owner will specify the rocket
-  mechanics separately, so don't invent them.
+  other arm weapons. Fires the rocket loaded in its bore (same size / look:
+  the model's own warhead + a matching body) every 2.5 s, with a big muzzle
+  flash, lots of smoke and heavy recoil (owner's spec). No sounds on it yet
+  (owner said so) - don't add any until asked.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
