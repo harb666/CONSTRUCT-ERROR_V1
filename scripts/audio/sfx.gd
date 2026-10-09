@@ -30,6 +30,10 @@ const MACHINE_DEATH := preload("res://assets/audio/enemies/machine_death.wav")
 ## apart). MINI_BOSS_MG: the robot boss's chaingun - a recording of
 ## continuous fire; RobotBoss plays one shot out of it per round fired.
 const SMALL_ROBOT_DEATH := preload("res://assets/audio/enemies/small_robot_death.mp3")
+## The owner's two further grunt death sounds: a death picks one of the three
+## at random.
+const SMALL_ROBOT_DEATH_2 := preload("res://assets/audio/enemies/small_robot_death_2.mp3")
+const SMALL_ROBOT_DEATH_3 := preload("res://assets/audio/enemies/small_robot_death_3.mp3")
 const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3")
 ## MINI_BOSS_MISSILE: the robot boss launching a missile (the launch blast
 ## starts ~1.04 s into the file; RobotBoss plays it from there).

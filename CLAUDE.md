@@ -27,6 +27,13 @@
   (not when they break apart: black holes, explosions), supplied by the owner
   (sha256 ea1e3439974adfbb32416bff3afc2b551b9ea5f45ab8a71ccc1dcabaf6a8683b).
   `RobotEnemy.die()` plays it via `Sfx.SMALL_ROBOT_DEATH`.
+- `assets/audio/enemies/small_robot_death_2.mp3` (sha256
+  068c10ac9adb8704966c38943368516f79b79a4ff27f7c341f9c500a6a834b8b) and
+  `assets/audio/enemies/small_robot_death_3.mp3` (sha256
+  016f968e811eb248e42a2bdeed35ab97b73fce134bfa143355c08b56dece5676) - the
+  owner's other two grunt death sounds. Each such death plays one of the
+  three at random (never the same twice running); `_2` starts 0.15 s in
+  (it opens with 0.2 s of silence).
 - `assets/audio/enemies/mini_boss_machine_gun_firing.mp3` - the robot boss's
   chaingun, supplied by the owner (sha256
   8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978). A recording of

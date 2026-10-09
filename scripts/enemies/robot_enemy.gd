@@ -74,7 +74,8 @@ const CAPS := preload("res://assets/characters/robot/robot_caps.res")
 @export var shot_sound_near := 3.0
 @export var shot_sound_far := 40.0
 @export var shot_sound_pitch := Vector2(0.95, 1.05)
-## Death sound (Sfx.SMALL_ROBOT_DEATH, the owner's own sound) when killed by
+## Death sound (one of the owner's three, Sfx.SMALL_ROBOT_DEATH / _2 / _3, at
+## random, never the same one twice running) when killed by
 ## weapon fire and it doesn't break apart (none for black holes, explosions
 ## or any break-up). Grunts only (the skirmisher turns it off).
 @export var weapon_death_sound := true
@@ -176,6 +177,10 @@ var _backing := false
 var shot_sounds := 0
 ## Death sounds started (tests).
 var death_sounds := 0
+## The death sound last played (tests).
+var last_death_sound: AudioStream
+## Index of the death sound played last by any grunt (so the next differs).
+static var _last_death_pick := -1
 var _shot_voices: Array[DynamicSound] = []
 var _shot_voice := 0
 
@@ -900,7 +905,18 @@ func die(info: DamageInfo) -> void:
 	if weapon_death_sound and last_destruction == BreakApart.Level.NONE and info \
 			and info.damage_type != DamageInfo.Type.EXPLOSION and info.damage_type != DamageInfo.Type.SUPERNOVA \
 			and info.weapon != &"black_hole":
-		Sfx.play_at(get_parent(), Sfx.SMALL_ROBOT_DEATH, global_position + Vector3.UP, death_sound_db, death_sound_near, death_sound_far)
+		# One of the three at random, not the one heard last. The second file
+		# opens with 0.2 s of silence: it starts just before its sound.
+		var sounds: Array[AudioStream] = [Sfx.SMALL_ROBOT_DEATH, Sfx.SMALL_ROBOT_DEATH_2, Sfx.SMALL_ROBOT_DEATH_3]
+		var starts: Array[float] = [0.0, 0.15, 0.0]
+		var pick := randi() % sounds.size()
+		if pick == _last_death_pick:
+			pick = (pick + 1 + randi() % (sounds.size() - 1)) % sounds.size()
+		_last_death_pick = pick
+		last_death_sound = sounds[pick]
+		var snd := Sfx.play_at(get_parent(), sounds[pick], global_position + Vector3.UP, death_sound_db, death_sound_near, death_sound_far)
+		if snd and starts[pick] > 0.0:
+			snd.play(starts[pick])
 		death_sounds += 1
 	if last_destruction == BreakApart.Level.NONE:
 		_failure_sparks()

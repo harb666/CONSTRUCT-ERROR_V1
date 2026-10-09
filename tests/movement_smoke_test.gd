@@ -4100,6 +4100,28 @@ func _death_sound_tests(main: Node) -> void:
 	const SRD_SHA := "ea1e3439974adfbb32416bff3afc2b551b9ea5f45ab8a71ccc1dcabaf6a8683b"
 	if FileAccess.file_exists("res://assets/audio/enemies/small_robot_death.mp3"):
 		_check(FileAccess.get_sha256("res://assets/audio/enemies/small_robot_death.mp3") == SRD_SHA, "audio: small robot death sound file is the owner's original, unchanged")
+	const SRD_SHAS := {"small_robot_death_2.mp3": "068c10ac9adb8704966c38943368516f79b79a4ff27f7c341f9c500a6a834b8b", "small_robot_death_3.mp3": "016f968e811eb248e42a2bdeed35ab97b73fce134bfa143355c08b56dece5676"}
+	for f in SRD_SHAS:
+		if FileAccess.file_exists("res://assets/audio/enemies/" + f):
+			_check(FileAccess.get_sha256("res://assets/audio/enemies/" + f) == SRD_SHAS[f], "audio: %s is the owner's original, unchanged" % f)
+	# Three death sounds, one at random each time, never the same twice
+	# running.
+	var heard := {}
+	var repeats := 0
+	var prev: AudioStream = null
+	for k in 12:
+		var g := _spawn_robot(main, at + Vector3(k % 4, 0, 0))
+		await _ticks(3)
+		var hit := DamageInfo.make(999, DamageInfo.Type.BULLET, at, Vector3.FORWARD)
+		g.apply_damage(hit)
+		await _ticks(1)
+		if g.death_sounds == 1:
+			heard[g.last_death_sound] = true
+			repeats += int(g.last_death_sound == prev)
+			prev = g.last_death_sound
+		g.queue_free()
+		await _ticks(1)
+	_check(heard.size() == 3 and heard.has(Sfx.SMALL_ROBOT_DEATH) and heard.has(Sfx.SMALL_ROBOT_DEATH_2) and heard.has(Sfx.SMALL_ROBOT_DEATH_3) and repeats == 0, "grunt death sound: picks one of the owner's 3 at random, never the same twice running (%d heard, %d repeats)" % [heard.size(), repeats])
 	RobotEnemy.ai_enabled = was_ai
 	await _ticks(3)
 
