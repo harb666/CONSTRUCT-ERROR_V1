@@ -3670,19 +3670,21 @@ func _front_end_tests() -> void:
 	_check(fe != null and paused and main.players.is_empty(), "front end: opens over the paused arena, no player yet")
 	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
 	var cam_from: Vector3 = main._menu_camera.global_position
-	await _wall_wait(func() -> bool: return fe.loaded, 12.0)
-	_check(fe.loaded and main._menu_camera.global_position.distance_to(cam_from) > 0.01, "front end: loading finishes, camera moves while paused")
-	# Tap anywhere: start.
+	_check(not fe.loaded and fe._buttons.has("start"), "front end: TAP TO START is up while the arena is still loading")
+	for i in 4:
+		await process_frame
+	_check(main._menu_camera.global_position.distance_to(cam_from) > 0.001, "front end: camera moves while paused")
+	# Tap anywhere: start (iPhone Safari numbers fingers with large ids).
 	var xf := root.get_final_transform()
 	for pressed in [true, false]:
 		var ev := InputEventScreenTouch.new()
-		ev.index = 0
+		ev.index = 12345
 		ev.pressed = pressed
 		ev.position = xf * Vector2(300, 300)
 		Input.parse_input_event(ev)
 		await process_frame
 		await process_frame
-	_check(fe.screen == FrontEnd.Screen.SELECT, "front end: a tap on the title opens character select")
+	_check(fe.screen == FrontEnd.Screen.SELECT and not fe.loaded, "front end: a tap on the title opens character select (even while loading)")
 	await process_frame
 	await process_frame
 	var ap := fe._preview_vp.find_child("AnimationPlayer", true, false) as AnimationPlayer if fe._preview_vp else null
@@ -3692,7 +3694,7 @@ func _front_end_tests() -> void:
 	var dep: Rect2 = fe._buttons["deploy"]
 	for pressed in [true, false]:
 		var ev := InputEventScreenTouch.new()
-		ev.index = 0
+		ev.index = 7
 		ev.pressed = pressed
 		ev.position = xf * dep.get_center()
 		Input.parse_input_event(ev)

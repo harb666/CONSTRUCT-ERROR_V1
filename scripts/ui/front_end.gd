@@ -1,7 +1,8 @@
 class_name FrontEnd
 extends Control
 ## The screens before a match, over the (paused) arena:
-## 1. Title: "TAP TO START". The tap is a real touch, so the browser lets the
+## 1. Title: "TAP TO START" (works at once; a ring gauge shows the arena
+##    still loading behind it). The tap is a real touch, so the browser lets the
 ##    game's sound start right then (iPhones keep web audio off until the
 ##    first touch); the arena keeps loading / drawing behind it, so by the
 ##    time you're in, sounds play straight away.
@@ -16,10 +17,11 @@ signal deployed(character: CharacterDefinition)
 
 enum Screen { TITLE, SELECT, OUT }
 
-## Loading counts as done after this many smooth frames in a row (the
-## phone has finished preparing the arena's graphics) or `max_loading_time`.
+## The ring gauge shows LOADING until this many smooth frames in a row (the
+## phone has finished preparing the arena's graphics) or `max_loading_time`
+## real seconds. Display only: TAP TO START works from the first moment.
 @export var smooth_frames_needed := 20
-@export var max_loading_time := 10.0
+@export var max_loading_time := 8.0
 @export var fade_time := 0.35
 
 var screen := Screen.TITLE
@@ -36,6 +38,11 @@ var _smooth := 0
 var _fade := 1.0
 var _screen_t := 0.0
 var _press := ""
+## The finger being tracked (browsers number fingers freely: iPhones give
+## large ids, not 0), -1 = none.
+var _finger := -1
+## Tapped while still loading: start as soon as it's done.
+var _start_ms := 0
 var _build := ""
 var _preview_vp: SubViewport
 var _preview_pivot: Node3D
@@ -46,6 +53,7 @@ var _buttons := {}  # id -> Rect2 (this frame's layout)
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_start_ms = Time.get_ticks_msec()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if roster == null:
 		roster = CharacterRoster.load_default()
@@ -60,8 +68,8 @@ func _process(delta: float) -> void:
 	_t += delta
 	_screen_t += delta
 	if not loaded:
-		_load_t += delta
-		_smooth = _smooth + 1 if delta < 0.05 else 0
+		_load_t = (Time.get_ticks_msec() - _start_ms) / 1000.0
+		_smooth = _smooth + 1 if delta < 0.07 else 0
 		if (_load_t > 0.5 and _smooth >= smooth_frames_needed) or _load_t > max_loading_time:
 			loaded = true
 	if orbit_camera and is_instance_valid(orbit_camera):
@@ -85,7 +93,16 @@ func _input(event: InputEvent) -> void:
 		return
 	var pos := Vector2.INF
 	var pressed := false
-	if event is InputEventScreenTouch and event.index == 0:
+	if event is InputEventScreenTouch:
+		# Any finger: the first one down is followed until it lifts.
+		if event.pressed:
+			if _finger != -1:
+				return
+			_finger = event.index
+		elif event.index != _finger:
+			return
+		else:
+			_finger = -1
 		pos = event.position
 		pressed = event.pressed
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
@@ -119,8 +136,6 @@ func _hit(pos: Vector2) -> String:
 ## Presses a button by id ("start", "deploy", "char:<id>").
 func _activate(id: String) -> void:
 	if id == "start" and screen == Screen.TITLE:
-		if not loaded:
-			return
 		screen = Screen.SELECT
 		_screen_t = 0.0
 		_make_preview()
@@ -280,22 +295,16 @@ func _draw_title(a: float) -> void:
 	var btn := Rect2(Vector2(cx - 170, ec.y + er + 26), Vector2(340, 58))
 	if not loaded:
 		# Loading gauge (reference sheet's percentage rings).
-		var k := clampf(float(_smooth) / smooth_frames_needed, 0.0, 1.0)
+		var k := clampf(maxf(float(_smooth) / smooth_frames_needed, _load_t / max_loading_time), 0.0, 1.0)
 		draw_arc(ec, er * 0.55, -PI * 0.5, -PI * 0.5 + TAU * maxf(k, 0.04), 48, Color(HudStyle.CYAN, a), 5.0, true)
 		HudStyle.text(self, nf, ec + Vector2(0, 8), "%d%%" % roundi(k * 100.0), 22, Color(HudStyle.TEXT, a), 0.5)
-		HudStyle.panel(self, btn, HudStyle.CYAN_DIM, HudStyle.FILL_DARK, 14.0, a)
-		var stripes_x := fposmod(_t * 60.0, 24.0)
-		for i in 14:
-			var x := btn.position.x + 14 + i * 24 + stripes_x - 24
-			if x > btn.position.x + 8 and x < btn.end.x - 22:
-				draw_line(Vector2(x, btn.end.y - 10), Vector2(x + 8, btn.end.y - 18), Color(HudStyle.CYAN, 0.5 * a), 3.0)
-		HudStyle.text(self, lf, btn.get_center() + Vector2(0, -2), "LOADING", 24, Color(HudStyle.TEXT, 0.7 * a), 0.5)
 	else:
-		var pulse := 0.5 + 0.5 * sin(_t * 4.0)
 		HudStyle.text(self, nf, ec + Vector2(0, 8), "READY", 20, Color(HudStyle.TEXT, a), 0.5)
-		HudStyle.panel(self, btn, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.45), pulse * 0.5), 14.0, a)
-		HudStyle.brackets(self, btn, Color(HudStyle.CYAN, (0.5 + 0.5 * pulse) * a), 16.0, 6.0 + pulse * 4.0)
-		HudStyle.text(self, nf, btn.get_center() + Vector2(0, 10), "TAP TO START", 26, Color(HudStyle.TEXT, a), 0.5, 3)
+	# Works from the first moment, loading or not.
+	var pulse := 0.5 + 0.5 * sin(_t * 4.0)
+	HudStyle.panel(self, btn, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.45), pulse * 0.5), 14.0, a)
+	HudStyle.brackets(self, btn, Color(HudStyle.CYAN, (0.5 + 0.5 * pulse) * a), 16.0, 6.0 + pulse * 4.0)
+	HudStyle.text(self, nf, btn.get_center() + Vector2(0, 10), "TAP TO START", 26, Color(HudStyle.TEXT, a), 0.5, 3)
 	_buttons["start"] = btn
 	if _build != "":
 		HudStyle.text(self, lf, Vector2(size.x - _margin(), size.y - 14), "build " + _build, 15, Color(HudStyle.TEXT, 0.45 * a), 1.0)
