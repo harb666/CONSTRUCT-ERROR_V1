@@ -1240,7 +1240,7 @@ var corpse_gap := 0.0
 var _settle_body: RigidBody3D
 var _settle_t := 0.0
 ## Dying: how far (deg) an upper arm may be raised from hanging down.
-@export var death_arm_raise_max := 75.0
+@export var death_arm_raise_max := 50.0
 
 
 func _corpse(delta: float) -> void:
