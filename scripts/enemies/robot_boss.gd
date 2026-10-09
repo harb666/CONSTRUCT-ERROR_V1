@@ -163,6 +163,13 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 @export var missile_blast_radius := 2.6
 ## Missile length (m); a loaded one sits in the launcher's silo.
 @export var missile_length := 1.8
+## Missile launch sound (the owner's recording). It is played from
+## `missile_sound_start` s in: the launch blast's onset (before it is ~1 s of
+## near-silence), so the blast is heard the moment the missile fires.
+@export var missile_sound_start := 1.03
+@export var missile_sound_db := 0.0
+@export var missile_sound_near := 8.0
+@export var missile_sound_far := 80.0
 ## After a launch the next missile is loaded this much later (s).
 @export var missile_reload_time := 1.6
 
@@ -206,6 +213,7 @@ var missiles_fired := 0
 var bullets_fired := 0
 ## Chaingun shot sounds started (tests).
 var chaingun_sounds := 0
+var missile_sounds := 0
 var _mg_voices: Array[DynamicSound] = []
 var _mg_left: Array[float] = []
 var _mg_next := 0
@@ -960,7 +968,12 @@ func fire_missile(at: Vector3) -> BossMissile:
 	_reload_t = missile_reload_time
 	launch_fx.fire(silo_mouth(), SILO_RADIUS * 2.0 * model_scale)
 	missiles_fired += 1
-	Sfx.play_at(get_parent(), Sfx.BH_FIRE, from.origin, -6.0, 5.0, 60.0)
+	# The owner's launch sound, from the instant the blast starts in the
+	# recording, so the blast lands on the frame the missile leaves.
+	var snd := Sfx.play_at(get_parent(), Sfx.MINI_BOSS_MISSILE, from.origin, missile_sound_db, missile_sound_near, missile_sound_far)
+	if snd:
+		snd.play(missile_sound_start)
+		missile_sounds += 1
 	missile_launched.emit(point)
 	_chest_open_t = chest_open_delay
 	return last_missile

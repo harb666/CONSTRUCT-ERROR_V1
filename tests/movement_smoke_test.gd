@@ -2674,7 +2674,16 @@ func _robot_boss_tests(main: Node) -> void:
 	boss.core_exposed.connect(func() -> void: events.exposed = Engine.get_physics_frames() / 60.0, CONNECT_ONE_SHOT)
 	boss.core_protected.connect(func() -> void: events.protected = Engine.get_physics_frames() / 60.0, CONNECT_ONE_SHOT)
 	var launch_frame := Engine.get_physics_frames()
+	var ms0 := boss.missile_sounds
 	var m := boss.fire_missile(p.global_position)
+	var launch_snd: AudioStreamPlayer3D = null
+	for c in boss.get_parent().get_children():
+		if c is AudioStreamPlayer3D and c.stream == Sfx.MINI_BOSS_MISSILE and c.playing:
+			launch_snd = c
+	_check(boss.missile_sounds - ms0 == 1 and launch_snd != null and absf(launch_snd.get_playback_position() - boss.missile_sound_start) < 0.05 and launch_snd.global_position.distance_to(boss.missile_socket.global_position) < 0.05, "boss: the owner's missile firing sound starts at its launch blast the moment the missile fires")
+	const MISSILE_SHA := "5e7a586a472f453020cf2148a1fdd17f37be59de52b3e981e5d46ea41229b7c7"
+	if FileAccess.file_exists("res://assets/audio/enemies/mini_boss_missile_firing.mp3"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/mini_boss_missile_firing.mp3") == MISSILE_SHA, "audio: mini boss missile firing sound file is the owner's original, unchanged")
 	m.exploded.connect(func(at: Vector3) -> void: events.boom = at, CONNECT_ONE_SHOT)
 	var launch_y := boss.missile_socket.global_position.y
 	_check(m.global_position.distance_to(boss.missile_socket.global_position) < 0.05, "boss: missile appears at the launcher's Missile_Spawn")

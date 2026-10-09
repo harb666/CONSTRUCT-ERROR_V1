@@ -31,6 +31,9 @@ const MACHINE_DEATH := preload("res://assets/audio/enemies/machine_death.wav")
 ## continuous fire; RobotBoss plays one shot out of it per round fired.
 const SMALL_ROBOT_DEATH := preload("res://assets/audio/enemies/small_robot_death.mp3")
 const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3")
+## MINI_BOSS_MISSILE: the robot boss launching a missile (the launch blast
+## starts ~1.04 s into the file; RobotBoss plays it from there).
+const MINI_BOSS_MISSILE := preload("res://assets/audio/enemies/mini_boss_missile_firing.mp3")
 ## The generated cannon shot (no longer used by the grunts) and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")

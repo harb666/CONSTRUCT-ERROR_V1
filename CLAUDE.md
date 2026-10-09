@@ -32,6 +32,11 @@
   8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978). A recording of
   continuous fire: `RobotBoss` plays one shot cut from it per round fired
   (`chaingun_shot_starts`), so it matches the real rate of fire.
+- `assets/audio/enemies/mini_boss_missile_firing.mp3` - the robot boss's
+  missile launch, supplied by the owner (sha256
+  5e7a586a472f453020cf2148a1fdd17f37be59de52b3e981e5d46ea41229b7c7).
+  `RobotBoss.fire_missile()` plays it from the blast's onset
+  (`missile_sound_start` 1.03 s) so it is in sync with the launch.
 
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
