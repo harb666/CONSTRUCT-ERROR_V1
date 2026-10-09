@@ -42,6 +42,9 @@
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
   their muzzle flashes stay on. The player's machine gun effects (barrel heat
   glow, overheating, etc.) are separate and stay as they are.
+- Skirmishers are twice as big (`RobotSkirmisher.size_scale = 2.0`): model,
+  hitbox, target point, steps, jump and dive lunge scale; speeds, health and
+  weapons don't.
 
 ## Approved save points
 - Branch `saved/approved-2026-10-09` (commit 730b224): the owner said

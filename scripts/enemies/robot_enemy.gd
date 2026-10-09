@@ -600,8 +600,15 @@ func _think() -> void:
 		var off: Vector3 = global_position - (e as Node3D).global_position
 		off.y = 0.0
 		var d := off.length()
-		if d > 0.01 and d < 1.8:
-			_sep += off / d * (1.8 - d)
+		# 1.8 m between two normal-size robots; more round bigger ones.
+		var room := 0.9 * (_size_factor() + (e as RobotEnemy)._size_factor())
+		if d > 0.01 and d < room:
+			_sep += off / d * (room - d)
+
+
+## How many times its normal size this robot is (spacing from others).
+func _size_factor() -> float:
+	return 1.0
 
 
 func _aim_point() -> Vector3:

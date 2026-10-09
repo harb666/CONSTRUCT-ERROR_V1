@@ -3817,11 +3817,17 @@ func _combat3_tests(main: Node) -> void:
 	p.global_position = e2.global_position + Vector3(0, 0.05, 10)
 	p.reset_physics_interpolation()
 	await _ticks(30)
+	# (Not mid standing-turn: that's a turn on the spot, not suppression.)
+	for i in 90:
+		if e2.action != RobotSkirmisher.Act.TURN:
+			break
+		await _ticks(1)
 	var start2 := e2.global_position
 	for i in 60:
 		if i % 6 == 0:
 			e2.suppression.level = 1.0
 		await _ticks(1)
+		if i % 6 == 0: print("DBG ", i, " pos ", e2.global_position, " v ", e2.linear_velocity, " act ", e2.action, " anim ", e2._anim.current_animation, " ", e2.get("_steer_t"), " ", e2.get("_backing"))
 	_check(e2.global_position.distance_to(start2) > 1.0, "split: a suppressed skirmisher keeps moving (%.1f m in 1 s)" % e2.global_position.distance_to(start2))
 	RobotEnemy.ai_enabled = false
 	# Phase E feedback: concentrated hits spark harder; skirmisher wind-up tell.
@@ -3899,7 +3905,9 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	probe.feet = [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
 	var legs = r.get("_foot_ik")
 	legs.max_camera_distance = 1.0e6
-	var rest_y := [sk.get_bone_global_rest(probe.feet[0]).origin.y, sk.get_bone_global_rest(probe.feet[1]).origin.y]
+	# Rest heights in world metres (a robot's model may be scaled up).
+	var ks := sk.global_transform.basis.get_scale().y
+	var rest_y := [sk.get_bone_global_rest(probe.feet[0]).origin.y * ks, sk.get_bone_global_rest(probe.feet[1]).origin.y * ks]
 	var prev := [Vector3.ZERO, Vector3.ZERO]
 	var was := [false, false]
 	var held := [0, 0]
@@ -3908,7 +3916,10 @@ func _walk_feet(main: Node, scene: String, at: Vector3, speed: float, frames: in
 	var total := 0
 	var min_sep := INF
 	var max_h := 0.0
-	for f in 45:
+	# Warm-up: long enough for both feet to step round to the new heading
+	# (a bigger robot's slower, longer steps take more frames).
+	var ks0: float = sk.global_transform.basis.get_scale().y
+	for f in int(45 * ks0):
 		await physics_frame
 	for f in frames:
 		await process_frame
@@ -4096,6 +4107,21 @@ func _death_sound_tests(main: Node) -> void:
 ## Skirmisher barrel lights: never shown before they are placed on the
 ## barrel (the core mesh is a 1 m sphere), always small and on the muzzle.
 func _barrel_glow_tests(main: Node) -> void:
+	# The owner asked for skirmishers twice as big: model, hitbox and target
+	# point all doubled.
+	var big := _spawn_skirmisher(main, Vector3(-36, 0.05, 20))
+	await _ticks(5)
+	var cap := (big.get_node("Collision") as CollisionShape3D).shape as CapsuleShape3D
+	var tgt_y := (big.get_node("Targetable") as Node3D).position.y
+	_check(is_equal_approx(big.size_scale, 2.0) and big.get_skeleton().global_transform.basis.get_scale().is_equal_approx(Vector3.ONE * 2.0) \
+			and is_equal_approx(cap.height, 3.3) and is_equal_approx(cap.radius, 0.72) and is_equal_approx(tgt_y, 2.2), \
+			"skirmisher: twice as big (model x%.1f, hitbox %.2f m tall, target at %.1f m)" % [big.get_skeleton().global_transform.basis.get_scale().y, cap.height, tgt_y])
+	var head := big.get_skeleton().find_bone(&"mixamorig_Head")
+	if head >= 0:
+		var hy := (big.get_skeleton().global_transform * big.get_skeleton().get_bone_global_pose(head)).origin.y - big.global_position.y
+		_check(hy > 2.4, "skirmisher: its head is up at %.2f m" % hy)
+	big.queue_free()
+	await _ticks(2)
 	# The owner switched the yellow barrel-end glow off; muzzle flashes stay.
 	var s := _spawn_skirmisher(main, Vector3(-30, 0.05, 20))
 	await _ticks(10)
@@ -4142,11 +4168,19 @@ func _turned_spawn_tests(main: Node) -> void:
 		robots.append(r)
 		# (Checked straight away: the AI turns it towards the player next.)
 		_check(absf(r.global_rotation.y) < 0.001 and absf(wrapf(r.get("_yaw") - 2.6, -PI, PI)) < 0.01, "spawn: a turned %s keeps that facing, its body set straight" % ("skirmisher" if r is RobotSkirmisher else "grunt"))
-	await _ticks(300)
+	await _ticks(240)
+	# Best facing over the last second (a skirmisher may be mid-dive at any
+	# one instant).
+	var best := [INF, INF]
+	for f in 60:
+		await _ticks(1)
+		for k in 2:
+			var rr := robots[k]
+			var tt := p.global_position - rr.global_position
+			best[k] = minf(best[k], absf(wrapf(rr.get("_yaw") + rr.get("_aim").twist - atan2(tt.x, tt.z), -PI, PI)))
 	for r in robots:
 		r.health = 999.0
-		var to := p.global_position - r.global_position
-		var facing := wrapf(r.get("_yaw") + r.get("_aim").twist - atan2(to.x, to.z), -PI, PI)
+		var facing: float = best[robots.find(r)]
 		_check(r.shots_fired > 0 and absf(facing) < deg_to_rad(60.0), "spawn: a robot spawned turned away still turns, aims and fires at the player (%d shots, chest %.0f deg off)" % [r.shots_fired, rad_to_deg(facing)])
 		r.queue_free()
 	RobotEnemy.ai_enabled = was_ai

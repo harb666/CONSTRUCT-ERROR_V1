@@ -58,6 +58,9 @@ var _hips := -1
 var _legs: Array[WLeg] = []
 var _drop := 0.0
 var _moving := false
+## The model's scale (a scaled-up robot): world-space step sizes grow with
+## it and its steps come slower, so a bigger robot strides like a big one.
+var _k := 1.0
 
 
 class WLeg:
@@ -131,6 +134,7 @@ func _process_modification() -> void:
 		return
 	var xf := skel.global_transform
 	var inv := xf.affine_inverse()
+	_k = maxf(xf.basis.get_scale().y, 0.01)
 	var fwd := xf.basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized() if fwd.length_squared() > 1e-6 else Vector3.BACK
@@ -153,7 +157,7 @@ func _process_modification() -> void:
 			l.placed = true
 	# Cycle: runs while moving; standing, it runs only to finish a step or
 	# to settle a foot that's out of place.
-	var f := lerpf(cadence.x, cadence.y, s)
+	var f := lerpf(cadence.x, cadence.y, s) / _k
 	var d := lerpf(duty.x, duty.y, s)
 	_moving = speed > (0.12 if _moving else 0.25)
 	var settle := false
@@ -161,7 +165,7 @@ func _process_modification() -> void:
 		for i in 2:
 			var l := _legs[i]
 			var off := Vector2(l.pos.x - home[i].x, l.pos.z - home[i].z).length()
-			if off > settle_distance or absf(wrapf(l.yaw - body_yaw, -PI, PI)) > settle_yaw:
+			if off > settle_distance * _k or absf(wrapf(l.yaw - body_yaw, -PI, PI)) > settle_yaw:
 				settle = true
 	var any_swing := not _legs[0].planted or not _legs[1].planted
 	if _moving or settle or any_swing:
@@ -175,7 +179,7 @@ func _process_modification() -> void:
 			# Standing and in place: stay down (the other foot settles).
 			if not _moving and not any_swing and not settle:
 				continue
-			if not _moving and Vector2(l.pos.x - home[i].x, l.pos.z - home[i].z).length() < settle_distance * 0.5 \
+			if not _moving and Vector2(l.pos.x - home[i].x, l.pos.z - home[i].z).length() < settle_distance * _k * 0.5 \
 					and absf(wrapf(l.yaw - body_yaw, -PI, PI)) < settle_yaw * 0.5:
 				continue
 			l.planted = false
@@ -191,7 +195,7 @@ func _process_modification() -> void:
 			var to := _on_floor(l, home[i] + lead)
 			var e := t * t * (3.0 - 2.0 * t)
 			var p := l.from.lerp(to, e)
-			p.y = lerpf(l.from.y, to.y, e) + sin(PI * t) * lerpf(lift.x, lift.y, s)
+			p.y = lerpf(l.from.y, to.y, e) + sin(PI * t) * lerpf(lift.x, lift.y, s) * _k
 			l.pos = p
 			l.yaw = lerp_angle(l.from_yaw, body_yaw, e)
 			if not swing or t >= 1.0:
@@ -226,17 +230,17 @@ func _process_modification() -> void:
 func _on_floor(l: WLeg, p: Vector3) -> Vector3:
 	var y := body.global_position.y if body else p.y
 	if body and body.is_inside_tree():
-		var q := PhysicsRayQueryParameters3D.create(Vector3(p.x, y + 0.6, p.z), Vector3(p.x, y - 1.4, p.z))
+		var q := PhysicsRayQueryParameters3D.create(Vector3(p.x, y + 0.6 * _k, p.z), Vector3(p.x, y - 1.4 * _k, p.z))
 		q.collision_mask = 1
 		q.exclude = [body.get_rid()]
 		var hit := body.get_world_3d().direct_space_state.intersect_ray(q)
 		if not hit.is_empty() and not (hit.collider is RigidBody3D or hit.collider is CharacterBody3D):
 			var n: Vector3 = hit.normal
 			l.floor_n = n if n.dot(Vector3.UP) > 0.7 else Vector3.UP
-			return Vector3(p.x, hit.position.y + l.ankle_h, p.z)
+			return Vector3(p.x, hit.position.y + l.ankle_h * _k, p.z)
 	l.floor_n = Vector3.UP
 	var base := (get_skeleton().global_transform * Vector3.ZERO).y
-	return Vector3(p.x, base + l.ankle_h, p.z)
+	return Vector3(p.x, base + l.ankle_h * _k, p.z)
 
 
 ## Orthonormal frame with x along `dir` and y along `pole` (made

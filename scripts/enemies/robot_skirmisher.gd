@@ -40,6 +40,12 @@ const FLASH_POOL := 6
 
 enum Act { NONE, SIDESTEP, JUMP, DIVE, TURN, STAGGER }
 
+@export_group("Size")
+## The whole robot is this many times its model's size (owner: twice as
+## big). Model, hitbox, target point, leg steps, jump and dive lunge all
+## scale with it; ground speeds, health and weapons stay the same.
+@export var size_scale := 2.0
+
 @export_group("Mobility")
 ## Seconds between picking a new firing position round the target.
 @export var reposition_time := Vector2(0.9, 2.0)
@@ -208,11 +214,24 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	# Bigger legs take longer strides: the clips play slower for the same
+	# ground speed, so the feet still keep pace with the floor.
+	walk_anim_speed *= size_scale
+	run_anim_speed *= size_scale
 	super._ready()
 	mass = 85.0
 	_col = get_node_or_null("Collision") as CollisionShape3D
 	if _col:
+		if not is_equal_approx(size_scale, 1.0):
+			var cap := (_col.shape as CapsuleShape3D).duplicate() as CapsuleShape3D
+			cap.radius *= size_scale
+			cap.height *= size_scale
+			_col.shape = cap
+			_col.position.y *= size_scale
 		_col_y = _col.position.y
+	var tg := get_node_or_null("Targetable") as Node3D
+	if tg:
+		tg.position.y *= size_scale
 	_hop_t = randf_range(hop_time.x, hop_time.y)
 
 
@@ -273,6 +292,8 @@ func _whole_mesh_skips(mat: Material) -> bool:
 
 func _build_model() -> void:
 	super._build_model()
+	_model.scale = Vector3.ONE * size_scale
+	_model.position = _model_offset() * size_scale
 	_hips = _skeleton.find_bone(&"mixamorig_Hips")
 	if _hips >= 0:
 		_hips_rest_y = _skeleton.get_bone_global_rest(_hips).origin.y
@@ -289,7 +310,7 @@ func _build_model() -> void:
 		_fire_snd = Sfx.emitter(self, Sfx.MG_FIRE, fire_sound_db, fire_sound_near, fire_sound_far)
 		_fire_snd.name = "FireSound"
 		_fire_snd.max_polyphony = 2
-		_fire_snd.position = Vector3(0, 1.1, 0)
+		_fire_snd.position = Vector3(0, 1.1 * size_scale, 0)
 
 
 ## Per cannon: [core (solid, unshaded), halo (additive billboard)].
@@ -435,7 +456,7 @@ func _think() -> void:
 func _scan_threats() -> void:
 	if _pending >= 0.0 or (action != Act.NONE and action != Act.TURN) or _evade_cd > 0.0:
 		return
-	var centre := global_position + Vector3.UP * 1.0
+	var centre := global_position + Vector3.UP * 1.0 * size_scale
 	for b in PlasmaBolt.in_flight():
 		if not is_instance_valid(b.shooter) or not (b.shooter as Node).is_in_group(&"players"):
 			continue
@@ -522,7 +543,7 @@ func _pick_position(dir_to: Vector3, d: float) -> void:
 		ang *= 1.0 if randf() < 0.5 else -1.0
 		var dist := randf_range(2.5, 5.0)
 		var p := flat + base.rotated(Vector3.UP, ang) * dist
-		if _floor_at(p) and _clear(global_position + Vector3.UP * 0.6, Vector3(p.x, global_position.y + 0.6, p.z)):
+		if _floor_at(p) and _clear(global_position + Vector3.UP * 0.6, Vector3(p.x, global_position.y + 0.6, p.z)) and _clear_overhead(p - flat):
 			_repos = p
 			return
 		inward = not inward if attempt == 2 else inward
@@ -542,7 +563,7 @@ func _steered(want: Vector3, delta: float) -> Vector3:
 	var from := global_position + Vector3.UP * 0.6
 	for ang in [0.0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1]:
 		var dir := want.rotated(Vector3.UP, ang)
-		if _clear(from, from + dir * 1.6) and _floor_at(global_position + dir * 1.4):
+		if _clear(from, from + dir * 1.6) and _clear_overhead(dir * 1.6) and _floor_at(global_position + dir * 1.4):
 			_steer = dir
 			return dir
 	_steer = -want
@@ -555,6 +576,21 @@ func _clear(a: Vector3, b: Vector3) -> bool:
 	q.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	return hit.is_empty() or hit.collider == target or (hit.collider is Node and (hit.collider as Node).is_in_group(&"enemies"))
+
+
+func _size_factor() -> float:
+	return size_scale
+
+
+## A scaled-up robot is taller than the knee-high probes see: also check
+## near the top of its head, so it doesn't walk into overhangs it no longer
+## fits under (a normal-size one fits under them, so it skips this).
+func _clear_overhead(off: Vector3) -> bool:
+	if size_scale <= 1.0:
+		return true
+	var h := Vector3.UP * (_col_y * 2.0 - 0.3)
+	off.y = 0.0
+	return _clear(global_position + h, global_position + h + off)
 
 
 func _floor_at(p: Vector3) -> bool:
@@ -814,7 +850,7 @@ func _update_action(delta: float) -> void:
 			var ct := _anim.current_animation_position * (1.0 if _anim.current_animation == &"Jump_Run" else 0.0)
 			# The clip jumps in place: lift between take-off and landing.
 			var u := clampf((ct - 0.1) / 0.45, 0.0, 1.0)
-			_air_y = jump_height * sin(PI * u)
+			_air_y = jump_height * size_scale * sin(PI * u)
 			var spd := jump_speed * (0.6 if ct < 0.1 else 1.0)
 			linear_velocity = Vector3(_act_dir.x * spd, v.y, _act_dir.z * spd)
 			if target:
@@ -832,7 +868,7 @@ func _update_action(delta: float) -> void:
 			var tz: Array = RobotSkirmisherMotion.TRAVEL_Z.get(&"Jumping_Punch", [])
 			var dz := RobotSkirmisherMotion.sample(tz, ct) - RobotSkirmisherMotion.sample(tz, _prev_ct)
 			_prev_ct = ct
-			var spd := clampf(dz / maxf(delta, 1e-3) * dive_travel_scale, 0.0, 9.0)
+			var spd := clampf(dz / maxf(delta, 1e-3) * dive_travel_scale * size_scale, 0.0, 9.0 * size_scale)
 			if not _side_free(_act_dir, 0.9):
 				spd = 0.0  # don't plough into a wall / off a ledge
 			linear_velocity = Vector3(_act_dir.x * spd, v.y, _act_dir.z * spd)
@@ -865,14 +901,14 @@ func _update_action(delta: float) -> void:
 	# The hitbox follows the body up (jump lift, the dive's leap).
 	var hips_lift := 0.0
 	if _hips >= 0 and action == Act.DIVE:
-		hips_lift = maxf(0.0, _skeleton.get_bone_global_pose(_hips).origin.y - _hips_rest_y)
+		hips_lift = maxf(0.0, _skeleton.get_bone_global_pose(_hips).origin.y - _hips_rest_y) * size_scale
 	_lift = _air_y + hips_lift
 	if _col:
 		_col.position.y = _col_y + _lift
 
 
 func _land() -> void:
-	_land_dip = 0.09
+	_land_dip = 0.09 * size_scale
 	_landing_dust(linear_velocity)
 
 
@@ -911,13 +947,13 @@ func _reset_action() -> void:
 func _apply_visual(delta: float) -> void:
 	if not alive or _visual == null:
 		return
-	_land_dip = maxf(_land_dip - delta * 0.6, 0.0)
+	_land_dip = maxf(_land_dip - delta * 0.6 * size_scale, 0.0)
 	_jolt = _jolt.move_toward(Vector2.ZERO, delta * 1.6)
 	_recoil = maxf(_recoil - delta * 9.0, 0.0)
 	if action == Act.NONE:
 		_lean = _lean.move_toward(Vector2.ZERO, delta * 0.5)
 	var fwd := Vector3(sin(_yaw), 0, cos(_yaw))
-	_visual.position = Vector3(0, _air_y - _land_dip, 0) - fwd * _recoil * 0.035
+	_visual.position = Vector3(0, _air_y - _land_dip, 0) - fwd * _recoil * 0.035 * size_scale
 	_visual.rotation = Vector3(_lean.x - _jolt.x - _recoil * 0.03, _yaw + _jolt.y, _lean.y)
 
 
