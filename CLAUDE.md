@@ -38,6 +38,11 @@
   their muzzle flashes stay on. The player's machine gun effects (barrel heat
   glow, overheating, etc.) are separate and stay as they are.
 
+## Approved save points
+- `approved-2026-10-09` (git tag, commit 730b224): the owner said everything
+  is good. It's the known-good state to compare against or roll back to
+  (`git checkout approved-2026-10-09`). Never move or delete approved tags.
+
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`
   (~1 min; must end `FAILURES: 0`).
