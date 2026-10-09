@@ -39,9 +39,9 @@
   glow, overheating, etc.) are separate and stay as they are.
 
 ## Approved save points
-- `approved-2026-10-09` (git tag, commit 730b224): the owner said everything
-  is good. It's the known-good state to compare against or roll back to
-  (`git checkout approved-2026-10-09`). Never move or delete approved tags.
+- Branch `saved/approved-2026-10-09` (commit 730b224): the owner said
+  everything is good. It's the known-good state to compare against or roll
+  back to. Never push to, move or delete `saved/*` branches.
 
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`
