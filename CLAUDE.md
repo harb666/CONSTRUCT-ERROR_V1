@@ -75,6 +75,14 @@
   deg) from hanging down (`_limit_arms`, applied to the pose right after
   the clip each frame); the human death clips otherwise fling the arms out
   and the thin upper-arm rod makes the cannon look detached.
+- Every skirmisher death breaks the right arm off at the shoulder as its own
+  piece, which falls to the floor (`_schedule_arm_break` / `_break_now`;
+  owner asked for this). The left arm only breaks off from strong hits, as
+  before.
+- Living skirmishers draw their joint caps (the "Interior" surfaces sealing
+  each section's open edge at shoulders, hips, neck, waist;
+  `_whole_mesh_skips` returns false), so a bent joint can't be seen through.
+  Mesh, rig and animations unchanged.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this

@@ -311,9 +311,12 @@ func _model_offset() -> Vector3:
 	return Vector3(-0.0072, 0, 0.3031)
 
 
-## The cut caps are only seen once a section is gone.
-func _whole_mesh_skips(mat: Material) -> bool:
-	return mat != null and mat.resource_name == "Interior"
+## The cut caps (the "Interior" surfaces that seal each section's open
+## edge at the shoulders, hips, neck and waist) are drawn on the living
+## robot too: where a joint bends, the section's open edge shows, and with
+## back faces culled you could see straight through the body.
+func _whole_mesh_skips(_mat: Material) -> bool:
+	return false
 
 
 func _build_model() -> void:
@@ -1166,6 +1169,7 @@ func die(info: DamageInfo) -> void:
 		_visual.rotation = Vector3(0, _yaw, 0)
 	super.die(info)
 	_death_sound()
+	_schedule_arm_break(info)
 	if died_airborne and _visual:
 		# Falls the rest of the way from where it was hit.
 		_visual.position.y = maxf(air - 0.6, 0.0)
@@ -1185,6 +1189,39 @@ func _death_sound() -> void:
 	if snd and starts[pick] > 0.0:
 		snd.play(starts[pick])
 	death_sounds += 1
+
+
+# --- Dying: the right arm comes off ---
+
+## Every death (owner's choice): the right arm breaks off at the shoulder
+## as its own piece and falls to the floor, so it can never be left
+## hanging away from its socket. Same timing as other break-offs; if the
+## killing hit breaks other parts the arm goes with their first batch.
+func _schedule_arm_break(info: DamageInfo) -> void:
+	if _right_arm_section() == null:
+		return
+	var p := clampf(_breaker.power_of(info), 0.0, 1.0)
+	var t := lerpf(break_delay.y, break_delay.x, p) * randf_range(0.8, 1.2)
+	get_tree().create_timer(t, false, true).timeout.connect(func() -> void:
+		if is_inside_tree() and not alive:
+			_break_now([], info, []))
+
+
+func _right_arm_section() -> BreakSection:
+	for s in section_set.sections:
+		if s.section_name == &"Right_Arm":
+			return s
+	return null
+
+
+func _break_now(cuts: Array, info: DamageInfo, planned: Array[BreakSection]) -> void:
+	var arm := _right_arm_section()
+	if arm and _breaker and not _breaker.is_detached(arm.section_name) and not cuts.has(arm):
+		# Its own piece: never carried off on the torso, never left on.
+		cuts = cuts + [arm]
+		planned = planned.duplicate()
+		planned.append(arm)
+	super._break_now(cuts, info, planned)
 
 
 # --- Dying: arms kept in ---

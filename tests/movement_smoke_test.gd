@@ -1496,8 +1496,9 @@ func _skirmisher_tests(main: Node) -> void:
 	for m: MeshInstance3D in r._sections:
 		tris += (m.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 	_check(tris < 18000, "skirmisher: optimised mesh (%d triangles, source 62k)" % tris)
-	_check(r.is_whole_mesh() and r._whole.mesh.get_surface_count() == 1, "skirmisher: alive = one merged mesh, one draw surface (caps left out)")
-	_check(r._whole_far != null and r._whole_far.mesh.get_surface_count() == 1 and r._whole_far.mesh != r._whole.mesh, "skirmisher: own far LOD mesh")
+	_check(r.is_whole_mesh() and r._whole.mesh.get_surface_count() == 2 and r._whole.mesh.surface_get_material(1).resource_name == "Interior",
+		"skirmisher: alive = one merged mesh: body + the caps sealing its joints (no seeing through a bent joint)")
+	_check(r._whole_far != null and r._whole_far.mesh.get_surface_count() == 2 and r._whole_far.mesh != r._whole.mesh, "skirmisher: own far LOD mesh (joints sealed too)")
 	var first := _spawn_robot(main, base + Vector3(6, 0, -14))
 	await _ticks(3)
 	_check(first._whole.mesh != r._whole.mesh and first._whole.mesh.get_surface_count() == 2, "first robot keeps its own merged mesh (cache per model)")
@@ -1727,6 +1728,8 @@ func _skirmisher_tests(main: Node) -> void:
 	_check(seen.size() >= 5, "skirmisher deaths vary (%d kinds in 10: %s)" % [seen.size(), seen.keys()])
 	_check(RobotDeathSparks.active_count() > 0, "electrical death effects play (arcs, sparks, smoke)")
 	await _ticks(60)
+	var armless := deaths.filter(func(q: RobotSkirmisher) -> bool: return q.get_breaker().is_detached(&"Right_Arm")).size()
+	_check(armless == deaths.size(), "skirmisher: the right arm breaks off on every death (%d/%d)" % [armless, deaths.size()])
 	_check(RobotDeathSparks.active_count() > 0 and JointSparks.active_count() > 0, "the electrical failure keeps crackling, dying away")
 	var air := _spawn_skirmisher(main, base + Vector3(-8, 0, -6))
 	await _ticks(5)
@@ -1742,10 +1745,11 @@ func _skirmisher_tests(main: Node) -> void:
 	for i in 200:
 		counts[big._breaker.choose_level(DamageInfo.make(9, DamageInfo.Type.BULLET, Vector3.ZERO, Vector3.FORWARD, 2.0))] += 1
 	_check(counts[0] > 180, "ordinary kills leave it whole (%s)" % [counts])
-	var debris0 := DebrisPiece.active_count()
+	var big_pieces := []  # this robot's own (others nearby drop their right arm)
+	big._breaker.piece_detached.connect(func(pc: DebrisPiece, _s: BreakSection, _j: Vector3) -> void: big_pieces.append(pc))
 	big.apply_damage(expl)
 	await _ticks(45)
-	var pieces := DebrisPiece.active_count() - debris0
+	var pieces := big_pieces.size()
 	# The level is rolled round the blast's power: a heavy roll takes off
 	# several sections, a medium one 1-2 (by design).
 	var want_pieces := 2 if big.last_destruction >= BreakApart.Level.HEAVY else 1
@@ -4030,7 +4034,8 @@ func _skirmisher_leg_tests(main: Node) -> void:
 	await _ticks(60 * 7)
 	var low := INF
 	for sec in s._sections:
-		if is_instance_valid(sec) and sec.visible:
+		# Still on the body (the right arm has broken off by now).
+		if is_instance_valid(sec) and sec.visible and sec.get_parent() == sk:
 			var hull: Dictionary = s._section_hull(sec)
 			for b in hull:
 				var xf := sk.global_transform * sk.get_bone_global_pose(b)
@@ -4041,7 +4046,12 @@ func _skirmisher_leg_tests(main: Node) -> void:
 	# out; on this robot the cannon then looks detached from the shoulder).
 	var s3 := _spawn_skirmisher(main, Vector3(-33, 0.05, -24))
 	await _ticks(10)
+	var r_arm := []  # the right arm's piece
+	s3.get_breaker().piece_detached.connect(func(pc: DebrisPiece, sec: BreakSection, _j: Vector3) -> void:
+		if sec.section_name == &"Right_Arm":
+			r_arm.append(pc))
 	s3.apply_damage(DamageInfo.make(999, DamageInfo.Type.ENERGY, s3.global_position + Vector3.UP * 2.0, Vector3.BACK, 0.2, 0.0))
+	var weak_level := s3.last_destruction
 	var raise := 0.0
 	var sk3 := s3.get_skeleton()
 	for f in 150:
@@ -4054,6 +4064,22 @@ func _skirmisher_leg_tests(main: Node) -> void:
 			var f3 := sk3.get_bone_global_pose(sk3.find_bone("mixamorig_%sForeArm" % side))
 			raise = maxf(raise, rad_to_deg(down.angle_to(f3.origin - a3.origin)))
 	_check(raise <= s3.death_arm_raise_max + 1.0, "skirmisher death: arms kept tucked in at the shoulder (raised %.0f deg at most, limit %.0f; %s)" % [raise, s3.death_arm_raise_max, s3._anim.current_animation])
+	# Even a weak kill (nothing else breaks) drops the right arm on the floor.
+	await _ticks(60)
+	var r_low := INF
+	var r_piece: DebrisPiece = r_arm[0] if r_arm.size() == 1 and is_instance_valid(r_arm[0]) else null
+	if r_piece:
+		for mi in r_piece.pose.get_children():
+			if mi is MeshInstance3D and mi.visible:
+				var hull: Dictionary = s3._section_hull(mi)
+				for b in hull:
+					var xf: Transform3D = r_piece.pose.global_transform * r_piece.pose.get_bone_global_pose(b)
+					for v in hull[b]:
+						r_low = minf(r_low, (xf * v).y)
+	_check(r_piece != null and absf(r_low - s3.global_position.y) < 0.04,
+		"skirmisher death: the right arm comes off and lies on the floor, also on a weak kill (level %d, lowest part %.3f m off it)" % [weak_level, r_low - s3.global_position.y])
+	if r_piece:
+		r_piece.queue_free()
 	s3.queue_free()
 	# A broken-off arm drops to the floor (collides with its own outline,
 	# not a bounding box far bigger than the limb).
