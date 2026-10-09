@@ -56,6 +56,7 @@ func _run() -> void:
 	var p: PlayerController = main.players[1]
 	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
 	_check(p.is_on_floor(), "player starts grounded")
+	_check(not p.can_die, "player can't die (owner's testing setting, main.players_can_die)")
 	_check(anim.current_state == "Locomotion", "anim idle in Locomotion")
 
 	# Stick push picks the gait: light = walk, firmer = run, (nearly) all the
@@ -3302,7 +3303,10 @@ func _recovery_tests(main: Node) -> void:
 		drops.spawn(RecoveryDrops.Kind.ARMOUR, far + Vector3(10, 1, 0), 6.0)
 	_check(drops._pool.size() <= drops.max_active and drops.active_count() == drops.max_active, "recovery: active shards capped at %d" % drops.max_active)
 
-	# Dying respawns with full health and clears the shards.
+	# Dying respawns with full health and clears the shards (dying is off
+	# in the game for now - main.players_can_die - so switch it on here).
+	var could_die := p.can_die
+	p.can_die = true
 	var died := [false]
 	p.died.connect(func() -> void: died[0] = true, CONNECT_ONE_SHOT)
 	p.armour = 0.0
@@ -3310,6 +3314,7 @@ func _recovery_tests(main: Node) -> void:
 	p.apply_damage(DamageInfo.make(5.0, DamageInfo.Type.ENERGY, p.global_position, Vector3.FORWARD))
 	_check(died[0] and p.health == p.max_health and p.global_position.distance_to(p.spawn_transform.origin) < 0.1, "recovery: 0 HP -> respawn at spawn with full health")
 	_check(drops.active_count() == 0, "recovery: respawn clears shards")
+	p.can_die = could_die
 	var hud := main.get_node_or_null("UI/VitalsHud")
 	_check(hud is VitalsHud and (hud as VitalsHud).player == p, "recovery: vitals HUD shows the local player")
 
@@ -4258,7 +4263,9 @@ func _death_sound_tests(main: Node) -> void:
 	var heard := {}
 	var repeats := 0
 	var prev: AudioStream = null
-	for k in 12:
+	for k in 30:
+		if heard.size() == 3 and k >= 12:
+			break
 		var g := _spawn_robot(main, at + Vector3(k % 4, 0, 0))
 		await _ticks(3)
 		var hit := DamageInfo.make(999, DamageInfo.Type.BULLET, at, Vector3.FORWARD)

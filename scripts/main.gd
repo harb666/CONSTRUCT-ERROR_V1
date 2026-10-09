@@ -12,6 +12,9 @@ const CAMERA_RIG_SCENE := preload("res://scenes/camera_rig.tscn")
 @onready var debug_hud: Label = $UI/DebugHud
 
 var players := {}  # player_id -> PlayerController
+## Owner's testing setting: players can't die (hits still land and count).
+## Set back to true to restore dying / respawning.
+@export var players_can_die := false
 
 
 func _ready() -> void:
@@ -48,6 +51,7 @@ func spawn_player(player_id: int, is_local: bool) -> PlayerController:
 	players_root.add_child(player)
 	players[player_id] = player
 	player.add_to_group(&"players")  # enemies look for these
+	player.can_die = players_can_die
 
 	if is_local:
 		player.add_to_group(Sfx.LISTENER_GROUP)  # sounds get louder as it gets closer

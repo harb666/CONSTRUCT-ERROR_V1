@@ -76,6 +76,10 @@
   the clip each frame); the human death clips otherwise fling the arms out
   and the thin upper-arm rod makes the cannon look detached.
 
+- Testing: the player can't die (`main.gd` `players_can_die = false`; hits
+  still land, health can reach 0, no death / respawn). Owner asked for this
+  to test; set it back to true to restore dying.
+
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner
   approved the skirmisher movement.
