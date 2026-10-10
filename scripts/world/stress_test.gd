@@ -22,6 +22,40 @@ static func robot_count() -> int:
 	return clampi(_param("stress").to_int(), 0, 120)
 
 
+## ?bossfight=1 (test only): after DEPLOY the player stands on the battle
+## arena's raised walkway next to the robot boss with two shotguns, locked
+## onto it (re-locked every second), so a boss fight can be soaked in a
+## browser. Without the parameter nothing changes.
+static func boss_fight() -> bool:
+	return _param("bossfight") != ""
+
+
+static func start_boss_fight(main: Node, player: PlayerController) -> void:
+	var bosses := main.find_children("*", "RobotBoss", true, false)
+	if bosses.is_empty():
+		return
+	var boss := bosses[0] as RobotBoss
+	player.global_position = Vector3(-20, 3.1, -16)
+	player.velocity = Vector3.ZERO
+	player.reset_physics_interpolation()
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var h := player.get_node("WeaponHolder") as WeaponHolder
+	var lo := player.get_node("WeaponLoadout") as WeaponLoadout
+	var sg := reg.find(&"shotgun")
+	lo.unlock(sg)
+	h.equip(sg, "Right")
+	h.equip(sg, "Left")
+	var sel := player.get_node("Input/TargetSelector") as TargetSelector
+	var t := Timer.new()
+	t.wait_time = 1.0
+	t.autostart = true
+	main.add_child(t)
+	t.timeout.connect(func() -> void:
+		if is_instance_valid(boss) and boss.alive and sel.get_selected("Right") == null:
+			sel.forget_last_tap()
+			sel.tap_target(boss.get_node("Targetable")))
+
+
 static func perf_enabled() -> bool:
 	return robot_count() > 0 or _param("perf") != ""
 

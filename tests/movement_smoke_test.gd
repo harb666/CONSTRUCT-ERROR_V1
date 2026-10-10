@@ -736,6 +736,7 @@ func _robot_tests(main: Node) -> void:
 	var r2 := _spawn_robot(main, spot + Vector3(4, 0, 0))
 	await _ticks(10)
 	_check(r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return not m.visible), "living robot draws as one merged mesh")
+	_check(r2._sections.all(func(m: MeshInstance3D) -> bool: return m.mesh == null and r2.section_mesh(m) != null), "living robot's hidden sections hold no mesh (graphics memory), kept aside for its death")
 	var whole_surfaces: int = r2._whole.mesh.get_surface_count()
 	_check(whole_surfaces == 2, "merged robot mesh = 2 draw surfaces (was %d section meshes)" % r2._sections.size())
 	_check(r2._whole_far != null and r2._whole.visibility_range_end > 0.0 and is_equal_approx(r2._whole_far.visibility_range_begin, r2._whole.visibility_range_end), "swaps to a simpler mesh far away")
@@ -743,7 +744,7 @@ func _robot_tests(main: Node) -> void:
 	r2.force_death_style = "clip"
 	r2.apply_damage(DamageInfo.make(10, DamageInfo.Type.BULLET, r2.global_position + Vector3(0, 1, 2), Vector3(0, 0, -1), 1.0))
 	_check(not r2.alive and r2.last_destruction == BreakApart.Level.NONE, "low-force kill: dies whole")
-	_check(not r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return m.visible), "on death it switches to its separate sections")
+	_check(not r2.is_whole_mesh() and r2._sections.all(func(m: MeshInstance3D) -> bool: return m.visible and m.mesh != null), "on death it switches to its separate sections (meshes back)")
 	_check(r2._whole_far == null and r2._shadow_proxy == null, "far mesh and shadow stand-in removed on death")
 	_check(r2._anim.current_animation == String(r2.last_death_anim) and r2.last_death_anim != &"Walking", "plays one of its own death clips (%s)" % r2.last_death_anim)
 	_check(not r2.get_node("Targetable").is_valid_target(), "dead robot can't be targeted")
@@ -1498,7 +1499,7 @@ func _skirmisher_tests(main: Node) -> void:
 	_check(clips.all(func(c: String) -> bool: return r._anim.has_animation(c)), "skirmisher: all its movement/turn/jump/dive/death clips present")
 	var tris := 0
 	for m: MeshInstance3D in r._sections:
-		tris += (m.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+		tris += (r.section_mesh(m).surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 	_check(tris < 18000, "skirmisher: optimised mesh (%d triangles, source 62k)" % tris)
 	_check(r.is_whole_mesh() and r._whole.mesh.get_surface_count() == 2 and r._whole.mesh.surface_get_material(1).resource_name == "Interior",
 		"skirmisher: alive = one merged mesh: body + the caps sealing its joints (no seeing through a bent joint)")
@@ -1512,11 +1513,12 @@ func _skirmisher_tests(main: Node) -> void:
 	var per: Array = []
 	var all_main := {}
 	for m: MeshInstance3D in r._sections:
+		var mm: Mesh = r.section_mesh(m)
 		var main_e := {}
-		_edge_counts(m.mesh.surface_get_arrays(0), main_e)
+		_edge_counts(mm.surface_get_arrays(0), main_e)
 		var with_caps := main_e.duplicate()
-		if m.mesh.get_surface_count() > 1:
-			_edge_counts(m.mesh.surface_get_arrays(1), with_caps)
+		if mm.get_surface_count() > 1:
+			_edge_counts(mm.surface_get_arrays(1), with_caps)
 		per.append([main_e, with_caps])
 		for k in main_e:
 			all_main[k] = all_main.get(k, 0) + 1
@@ -1552,7 +1554,7 @@ func _skirmisher_tests(main: Node) -> void:
 	var torn := 0
 	var sk := r.get_skeleton()
 	for m: MeshInstance3D in r._sections:
-		var a := m.mesh.surface_get_arrays(0)
+		var a := r.section_mesh(m).surface_get_arrays(0)
 		var v: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
 		var bn: PackedInt32Array = a[Mesh.ARRAY_BONES]
 		var wt: PackedFloat32Array = a[Mesh.ARRAY_WEIGHTS]
@@ -1580,7 +1582,7 @@ func _skirmisher_tests(main: Node) -> void:
 					break
 	_check(torn <= 5, "skirmisher: optimised mesh still skins cleanly - no torn/spiky triangles in a big pose (%d)" % torn)
 	r._anim.play(&"Walking")
-	var cap_mat: Material = r._sections[0].mesh.surface_get_material(1)
+	var cap_mat: Material = r.section_mesh(r._sections[0]).surface_get_material(1)
 	_check(cap_mat != null and cap_mat.resource_name == "Interior" and (cap_mat as BaseMaterial3D).albedo_color.v < 0.3 and (cap_mat as BaseMaterial3D).albedo_texture == null, "skirmisher: caps are a cheap dark interior material (%s)" % [(cap_mat as BaseMaterial3D).albedo_color if cap_mat else null])
 
 	# Movement actions (AI off: driven directly).
@@ -2627,7 +2629,7 @@ func _mesh_cap_tests(main: Node) -> void:
 		src_counts[mi.name] = mi.mesh.get_surface_count()
 	src_scene.free()
 	for mi in r._sections:
-		var m: Mesh = mi.mesh
+		var m: Mesh = r.section_mesh(mi)
 		if src_counts.has(mi.name) and m.get_surface_count() != src_counts[mi.name]:
 			surfaces_ok = false
 		for si in m.get_surface_count():

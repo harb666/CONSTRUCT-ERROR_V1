@@ -77,7 +77,9 @@ func _on_deployed(character: CharacterDefinition) -> void:
 	get_tree().paused = false
 	debug_hud.visible = true
 	touch_controls.visible = DisplayServer.is_touchscreen_available()
-	spawn_player(1, true, character)
+	var local := spawn_player(1, true, character)
+	if StressTest.boss_fight():
+		StressTest.start_boss_fight(self, local)
 	if _menu_camera:
 		_menu_camera.queue_free()
 		_menu_camera = null

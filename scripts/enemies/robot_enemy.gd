@@ -380,6 +380,10 @@ var _whole_far: MeshInstance3D
 ## silhouette; the full-detail body itself doesn't need to cast it).
 var _shadow_proxy: MeshInstance3D
 var _sections: Array[MeshInstance3D] = []
+## The sections' meshes, taken off them while the merged body is drawn: a
+## hidden skinned mesh still costs its own graphics buffers on phones
+## (~1.2 MB per robot), so they only get their meshes back when it dies.
+var _section_meshes := {}
 
 
 ## All section surfaces merged per material (built once per model, shared
@@ -491,9 +495,13 @@ func _use_whole_mesh() -> void:
 	_shadow_proxy.skeleton = NodePath("..")
 	for s in _sections:
 		s.visible = false
+		if s.mesh:
+			_section_meshes[s] = s.mesh
+			s.mesh = null
 
 
 func _use_section_meshes() -> void:
+	restore_section_meshes()
 	for s in _sections:
 		if is_instance_valid(s):
 			s.visible = true
@@ -504,6 +512,19 @@ func _use_section_meshes() -> void:
 	_whole = null
 	_whole_far = null
 	_shadow_proxy = null
+
+
+## Gives the (hidden) sections their meshes back (before any break-apart).
+func restore_section_meshes() -> void:
+	for s in _section_meshes:
+		if is_instance_valid(s):
+			s.mesh = _section_meshes[s]
+	_section_meshes.clear()
+
+
+## A section's mesh, also while it is held off the section (tests/tools).
+func section_mesh(mi: MeshInstance3D) -> Mesh:
+	return _section_meshes.get(mi, mi.mesh)
 
 
 ## True while drawn as the single merged mesh (tests/debug).

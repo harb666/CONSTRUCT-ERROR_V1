@@ -172,6 +172,10 @@ func detach(cuts: Array[BreakSection], info: DamageInfo, base_velocity := Vector
 	var pieces: Array[DebrisPiece] = []
 	if skeleton == null or not skeleton.is_inside_tree():
 		return pieces
+	# A robot drawn as one merged body keeps its sections' meshes aside.
+	var host := get_parent()
+	if host and host.has_method(&"restore_section_meshes"):
+		host.restore_section_meshes()
 	var cut_names := {}
 	for c in cuts + planned:
 		cut_names[c.section_name] = true
