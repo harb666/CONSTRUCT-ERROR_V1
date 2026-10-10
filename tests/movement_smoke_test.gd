@@ -586,12 +586,16 @@ func _gravity_well_tests(main: Node, p: PlayerController, holder: WeaponHolder) 
 	main.get_node("CameraRig").yaw = 0.0
 	# This checks the pull, not obstacles: a loose prop the well dragged into
 	# the escape lane is moved aside first.
+	# (Any loose prop near the player or the well is moved well clear - one
+	# dragged in from just beside the lane once pinned the player.)
 	for prop in main.find_children("*", "RigidBody3D", true, false):
 		var b := prop as RigidBody3D
-		var rel := b.global_position - p.global_position
-		if not (b is RobotEnemy) and rel.z > -0.5 and rel.z < 9.0 and absf(rel.x) < 1.5:
-			b.global_position += Vector3(4.0 * (1.0 if rel.x >= 0.0 else -1.0), 0, 0)
+		if b is RobotEnemy or b is DebrisPiece or b.freeze:
+			continue
+		if b.global_position.distance_to(p.global_position) < 12.0 or b.global_position.distance_to(spot) < 12.0:
+			b.global_position = Vector3(36.0, 0.5, 36.0) + Vector3(randf_range(-2, 2), randf_range(0, 2), randf_range(-2, 2))
 			b.linear_velocity = Vector3.ZERO
+			b.angular_velocity = Vector3.ZERO
 	Input.action_press("move_back")
 	Input.action_press("sprint")
 	var z0 := p.global_position.z
