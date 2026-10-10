@@ -107,6 +107,9 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 	if n > 0 and cmd.move.length() < 0.1 and sum.length() > 0.01:
 		player.face_yaw_when_idle(atan2(-sum.x, -sum.z))
 	for side in SIDES:
+		# The right arm's cannon is busy punching (PlayerMelee fires it).
+		if side == "Right" and player.melee and player.melee.active:
+			continue
 		(slots[side] as WeaponSlot).update(player)
 
 

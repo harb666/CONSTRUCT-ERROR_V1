@@ -26,6 +26,8 @@ signal wheel_released(position: Vector2)
 const BUTTONS := [
 	{"action": "jump", "label": "JUMP", "radius": 70.0, "offset": Vector2(-120, -120)},
 	{"action": "dodge", "label": "DODGE", "radius": 54.0, "offset": Vector2(-280, -90)},
+	# Pistol-cannon punch-shot; dimmed while no enemy is in reach.
+	{"action": "melee", "label": "MELEE", "radius": 52.0, "offset": Vector2(-118, -292)},
 	# Drawn by the WeaponWheel (shows the equipped weapons).
 	{"action": "weapon_wheel", "label": "", "radius": 44.0, "offset": Vector2(-262, -238), "wheel": true},
 ]
@@ -43,6 +45,8 @@ var _hidden := {}
 var _tap_track := {}
 ## The weapon-wheel button only exists when a wheel is connected.
 var wheel_enabled := false
+## Actions whose buttons are drawn dimmed (shown, still pressable).
+var _dim := {}
 
 
 func _ready() -> void:
@@ -184,6 +188,17 @@ func set_action_enabled(action: String, enabled: bool) -> void:
 	queue_redraw()
 
 
+## Dim a button (e.g. MELEE with nothing in reach) or light it up again.
+func set_action_dim(action: String, dim: bool) -> void:
+	if dim == _dim.has(action):
+		return
+	if dim:
+		_dim[action] = true
+	else:
+		_dim.erase(action)
+	queue_redraw()
+
+
 func _press_button(i: int) -> void:
 	var b: Dictionary = BUTTONS[i]
 	if b.get("wheel", false):
@@ -231,6 +246,10 @@ func _draw() -> void:
 			continue
 		var c := _button_center(i)
 		var active: bool = _button_fingers[i] != -1
+		if _dim.has(b.action) and not active:
+			draw_arc(c, b.radius, 0, TAU, 48, Color(HudStyle.CYAN, 0.3), 2.0, true)
+			_draw_label(c, b.label, Color(HudStyle.TEXT, 0.35))
+			continue
 		draw_button_ring(self, c, b.radius, active)
 		_draw_label(c, b.label, Color(HudStyle.TEXT, 0.95))
 

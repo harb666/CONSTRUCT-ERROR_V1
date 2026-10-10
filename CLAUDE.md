@@ -162,6 +162,14 @@
   lens disc is cut from 2.3 to 1.7 x (its outer layers were the big striped
   disc). Everything else on the black hole is unchanged.
 
+- Melee punch-shot (owner asked): MELEE button (F / pad X), dimmed with
+  nothing in reach (4.6 m). Right arm switches to the pistol cannon, right
+  foot steps back, coil, lunge, straight cannon punch that fires as it lands
+  (0.2 s), short hit-stop; grunts blown to pieces sent far, skirmishers 0.9
+  damage + knocked back stumbling, never the boss. Camera swings round a
+  little and back by 0.62 s (impact zoom, no shake). The right arm then goes
+  back to its previous weapon. `PlayerMelee`, `MeleePoseModifier`.
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.

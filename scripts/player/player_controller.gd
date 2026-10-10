@@ -165,6 +165,9 @@ func add_armour(amount: float) -> float:
 	return add
 
 
+## Pistol-cannon punch-shot (PlayerMelee): while it plays it drives the
+## lunge and facing; movement input, jumps and dodges wait.
+var melee: PlayerMelee
 var external_velocity := Vector3.ZERO
 @export var external_decay := 5.0
 ## Sideways speed (m/s per frame of contact) given to a black-hole-pulled
@@ -177,6 +180,12 @@ var _fall_speed := 0.0
 func _ready() -> void:
 	health = max_health
 	armour = minf(start_armour, max_armour)
+	if get_node_or_null("Melee") == null:
+		melee = PlayerMelee.new()
+		melee.name = "Melee"
+		add_child(melee)
+	else:
+		melee = get_node("Melee") as PlayerMelee
 	if get_node_or_null("PerfectDodge") == null:
 		var pd := PerfectDodge.new()
 		pd.name = "PerfectDodge"
@@ -212,6 +221,15 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	if cmd.jump_pressed:
 		_jump_buffer_timer = jump_buffer_time
 
+	# --- melee ---
+	if melee:
+		if cmd.melee_pressed and not is_dodging and on_floor:
+			melee.try_start()
+		melee.tick(delta)
+	var meleeing := melee != null and melee.active
+	if meleeing:
+		_jump_buffer_timer = 0.0
+
 	# --- wish direction (camera relative) ---
 	var stick := cmd.move.limit_length(1.0)
 	var wish := Vector3(stick.x, 0.0, stick.y).rotated(Vector3.UP, cmd.view_yaw)
@@ -225,7 +243,7 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	is_sprinting = (cmd.sprint_held or _stick_sprint) and wish_amount > 0.1
 
 	# --- dodge start ---
-	if cmd.dodge_pressed and not is_dodging and _dodge_cooldown_timer <= 0.0 and (on_floor or _air_dodges_left > 0):
+	if cmd.dodge_pressed and not meleeing and not is_dodging and _dodge_cooldown_timer <= 0.0 and (on_floor or _air_dodges_left > 0):
 		_start_dodge(wish_dir, on_floor)
 
 	# --- jump (cancels a dodge, keeping its momentum) ---
@@ -238,7 +256,9 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	# --- horizontal velocity ---
 	var horiz := Vector2(velocity.x, velocity.z)
-	if is_dodging:
+	if meleeing:
+		horiz = melee.lunge
+	elif is_dodging:
 		_dodge_timer -= delta
 		horiz = Vector2(_dodge_dir.x, _dodge_dir.z) * dodge_speed
 		if _dodge_timer <= 0.0:
@@ -284,7 +304,10 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	# --- facing ---
 	_aim_face_timer = maxf(_aim_face_timer - delta, 0.0)
-	if _aim_face_timer > 0.0 and not is_dodging:
+	if meleeing:
+		# Squared up to the enemy it's punching.
+		rotation.y = lerp_angle(rotation.y, melee.face_yaw, 1.0 - exp(-40.0 * delta))
+	elif _aim_face_timer > 0.0 and not is_dodging:
 		# Shooting: face the camera's aim and strafe.
 		rotation.y = lerp_angle(rotation.y, cmd.view_yaw, 1.0 - exp(-aim_turn_rate * delta))
 	else:
@@ -386,6 +409,8 @@ func _do_jump(jump_velocity: float, is_air_jump: bool) -> void:
 
 
 func respawn() -> void:
+	if melee:
+		melee.cancel()
 	global_transform = spawn_transform
 	velocity = Vector3.ZERO
 	is_dodging = false

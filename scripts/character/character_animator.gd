@@ -99,6 +99,7 @@ var _pending_jump := ""
 var _pending_land := false
 var _state_time := 0.0
 var _arm_aim: ArmAimModifier
+var melee_pose: MeleePoseModifier
 ## Arm holding a weapon ("Left"/"Right"/""): kept raised in every state.
 ## (Dual wield: see `armed`, one flag per arm.)
 var armed_side := ""
@@ -145,6 +146,10 @@ func _ready() -> void:
 	_arm_aim = ArmAimModifier.new()
 	_arm_aim.name = "ArmAimModifier"
 	skeleton.add_child(_arm_aim)
+	# Melee punch-shot: full-body pose on top of everything (PlayerMelee).
+	melee_pose = MeleePoseModifier.new()
+	melee_pose.name = "MeleePoseModifier"
+	skeleton.add_child(melee_pose)
 
 	if controller:
 		controller.jumped.connect(_on_jumped)
@@ -288,6 +293,12 @@ func _process(delta: float) -> void:
 		return
 	var vel := controller.velocity
 	var speed := Vector2(vel.x, vel.z).length()
+	if melee_pose and melee_pose.melee == null:
+		melee_pose.melee = controller.melee
+	# Punching: the pose layer does the body; the clips stand still under it.
+	var meleeing := controller.melee != null and controller.melee.active
+	if meleeing:
+		speed = 0.0
 	var on_floor := controller.is_on_floor()
 
 	var yaw := controller.global_rotation.y
@@ -350,6 +361,8 @@ func _process(delta: float) -> void:
 func _choose_state(on_floor: bool, speed: float, vy: float) -> String:
 	if is_dead:
 		return "Dead"
+	if controller.melee and controller.melee.active:
+		return "Locomotion"
 	if controller.is_dodging:
 		return "Dodge"
 	if _pending_jump != "":

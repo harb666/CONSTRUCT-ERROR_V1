@@ -10,6 +10,8 @@ var view_yaw := 0.0
 ## Edge-triggered: true for exactly one tick per press.
 var jump_pressed := false
 var dodge_pressed := false
+## Melee (pistol-cannon punch-shot), one tick per press.
+var melee_pressed := false
 ## Held states.
 var jump_held := false
 var sprint_held := false
@@ -25,6 +27,7 @@ func to_dict() -> Dictionary:
 		"y": view_yaw,
 		"jp": jump_pressed,
 		"dp": dodge_pressed,
+		"mp": melee_pressed,
 		"jh": jump_held,
 		"sh": sprint_held,
 		"t": target_id,
@@ -38,6 +41,7 @@ static func from_dict(d: Dictionary) -> PlayerCommand:
 	c.view_yaw = d.get("y", 0.0)
 	c.jump_pressed = d.get("jp", false)
 	c.dodge_pressed = d.get("dp", false)
+	c.melee_pressed = d.get("mp", false)
 	c.jump_held = d.get("jh", false)
 	c.sprint_held = d.get("sh", false)
 	c.target_id = d.get("t", 0)

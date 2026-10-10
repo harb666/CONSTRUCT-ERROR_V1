@@ -520,6 +520,7 @@ func _run() -> void:
 	await _death_sound_tests(main)
 	await _barrel_glow_tests(main)
 	await _turned_spawn_tests(main)
+	await _melee_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -730,6 +731,125 @@ func _check_once(cond: bool, msg: String) -> void:
 	if not cond and not _once_failed.has(msg):
 		_once_failed[msg] = true
 		_check(false, msg)
+
+
+## Melee punch-shot (owner asked): pistol cannon on the right arm, one foot
+## back, a punch that fires as it lands; grunts blown apart and sent far,
+## skirmishers hurt badly and knocked back stumbling, no boss.
+func _melee_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	sel.clear()
+	var rig: CameraRig = null
+	for r in main.get_tree().get_nodes_in_group(&"camera_rigs"):
+		if (r as CameraRig).target == p:
+			rig = r
+	var mel := p.melee
+	var stop_was := PlayerMelee.hit_stop_enabled
+	var spot := Vector3(-34, 0, -34)
+	p.global_position = spot + Vector3(0, 0.05, 4.0)
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	var rl := load("res://resources/weapons/rocket_launcher.tres") as WeaponDefinition
+	h.equip(rl, "Right")
+	await _ticks(20)
+	_check(mel != null and not mel.available() and not mel.try_start(), "melee: nothing in reach -> no punch")
+	_check(InputMap.has_action("melee"), "melee: has its own input (F / pad X / MELEE button)")
+	# A grunt in reach: the button's press starts it.
+	var g := _spawn_robot(main, spot + Vector3(0.4, 0, 0.6))
+	await _ticks(10)
+	_check(mel.available() and mel.find_target() == g, "melee: an enemy in reach can be punched")
+	var p0 := p.global_position
+	Input.action_press("melee")
+	await _ticks(2)
+	Input.action_release("melee")
+	_check(mel.active and mel.target == g, "melee: pressing MELEE starts the punch")
+	_check(h.weapon("Right") is PlasmaCannon and h.slot("Right").definition == h.default_weapon, "melee: the right arm switches to the pistol cannon")
+	var sk_mod: MeleePoseModifier = null
+	for n in p.find_children("*", "SkeletonModifier3D", true, false):
+		if n is MeleePoseModifier:
+			sk_mod = n
+	var pc := h.weapon("Right") as PlasmaCannon
+	var shots0 := pc.fire_sounds
+	var cel0 := pc.cel_flash.flashes
+	var shot_ok := false
+	var max_w := 0.0
+	var cam_swing := 0.0
+	var killed_at := -1.0
+	var ts_min := 1.0
+	PlayerMelee.hit_stop_enabled = true
+	while mel.active:
+		await _ticks(1)
+		max_w = maxf(max_w, sk_mod.last_weight)
+		if rig:
+			cam_swing = maxf(cam_swing, rig.melee_amount())
+		ts_min = minf(ts_min, Engine.time_scale)
+		if mel.hit_done and not shot_ok and is_instance_valid(pc):
+			shot_ok = pc.fire_sounds > shots0 and pc.cel_flash.flashes > cel0
+		if killed_at < 0.0 and is_instance_valid(g) and not g.alive:
+			killed_at = mel.strike_t
+	_check(mel.strikes == 1 and killed_at >= 0.12 and killed_at <= 0.22, "melee: the punch lands quickly (%.2f s) and kills the grunt" % killed_at)
+	_check(p.global_position.distance_to(p0) > 1.5, "melee: lunges in to the enemy (%.1f m)" % p.global_position.distance_to(p0))
+	_check(max_w > 0.95, "melee: full-body punch pose plays (weight %.2f)" % max_w)
+	await _ticks(2)
+	_check(mel.hit_stops == 1 and Engine.time_scale == 1.0, "melee: a beat of hit-stop as it lands, then full speed again")
+	_check(shot_ok and mel.kills == 1, "melee: the cannon fires as it lands (its shot sound + cel flash)")
+	_check(is_instance_valid(g) and g.last_destruction != BreakApart.Level.NONE, "melee: the grunt is blown to pieces")
+	_check(rig == null or cam_swing > 0.8, "melee: the camera swings round a little (%.2f)" % cam_swing)
+	await _ticks(20)
+	_check(rig == null or (rig.melee_amount() == 0.0 and absf(rig.camera.fov - rig._base_fov) < 0.01), "melee: the camera is back in place")
+	_check(h.slot("Right").target_definition() == rl, "melee: the right arm goes back to the weapon it had")
+	var far := 0.0
+	await _ticks(40)
+	for d in root.find_children("*", "RigidBody3D", true, false):
+		if d is DebrisPiece:
+			far = maxf(far, Vector2((d as Node3D).global_position.x - (spot.x + 0.4), (d as Node3D).global_position.z - (spot.z + 0.6)).length())
+	_check(far > 4.0, "melee: grunt pieces are sent far (%.1f m)" % far)
+	# The player can move again at once.
+	Input.action_press("move_forward")
+	await _ticks(15)
+	Input.action_release("move_forward")
+	_check(Vector2(p.velocity.x, p.velocity.z).length() > 2.0 or p.is_dodging == false, "melee: the player moves freely afterwards")
+	if is_instance_valid(g):
+		g.queue_free()
+	# Skirmisher: badly hurt, knocked back, stumbling; not killed.
+	await _ticks(25)
+	p.global_position = spot + Vector3(0, 0.05, 4.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var sk := _spawn_skirmisher(main, spot)
+	await _ticks(5)
+	sk.global_position = spot
+	sk.linear_velocity = Vector3.ZERO
+	sk.reset_physics_interpolation()
+	await _ticks(10)
+	var hp0 := sk.health
+	var sp0 := sk.global_position
+	PlayerMelee.hit_stop_enabled = false
+	_check(mel.try_start(), "melee: skirmisher in reach")
+	var staggered := false
+	while mel.active:
+		await _ticks(1)
+		staggered = staggered or (sk.alive and sk.action == RobotSkirmisher.Act.STAGGER and sk.knock_backs > 0)
+	await _ticks(20)
+	var moved := Vector2(sk.global_position.x - sp0.x, sk.global_position.z - sp0.z).length()
+	_check(sk.alive and hp0 - sk.health >= 0.8, "melee: a skirmisher is badly hurt, not killed (%.2f of %.2f)" % [hp0 - sk.health, sk.max_health])
+	_check(staggered and sk.knock_backs == 1 and moved > 1.5, "melee: and knocked back stumbling (%.1f m)" % moved)
+	sk.queue_free()
+	RobotEnemy.ai_enabled = ai_was
+	# Big enemies can't be meleed.
+	var boss_scene := load("res://scenes/enemies/robot_boss.tscn") as PackedScene
+	if boss_scene:
+		var bi := boss_scene.instantiate()
+		_check(not PlayerMelee.can_punch(bi), "melee: the robot boss can't be meleed")
+		bi.free()
+	PlayerMelee.hit_stop_enabled = stop_was
+	h.equip(h.default_weapon, "Right")
+	await _ticks(10)
 
 
 func _spawn_robot(main: Node, at: Vector3) -> RobotEnemy:

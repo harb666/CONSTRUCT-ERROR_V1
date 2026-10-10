@@ -81,3 +81,14 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
 	return true
+
+
+## Point-blank shot for the melee punch (PlayerMelee): muzzle flash, a big
+## cel flash, the shot sound and the kick - the punch itself does the damage.
+func melee_shot(dir: Vector3, strength := 1.6) -> void:
+	var from := muzzle_position()
+	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color, true)
+	cel_flash.fire(from, dir, strength)
+	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
+	fire_sounds += 1
+	recoiled.emit(recoil_strength * 1.8)

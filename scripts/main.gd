@@ -123,6 +123,14 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 		var local_input := input as LocalPlayerInput
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
+		# MELEE button dims while no enemy is in reach (checked a few times a second).
+		var melee_timer := Timer.new()
+		melee_timer.wait_time = 0.15
+		melee_timer.autostart = true
+		melee_timer.timeout.connect(func() -> void:
+			if is_instance_valid(player) and player.melee:
+				touch_controls.set_action_dim("melee", not player.melee.available()))
+		player.add_child(melee_timer)
 		_add_hit_flash(player)
 		# Crash report breadcrumbs: weapon changes.
 		var crumb_holder := player.get_node("WeaponHolder") as WeaponHolder

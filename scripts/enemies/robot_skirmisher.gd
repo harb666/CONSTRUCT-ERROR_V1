@@ -178,6 +178,11 @@ var _lift := 0.0
 var _land_dip := 0.0
 var _lean := Vector2.ZERO  # pitch, roll (visual)
 var _jolt := Vector2.ZERO  # hit jolt: pitch, yaw
+## Melee knock-back: how fast its slide brakes, and the stumble's length.
+var _knock_decay := 8.0
+var _knock_t := 0.0
+## Times knocked back by a melee punch (tests).
+var knock_backs := 0
 var _recoil := 0.0
 var _spark_t := 2.0
 var _cam_d := 0.0
@@ -879,6 +884,25 @@ func _start_stagger() -> void:
 	_burst_left = 0
 
 
+## Melee punch (PlayerMelee): knocked back along `dir` at `speed`, rocked
+## backwards, stumbling (its legs step to keep up as it slides) for `time`
+## seconds before it fights on. Doesn't fire meanwhile.
+func knock_back(dir: Vector3, speed: float, time: float) -> void:
+	if not alive:
+		return
+	_begin(Act.STAGGER, time)
+	_burst_left = 0
+	_knock_decay = 2.4
+	_knock_t = time
+	var d := Vector3(dir.x, 0.0, dir.z).normalized()
+	var v := linear_velocity
+	linear_velocity = Vector3(d.x * speed, v.y, d.z * speed)
+	var fwd := Vector3(sin(_yaw), 0, cos(_yaw))
+	var right := Vector3(-fwd.z, 0, fwd.x)
+	_jolt = Vector2(d.dot(fwd) * 0.5, -d.dot(right) * 0.3 + randf_range(-0.15, 0.15))
+	knock_backs += 1
+
+
 ## Swing the facing on towards `_yaw_goal` (true while it still is).
 func _slew_yaw(delta: float) -> bool:
 	if is_nan(_yaw_goal):
@@ -960,9 +984,15 @@ func _update_action(delta: float) -> void:
 				_yaw = _turn_from + _turn_amount
 				_end_action()
 		Act.STAGGER:
-			var hv := Vector3(v.x, 0, v.z) * maxf(0.0, 1.0 - 8.0 * delta)
+			var hv := Vector3(v.x, 0, v.z) * maxf(0.0, 1.0 - _knock_decay * delta)
 			linear_velocity = Vector3(hv.x, v.y, hv.z)
+			if _knock_t > 0.0:
+				# Knocked back: wobbles as it stumbles, the rock easing off.
+				var k := 1.0 - clampf(_act_t / maxf(_knock_t, 0.01), 0.0, 1.0)
+				_jolt.y = sin(_act_t * 17.0) * 0.16 * k
 			if _act_t >= _act_len:
+				_knock_decay = 8.0
+				_knock_t = 0.0
 				_end_action()
 	# The hitbox follows the body up (jump lift, the dive's leap).
 	var hips_lift := 0.0
@@ -997,6 +1027,8 @@ func _end_action() -> void:
 
 func _reset_action() -> void:
 	action = Act.NONE
+	_knock_decay = 8.0
+	_knock_t = 0.0
 	_yaw_goal = NAN
 	_pending = -1.0
 	_air_y = 0.0

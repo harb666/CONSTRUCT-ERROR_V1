@@ -15,6 +15,7 @@ var target_selector: TargetSelector
 # lost or doubled regardless of how render frames and physics ticks line up.
 var _prev_jump := false
 var _prev_dodge := false
+var _prev_melee := false
 
 
 func get_command() -> PlayerCommand:
@@ -27,6 +28,9 @@ func get_command() -> PlayerCommand:
 	c.dodge_pressed = dodge_held and not _prev_dodge
 	_prev_jump = c.jump_held
 	_prev_dodge = dodge_held
+	var melee_held := Input.is_action_pressed("melee")
+	c.melee_pressed = melee_held and not _prev_melee
+	_prev_melee = melee_held
 	c.target_id = target_selector.selected_id("Right") if target_selector else 0
 	c.target_id_left = target_selector.selected_id("Left") if target_selector else 0
 	c.sprint_held = Input.is_action_pressed("sprint")
