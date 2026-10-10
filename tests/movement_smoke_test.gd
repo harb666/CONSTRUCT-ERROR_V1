@@ -1888,7 +1888,7 @@ func _wait_black_holes() -> void:
 ## Rocket launcher: red pad (other pads unchanged), registered for the
 ## wheel/unlock system, pickup into the RIGHT slot, mounted on either arm like
 ## the other arm weapons, one or two at once with each arm aiming at its own
-## target and firing a rocket every 2.5 s (no sound yet).
+## target and firing a rocket every 2.5 s, with the owner's firing sound.
 func _rocket_launcher_tests(main: Node) -> void:
 	var p: PlayerController = main.players[1]
 	var h: WeaponHolder = p.get_node("WeaponHolder")
@@ -1974,6 +1974,9 @@ func _rocket_launcher_tests(main: Node) -> void:
 	for r: RobotEnemy in [ra, rb]:
 		r.max_health = 99999.0
 		r.health = 99999.0
+	# Targets that survive (rocket kills are checked in _rocket_blast_tests).
+	PlayerRocket.lethal = false
+	var booms0 := PlayerRocket.explode_sounds
 	await _ticks(10)
 	var shots := {"Right": [], "Left": []}
 	var count := func(s: String, _w: Weapon) -> void: shots[s].append(Engine.get_physics_frames())
@@ -2036,10 +2039,12 @@ func _rocket_launcher_tests(main: Node) -> void:
 	_check(R.recoil_strength >= 1.0 and recoil_peak > 0.3, "heavy recoil kick on each rocket (strength %.1f, arm kick %.2f)" % [R.recoil_strength, recoil_peak])
 	_check(ra.hits > hits0[0] and rb.hits > hits0[1] and ra.health < 99999.0 and rb.health < 99999.0, "rockets fly to and hit each arm's target")
 	_check((R.find_child("Warhead", true, false) as Node3D).visible or R.reload_left() > 0.0, "the next rocket is back in the bore when it's ready")
-	var audio := 0
-	for n in [R, L] + get_root().find_children("*", "PlayerRocket", true, false):
-		audio += n.find_children("*", "AudioStreamPlayer3D", true, false).size() + n.find_children("*", "AudioStreamPlayer", true, false).size()
-	_check(audio == 0 and get_root().find_children("*", "PlasmaBolt", true, false).size() == bolts0, "no sounds on the launcher or its rockets yet; rockets only")
+	_check(R.fire_sounds == shots.Right.size() and L.fire_sounds == shots.Left.size() and R._voices.size() > 0 and R._voices[0].stream == Sfx.ROCKET_FIRING,
+		"each rocket fired plays the owner's rocket launcher sound (%d + %d sounds)" % [R.fire_sounds, L.fire_sounds])
+	_check(PlayerRocket.explode_sounds > booms0 and PlayerRocket.last_explode_sound in [Sfx.ROCKET_EXPLODE_0, Sfx.ROCKET_EXPLODE_1, Sfx.ROCKET_EXPLODE_2],
+		"rockets hitting their targets play one of the owner's explosion sounds (%d)" % (PlayerRocket.explode_sounds - booms0))
+	_check(get_root().find_children("*", "PlasmaBolt", true, false).size() == bolts0, "rockets only")
+	PlayerRocket.lethal = true
 	h.slot_fired.disconnect(count)
 	sel.clear()
 	for r in [ra, rb]:
@@ -2047,6 +2052,97 @@ func _rocket_launcher_tests(main: Node) -> void:
 	h.equip(h.default_weapon, "Right")
 	h.equip(h.default_weapon, "Left")
 	lo.relock(rl)
+	await _ticks(5)
+	await _rocket_blast_tests(main)
+
+
+## Rocket blasts: the owner's sound files (unchanged), one of the three
+## explosion sounds per blast (never the same twice running); robots struck or
+## close to the blast die at once and are blown apart outwards from it,
+## others nearby take splash damage they survive, and the boss only takes
+## a little - so it stays weaker than the Black Hole Generator.
+func _rocket_blast_tests(main: Node) -> void:
+	const ROCKET_SHAS := {
+		"rocket_launcher_firing.ogg": "7e547e4c9ced3b9f03cc9db1ca55c946d38c39fcfb24c3f8c9ebfcd6289a8642",
+		"rocket_explode_0.ogg": "9bfa4d9fc2c5e15978602a04463f513ebf55ccf342e20c7576dc0d730e7758a4",
+		"rocket_explode_1.ogg": "bf070f66400bc19faacb84a21c3a69a982062a13a44ece022155dd20b1f21752",
+		"rocket_explode_2.ogg": "831c0268bb44ba7e415924f08b4eb1e6c11f9eda6b30ebb05128b0e63ea422f8"}
+	for f in ROCKET_SHAS:
+		if FileAccess.file_exists("res://assets/audio/weapons/" + f):
+			_check(FileAccess.get_sha256("res://assets/audio/weapons/" + f) == ROCKET_SHAS[f], "audio: %s is the owner's original, unchanged" % f)
+	var p: PlayerController = main.players[1]
+	var rk := PlayerRocket.new()
+	main.add_child(rk)
+	rk.shooter = p
+	await _ticks(2)
+	# Sounds: random, never the same twice running.
+	var heard := {}
+	var repeats := 0
+	var prev: AudioStream = null
+	for i in 30:
+		rk._explode_sound(Vector3(0, -50, 0))
+		heard[PlayerRocket.last_explode_sound] = true
+		repeats += int(PlayerRocket.last_explode_sound == prev)
+		prev = PlayerRocket.last_explode_sound
+	_check(heard.size() == 3 and repeats == 0, "rocket explosion sound: one of the owner's 3 at random, never the same twice running (%d heard, %d repeats)" % [heard.size(), repeats])
+	await _ticks(2)
+
+	# Kills and break-apart.
+	var at := Vector3(30, 0, -30)
+	var struck := _spawn_robot(main, at)
+	var near := _spawn_robot(main, at + Vector3(0.9, 0, 0.3))
+	var far := _spawn_robot(main, at + Vector3(-1.8, 0, 0.4))
+	var sq := _spawn_skirmisher(main, at + Vector3(0.3, 0, 1.9))
+	await _ticks(15)
+	var blast_at := struck.global_position + Vector3.UP * 0.9
+	var pieces0 := {}
+	for d in get_root().find_children("*", "DebrisPiece", true, false):
+		pieces0[d] = true
+	rk.global_position = blast_at
+	rk._explode(blast_at, struck)
+	await _ticks(2)
+	_check(not struck.alive and not near.alive, "rocket: the robot it hits and one right next to the blast die at once")
+	_check(struck.last_destruction >= BreakApart.Level.HEAVY and near.last_destruction >= BreakApart.Level.HEAVY,
+		"rocket kills blow them apart (%s, %s)" % [BreakApart.Level.keys()[struck.last_destruction], BreakApart.Level.keys()[near.last_destruction]])
+	_check(far.alive and sq.alive and far.health < far.max_health and sq.health < sq.max_health,
+		"robots further out take splash damage and survive (grunt %.2f/%.1f, skirmisher %.2f/%.1f)" % [far.health, far.max_health, sq.health, sq.max_health])
+	await _ticks(20)
+	var outward := 0
+	var total := 0
+	for d: DebrisPiece in get_root().find_children("*", "DebrisPiece", true, false):
+		if pieces0.has(d):
+			continue
+		var flat := Vector3(d.global_position.x - blast_at.x, 0, d.global_position.z - blast_at.z)
+		var v := Vector3(d.linear_velocity.x, 0, d.linear_velocity.z)
+		if flat.length() < 4.0:
+			total += 1
+			outward += int(v.dot(flat) > 0.0 or v.length() < 0.5)
+	_check(total > 3 and outward >= total * 0.7,
+		"their parts fly outwards from the blast (%d of %d pieces)" % [outward, total])
+	for r in [struck, near, far, sq]:
+		r.queue_free()
+
+	# The boss: only a little damage, and the launcher stays below the BHG.
+	var boss: RobotBoss = load("res://scenes/enemies/robot_boss.tscn").instantiate()
+	main.add_child(boss)
+	boss.global_position = at + Vector3(0, 0, -12)
+	await _ticks(20)
+	var h0 := boss.health
+	var core_at: Vector3 = boss.core.global_position
+	rk.global_position = core_at
+	rk._explode(core_at, boss)
+	await _ticks(2)
+	var lost := h0 - boss.health
+	_check(boss.alive and lost > 0.0 and lost <= rk.boss_damage + 1e-4, "rocket on the boss: it lives and takes at most %.2f (took %.3f of %.0f)" % [rk.boss_damage, lost, h0])
+	var bhg: BlackHoleGenerator = load("res://scenes/weapons/black_hole_generator.tscn").instantiate()
+	var bhp: BlackHoleProjectile = BlackHoleProjectile.new()
+	var bhg_per := bhp.impact_damage + bhp.supernova_damage
+	var rocket_per := 2.0 * floorf(bhg.recharge_delay / 2.5) * rk.boss_damage
+	_check(rocket_per < bhg_per, "two rocket launchers do less to the boss in %.0f s (%.1f) than one Black Hole Generator shot (%.1f)" % [bhg.recharge_delay, rocket_per, bhg_per])
+	bhg.free()
+	bhp.free()
+	boss.queue_free()
+	rk.queue_free()
 	await _ticks(5)
 
 
@@ -3191,13 +3287,17 @@ func _robot_boss_v3_tests(main: Node, boss: RobotBoss) -> void:
 	_check(not boss.is_loaded() and boss.launch_fx.is_busy() and boss.launch_fx.global_position.distance_to(boss.silo_mouth().origin) < 1.5,
 		"boss: launch burst of fire and smoke out of the nozzle; silo empty")
 	var shock := false
+	var toon := false
 	for i in 360:
 		await _ticks(1)
 		for b in MissileBlast._pool:
 			shock = shock or (b.active and b._wave.visible and b._wave.scale.x > b.radius)
-		if m.done and shock:
+			toon = toon or (b.active and (b._wave.material_override as ShaderMaterial).shader == MissileBlast.RING_SHADER
+				and b._dust.filter(func(d: ToonPuff) -> bool: return d.visible).size() >= MissileBlast.DUST_PUFFS / 2)
+		if m.done and shock and toon:
 			break
 	_check(m.done and shock, "boss: missile explodes with an expanding shockwave")
+	_check(toon, "explosion shockwave is cartoon style (toon ring + a ring of dust puffs along the floor)")
 	await _ticks(int(boss.missile_reload_time * 60.0) + 30)
 	_check(boss.is_loaded(), "boss: next missile loaded after the reload")
 	# Pooled: repeated launches reuse the same few missiles and blasts.
@@ -3677,7 +3777,7 @@ func _vfx_tests() -> void:
 	var b := MissileBlast.spawn(main, Vector3(0, 0, 30), 2.0)
 	await _ticks(3)
 	var puffs := b.find_children("*", "ToonPuff", false, false)
-	_check(puffs.size() == 8 and puffs.any(func(x: ToonPuff) -> bool: return x.visible), "vfx: explosions are puffy 3D fireballs + smoke clouds (%d)" % puffs.size())
+	_check(puffs.size() == 8 + MissileBlast.DUST_PUFFS and puffs.any(func(x: ToonPuff) -> bool: return x.visible), "vfx: explosions are puffy 3D fireballs + smoke clouds (%d)" % puffs.size())
 	await _ticks(200)
 	_check(not b.active and puffs.all(func(x: ToonPuff) -> bool: return not x.visible), "vfx: explosion clouds dissolve and the blast frees up")
 	# Weapons: player flashes are the cartoon ones, robots keep theirs.

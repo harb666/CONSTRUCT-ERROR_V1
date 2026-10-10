@@ -41,6 +41,14 @@ const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_
 ## MINI_BOSS_MISSILE: the robot boss launching a missile (the launch blast
 ## starts ~1.04 s into the file; RobotBoss plays it from there).
 const MINI_BOSS_MISSILE := preload("res://assets/audio/enemies/mini_boss_missile_firing.mp3")
+## The owner's Rocket Launcher sounds - keep these exact files; never
+## replace or regenerate them without asking. ROCKET_FIRING: each launch.
+## ROCKET_EXPLODE_*: a rocket blowing up (one of the three at random, never
+## the same twice running).
+const ROCKET_FIRING := preload("res://assets/audio/weapons/rocket_launcher_firing.ogg")
+const ROCKET_EXPLODE_0 := preload("res://assets/audio/weapons/rocket_explode_0.ogg")
+const ROCKET_EXPLODE_1 := preload("res://assets/audio/weapons/rocket_explode_1.ogg")
+const ROCKET_EXPLODE_2 := preload("res://assets/audio/weapons/rocket_explode_2.ogg")
 ## The generated cannon shot (no longer used by the grunts) and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")

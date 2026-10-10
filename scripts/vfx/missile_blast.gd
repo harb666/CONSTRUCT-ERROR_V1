@@ -2,14 +2,18 @@ class_name MissileBlast
 extends Node3D
 ## Missile explosion (pooled, short and punchy): a white-hot impact flash,
 ## a bright core, puffy 3D cartoon fireballs that burn from white-hot to
-## orange and roll into dark smoke clouds (ToonPuff), a mini SHOCKWAVE (a ring
-## racing out along the ground plus a pressure ring facing the camera),
+## orange and roll into dark smoke clouds (ToonPuff), a cartoon mini
+## SHOCKWAVE in the same style (toon_ring.gdshader: a cream ring with an ink
+## rim racing out along the ground plus a pressure ring facing the camera,
+## and a ring of little dust puffs kicked out along the floor),
 ## sparks, flying debris, a brief strong light and a scorch
 ## mark that fades away. `spawn()` takes a pooled one (restarts it).
 ## Also used, smaller (`fx_scale`), for the boss core's internal explosion.
 
 const POOL_SIZE := 3
 const SCORCH_SHADER := preload("res://scripts/vfx/scorch_mul.gdshader")
+const RING_SHADER := preload("res://scripts/vfx/toon_ring.gdshader")
+const DUST_PUFFS := 8
 
 @export var duration := 0.7
 @export var shockwave_time := 0.32
@@ -20,6 +24,9 @@ var radius := 2.6
 var fx_scale := 1.0
 ## Ground shockwave ring and scorch (off for blasts in mid-air).
 var ground := true
+## Where the floor is under a blast that goes off just above it (INF = none):
+## the ground ring and dust run along it there (no scorch).
+var floor_at := Vector3.INF
 var active := false
 var _t := 99.0
 var _roll := 0.0
@@ -30,13 +37,15 @@ var _fire: Array[ToonPuff] = []
 var _clouds: Array[ToonPuff] = []
 var _wave: MeshInstance3D
 var _wave_air: MeshInstance3D
+## Dust kicked out along the floor by the shockwave.
+var _dust: Array[ToonPuff] = []
 var _scorch: MeshInstance3D
 var _light: OmniLight3D
 var _sparks: CPUParticles3D
 var _debris: CPUParticles3D
 
 
-static func spawn(parent: Node, at: Vector3, blast_radius: float, scale_fx := 1.0, on_ground := true) -> MissileBlast:
+static func spawn(parent: Node, at: Vector3, blast_radius: float, scale_fx := 1.0, on_ground := true, floor_point := Vector3.INF) -> MissileBlast:
 	_pool = _pool.filter(func(b: MissileBlast) -> bool: return is_instance_valid(b) and b.is_inside_tree())
 	var b: MissileBlast = null
 	for p in _pool:
@@ -56,6 +65,7 @@ static func spawn(parent: Node, at: Vector3, blast_radius: float, scale_fx := 1.
 	b.radius = blast_radius
 	b.fx_scale = scale_fx
 	b.ground = on_ground
+	b.floor_at = at if on_ground else floor_point
 	b._start(at)
 	return b
 
@@ -94,10 +104,13 @@ func _ready() -> void:
 	add_child(_core)
 	_flash = Vfx.quad("flare", Color(1.0, 0.97, 0.85), Vector2.ONE)
 	add_child(_flash)
-	_wave = Vfx.quad("ring", Color(1.0, 0.75, 0.45), Vector2.ONE)
-	add_child(_wave)
-	_wave_air = Vfx.quad("ring", Color(1.0, 0.85, 0.7), Vector2.ONE)
-	add_child(_wave_air)
+	_wave = _toon_ring(0.34)
+	_wave_air = _toon_ring(0.12)
+	for k in DUST_PUFFS:
+		var d := ToonPuff.new()
+		d.set_colors(Color(0.56, 0.5, 0.43))
+		add_child(d)
+		_dust.append(d)
 	_sparks = Vfx.particles("glow", 0.1, 40, 0.75)
 	_sparks.one_shot = true
 	_sparks.explosiveness = 0.95
@@ -142,6 +155,23 @@ func _ready() -> void:
 	set_process(false)
 
 
+func _has_floor() -> bool:
+	return floor_at.is_finite()
+
+
+func _toon_ring(width: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	mi.mesh = q
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var m := ShaderMaterial.new()
+	m.shader = RING_SHADER
+	m.set_shader_parameter("width", width)
+	mi.material_override = m
+	add_child(mi)
+	return mi
+
+
 func _start(at: Vector3) -> void:
 	active = true
 	_t = 0.0
@@ -149,7 +179,8 @@ func _start(at: Vector3) -> void:
 	global_transform = Transform3D(Basis(), at + Vector3.UP * 0.3 * fx_scale)
 	var r := radius * fx_scale
 	# Ground ring and scorch lie flat (just above the ground point).
-	_wave.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), at + Vector3.UP * 0.08)
+	var fl := floor_at if _has_floor() else at
+	_wave.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), fl + Vector3.UP * 0.08)
 	_scorch.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0).rotated(Vector3.UP, _roll).scaled(Vector3.ONE * r * 1.4), at + Vector3.UP * 0.04)
 	for p: CPUParticles3D in [_sparks, _debris]:
 		p.scale_amount_min = fx_scale
@@ -178,6 +209,23 @@ func _start(at: Vector3) -> void:
 		c.drift = off
 		c.delay = randf_range(0.18, 0.3)
 		c.play(base + off + Vector3.UP * r * 0.2, false)
+	for w in [_wave, _wave_air]:
+		(w.material_override as ShaderMaterial).set_shader_parameter("seed", randf() * 100.0)
+	# Dust puffs: a ring kicked out along the floor with the shockwave.
+	for i in _dust.size():
+		var d := _dust[i]
+		if not _has_floor():
+			d.visible = false
+			d.set_process(false)
+			continue
+		var a := _roll + TAU * (i + randf_range(-0.25, 0.25)) / _dust.size()
+		var out := Vector3(cos(a), 0.0, sin(a))
+		d.size = r * randf_range(0.17, 0.24)
+		d.life = randf_range(0.6, 0.85)
+		d.rise = r * randf_range(0.05, 0.15)
+		d.drift = out * r * randf_range(1.1, 1.5)
+		d.delay = randf_range(0.0, 0.04)
+		d.play(fl + out * r * 0.3 + Vector3.UP * r * 0.08, false)
 	visible = true
 	set_process(true)
 	_update()
@@ -212,14 +260,17 @@ func _update() -> void:
 	# Shockwave: races out and thins.
 	var wk := clampf(_t / shockwave_time, 0.0, 1.0)
 	var we := 1.0 - pow(1.0 - wk, 3.0)
-	_wave.visible = wk < 1.0 and ground
+	_wave.visible = wk < 1.0 and _has_floor()
 	_scorch.visible = ground
 	_wave_air.visible = wk < 1.0
 	if wk < 1.0:
 		_wave.scale = Vector3.ONE * r * (0.4 + 3.4 * we)
-		Vfx.set_alpha(_wave, (1.0 - wk) * 0.95)
-		Vfx.face_camera(_wave_air, r * (0.3 + 2.6 * we))
-		Vfx.set_alpha(_wave_air, (1.0 - wk) * 0.6)
+		Vfx.face_camera(_wave_air, r * (0.3 + 1.8 * we))
+		for w in [_wave, _wave_air]:
+			var m := w.material_override as ShaderMaterial
+			m.set_shader_parameter("progress", wk)
+			# Solid while it races out, then fades at the end (cartoon pop).
+			m.set_shader_parameter("fade", (1.0 - smoothstep(0.55, 1.0, wk)) * (1.0 if w == _wave else 0.5))
 	# Scorch fades away (not permanent).
 	var sk := clampf((_t - 0.1) / (duration + 2.0), 0.0, 1.0)
 	(_scorch.material_override as ShaderMaterial).set_shader_parameter("strength", 0.85 * (1.0 - sk))

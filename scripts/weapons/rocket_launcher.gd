@@ -12,7 +12,8 @@ extends Weapon
 ## turn so a new shot never cuts the last one's smoke short), more smoke
 ## drifting out of the barrel for a
 ## while after, and a heavy recoil kick (`recoil_strength`). The next rocket
-## slides back into the bore just before it's ready again. No sound yet.
+## slides back into the bore just before it's ready again. Each launch plays
+## the owner's rocket launcher sound (Sfx.ROCKET_FIRING).
 
 ## Seconds between rockets.
 @export var fire_interval := 2.5
@@ -26,11 +27,20 @@ extends Weapon
 @export var barrel_smoke_time := 1.6
 ## The next rocket slides into the bore over this long before it's ready (s).
 @export var reload_slide_time := 0.3
+@export_group("Audio")
+@export var fire_volume_db := 0.0
+@export var fire_near := 5.0
+@export var fire_far := 60.0
+@export_group("")
 
 ## Where the warhead's base sits in the weapon (its rest place in the bore).
 const WARHEAD_BASE := Vector3(0.386, -0.0188, 0.0)
 
 var shots_fired := 0
+## Launch sounds played (tests).
+var fire_sounds := 0
+var _voices: Array[DynamicSound] = []
+var _voice := 0
 var last_rocket: PlayerRocket
 var _cool := 0.0
 var _muzzle: Node3D
@@ -73,6 +83,9 @@ func on_equipped(owner_player: Node) -> void:
 		add_child(_barrel_smoke)
 		flash = RocketMuzzleFlash.new()
 		add_child(flash)
+		# Two voices in turn (a launch sound outlasts the gap when dual
+		# wielded - each arm has its own launcher anyway).
+		_voices = Sfx.voices(self, Sfx.ROCKET_FIRING, 2, fire_volume_db, fire_near, fire_far)
 		for k in SMOKE_PUFFS + FIRE_PUFFS:
 			var pf := ToonPuff.new()
 			pf.set_colors(Color(0.6, 0.58, 0.56))
@@ -130,6 +143,8 @@ func fire_at(shooter: Node3D, _target_point: Vector3) -> bool:
 	if flash:
 		flash.fire(Transform3D(mouth, muzzle_position()))
 	_puff_out(mouth.z, muzzle_position())
+	_voice = Sfx.play_next(_voices, _voice, Vector2(0.96, 1.04))
+	fire_sounds += 1
 	if _barrel_smoke:
 		_barrel_smoke.restart()
 		_smoke_t = 0.0

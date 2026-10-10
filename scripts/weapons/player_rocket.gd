@@ -10,8 +10,15 @@ extends Node3D
 ## (at most `turn_rate` deg/s, so it can still miss a target that dodges).
 ## Explodes on hitting anything (players' own bodies excepted), on passing
 ## within `proximity` of the target, or after `max_life`. The blast
-## (MissileBlast, the existing explosion effect) damages and shoves
-## everything within `blast_radius`. No sound yet.
+## (MissileBlast: cartoon fireballs, smoke and a mini shockwave) plays one of
+## the owner's three explosion sounds (random, never the same twice running).
+##
+## Damage (kept below the Black Hole Generator, the strongest pickup):
+## robots it strikes, and any within `kill_radius` of the blast, die at once
+## and are blown apart by the blast (`kill_force`: pieces fly out from the
+## blast centre). Big enemies (the robot boss) only take `boss_damage`.
+## Everything else within `blast_radius` takes `splash_damage` (less with
+## distance) and is shoved.
 ##
 ## Engine (at the tail): white-hot core flame, orange outer flame, glow,
 ## smoke puffs, a light and a SmokeTrail ribbon along the flight path that
@@ -40,12 +47,34 @@ const BODY_LENGTH := 0.2
 ## Explodes this close to the target's aim point (m).
 @export var proximity := 0.6
 @export var max_life := 3.5
-@export var damage := 2.5
+## Splash damage within `blast_radius` (full at the centre, falling off);
+## not enough on its own to kill a grunt or a skirmisher.
+@export var splash_damage := 1.0
 @export var blast_radius := 2.0
 @export var blast_force := 14.0
+## Robots (not the boss) struck, or this close to the blast (m, level
+## distance from their middle), are killed outright.
+@export var kill_radius := 1.2
+## Explosive force of a killing blast: blows the body apart (break-apart
+## power ~1.3, the heaviest level; a little less towards `kill_radius`).
+@export var kill_force := 44.0
+## Damage to big enemies (the robot boss) per rocket, before its armour.
+@export var boss_damage := 0.4
+
+@export_group("Audio")
+@export var explode_volume_db := 0.0
+@export var explode_near := 6.0
+@export var explode_far := 80.0
+@export_group("")
 
 static var _pool: Array[PlayerRocket] = []
 static var _warhead_mesh: Mesh
+static var _last_explode_pick := -1
+## Explosion sounds played (all rockets; for tests).
+static var explode_sounds := 0
+## Test switch: false = no outright kills (splash damage only).
+static var lethal := true
+static var last_explode_sound: AudioStream
 
 var target: Targetable
 var shooter: Node
@@ -317,12 +346,16 @@ func _explode(at: Vector3, struck: Node) -> void:
 	done = true
 	global_position = at
 	_blast(at, struck)
-	# Ground shockwave and scorch only when it goes off near the floor.
-	var down := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.1, at + Vector3.DOWN * 0.8)
+	# Scorch only when it goes off near the floor; the ground shockwave and
+	# dust also run along the floor under a blast up to body height.
+	var down := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.1, at + Vector3.DOWN * 1.8)
 	down.collision_mask = 1
 	down.exclude = _exclude
-	var on_ground := not get_world_3d().direct_space_state.intersect_ray(down).is_empty()
-	MissileBlast.spawn(get_parent(), at, blast_radius, 1.0, on_ground)
+	var hit := get_world_3d().direct_space_state.intersect_ray(down)
+	var on_ground := not hit.is_empty() and at.y - (hit.position as Vector3).y <= 0.8
+	var floor_point: Vector3 = hit.position if not hit.is_empty() else Vector3.INF
+	MissileBlast.spawn(get_parent(), at, blast_radius, 1.0, on_ground, floor_point)
+	_explode_sound(at)
 	exploded.emit(at)
 	# The rocket and engine go; the smoke trail lingers and fades.
 	_trail.emitting = false
@@ -330,8 +363,22 @@ func _explode(at: Vector3, struck: Node) -> void:
 	_wait = _puffs.lifetime
 
 
+## One of the owner's three explosion sounds at random, never the one
+## heard last.
+func _explode_sound(at: Vector3) -> void:
+	var sounds: Array[AudioStream] = [Sfx.ROCKET_EXPLODE_0, Sfx.ROCKET_EXPLODE_1, Sfx.ROCKET_EXPLODE_2]
+	var pick := randi() % sounds.size()
+	if pick == _last_explode_pick:
+		pick = (pick + 1 + randi() % (sounds.size() - 1)) % sounds.size()
+	_last_explode_pick = pick
+	last_explode_sound = sounds[pick]
+	Sfx.play_at(get_parent(), sounds[pick], at, explode_volume_db, explode_near, explode_far)
+	explode_sounds += 1
+
+
 ## Damage and push everything within the blast radius (not the shooter or
-## other players); whatever it struck takes the full blast.
+## other players). Robots struck or within `kill_radius` die, blown apart;
+## the boss takes `boss_damage`; the rest take falling-off splash damage.
 func _blast(at: Vector3, struck: Node) -> void:
 	var shape := SphereShape3D.new()
 	shape.radius = blast_radius
@@ -351,10 +398,30 @@ func _blast(at: Vector3, struck: Node) -> void:
 		var k := 1.0 if col == struck else clampf(1.0 - off.length() / (blast_radius + 0.8), 0.25, 1.0)
 		var push_dir := (off + Vector3.UP * 0.6).normalized()
 		if col.has_method("apply_damage"):
-			var info := DamageInfo.make(damage * k, DamageInfo.Type.EXPLOSION, at, push_dir, 0.0, blast_force * k, shooter)
+			var info: DamageInfo
+			if col is RobotBoss:
+				info = DamageInfo.make(boss_damage, DamageInfo.Type.EXPLOSION, at, push_dir, 0.0, blast_force * k, shooter)
+			elif lethal and col is RobotEnemy and _kills(col as RobotEnemy, at, struck):
+				# Dead at once and blown apart from the blast centre: the
+				# closer it was, the harder.
+				var flat := Vector2(off.x, off.z).length()
+				var kk := 1.0 if col == struck else clampf(1.0 - 0.3 * flat / maxf(kill_radius, 0.01), 0.7, 1.0)
+				var e := col as RobotEnemy
+				info = DamageInfo.make(maxf(e.health, 0.0) + 1.0, DamageInfo.Type.EXPLOSION, at, push_dir, 0.0, kill_force * kk, shooter)
+			else:
+				info = DamageInfo.make(splash_damage * k, DamageInfo.Type.EXPLOSION, at, push_dir, 0.0, blast_force * k, shooter)
 			info.weapon = &"rocket"
 			info.arm = arm_side
 			col.apply_damage(info)
 		elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 			var rb := col as RigidBody3D
 			rb.apply_central_impulse(push_dir * blast_force * k * minf(rb.mass, 20.0) * 0.5)
+
+
+## Killed outright: the robot it struck, or one whose middle is within
+## `kill_radius` (level distance) of the blast and not far above / below it.
+func _kills(e: RobotEnemy, at: Vector3, struck: Node) -> bool:
+	if e == struck:
+		return true
+	var off := e.global_position - at
+	return Vector2(off.x, off.z).length() <= kill_radius and off.y < 1.0 and off.y > -3.0

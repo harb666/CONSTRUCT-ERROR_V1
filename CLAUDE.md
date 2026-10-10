@@ -52,6 +52,19 @@
   `RobotBoss.fire_missile()` plays it from the blast's onset
   (`missile_sound_start` 1.03 s) so it is in sync with the launch.
 
+- `assets/audio/weapons/rocket_launcher_firing.ogg` (sha256
+  7e547e4c9ced3b9f03cc9db1ca55c946d38c39fcfb24c3f8c9ebfcd6289a8642) - the
+  rocket launcher's firing sound, supplied by the owner. `RocketLauncher`
+  plays it via `Sfx.ROCKET_FIRING`.
+- `assets/audio/weapons/rocket_explode_0.ogg` (sha256
+  9bfa4d9fc2c5e15978602a04463f513ebf55ccf342e20c7576dc0d730e7758a4),
+  `rocket_explode_1.ogg` (sha256
+  bf070f66400bc19faacb84a21c3a69a982062a13a44ece022155dd20b1f21752) and
+  `rocket_explode_2.ogg` (sha256
+  831c0268bb44ba7e415924f08b4eb1e6c11f9eda6b30ebb05128b0e63ea422f8) - the
+  owner's rocket explosion sounds. Each rocket blast plays one at random,
+  never the same twice running (`PlayerRocket._explode_sound`).
+
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
   their muzzle flashes stay on. The player's machine gun effects (barrel heat
@@ -89,8 +102,10 @@
 - Rocket Launcher (owner's model, red pad): mounted / dual-wielded like the
   other arm weapons. Fires the rocket loaded in its bore (same size / look:
   the model's own warhead + a matching body) every 2.5 s, with a big muzzle
-  flash, lots of smoke and heavy recoil (owner's spec). No sounds on it yet
-  (owner said so) - don't add any until asked.
+  flash, lots of smoke and heavy recoil (owner's spec). Its sounds are the
+  owner's (below). Robots it hits or lands right next to (not the boss) die
+  at once and are blown apart; it's kept weaker than the black hole gun
+  (owner asked): splash doesn't kill, the boss takes 0.4 per rocket.
 
 - Front end (owner asked): TAP TO START title (the tap turns sound on; the
   arena prepares behind it, meant to end the iPhone start-up silence) ->
