@@ -1385,6 +1385,8 @@ func _shotgun_tests(main: Node) -> void:
 	var dmg_o := 0.0
 	var assisted := 0
 	var max_bend := 0.0
+	var ring0 := ShotgunBlastRing.spawned
+	var sg_shots0 := sg.shots_fired
 	for k in 10:
 		sg._cool = 0.0
 		var ha := a.health
@@ -1398,6 +1400,8 @@ func _shotgun_tests(main: Node) -> void:
 		dmg_o += ho - (b.health + c2.health)
 	_check(assisted > 0 and dmg_o > 0.0, "outer streams semi-lock onto nearby enemies (%d streams, %.2f dmg)" % [assisted, dmg_o])
 	_check(dmg_o < dmg_a * 0.4, "secondary hits do only slight damage (%.2f vs %.2f on the target)" % [dmg_o, dmg_a])
+	_check(ShotgunBlastRing.spawned - ring0 == sg.shots_fired - sg_shots0 and sg.shots_fired > sg_shots0,
+		"vfx: every shotgun blast throws out fiery blast rings (%d)" % (ShotgunBlastRing.spawned - ring0))
 	_check(assisted <= 20, "at most one bent stream per nearby enemy per shot (%d in 10 shots)" % assisted)
 
 	# Auto-fire through the normal slot/lock path, and dual-wield ready: the
@@ -3960,6 +3964,23 @@ func _vfx_tests() -> void:
 	MagmaImpact.spawn(self, Vector3(0.2, 0.5, 30), Vector3.UP)
 	await _ticks(2)
 	_check(MagmaImpact.spawned == mi0 + 1 and MagmaImpact.busy_count() >= 1, "vfx: shotgun impacts burst into fire; streams on one spot merge into one bigger burst")
+	# Molten splats on fixed scenery (walls / floor), merged per spot; none
+	# on a moving robot.
+	var wall: StaticBody3D = null
+	for n in main.find_children("*", "StaticBody3D", true, false):
+		wall = n
+		break
+	var sp0 := MagmaSplat.spawned
+	var hitw := {"collider": wall, "at": Vector3(0, 0.0, 31), "normal": Vector3.UP, "dir": Vector3.FORWARD, "damage": 0.0,
+		"force": 0.0, "shooter": null, "color": Color(1, 0.45, 0.05), "hot": Color(1, 0.95, 0.7)}
+	Shotgun.land_stream(self, hitw)
+	hitw.at = Vector3(0.2, 0.0, 31)
+	Shotgun.land_stream(self, hitw)
+	var rob_hit := hitw.duplicate()
+	rob_hit.collider = sg  # anything that isn't fixed scenery
+	Shotgun.land_stream(self, rob_hit)
+	_check(wall != null and MagmaSplat.spawned == sp0 + 1 and MagmaSplat.active_count() >= 1,
+		"vfx: shotgun streams leave a molten splat on walls / floor (merged per spot, not on moving things)")
 	# Pads: weapons materialise with a faint hologram coat.
 	var spawner := main.get_node("ShotgunSpawnPad").find_child("WeaponSpawner", true, false) as WeaponSpawner
 	_check(spawner.display != null and Hologram._model_meshes(spawner.display).all(func(g: GeometryInstance3D) -> bool: return g.material_overlay is ShaderMaterial),

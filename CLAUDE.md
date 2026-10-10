@@ -145,6 +145,10 @@
   white-hot then the hit colour, and show a POW star; the player also gets
   a red screen-edge flash, but no camera shake on hits (owner asked).
   The boss doesn't squash.
+  Streams leave a molten splat on walls / floor that cools to a scorch
+  (`MagmaSplat`; owner asked), and every shot throws fiery blast rings out
+  of the barrels, one lingering round the trails' start (`ShotgunBlastRing`;
+  owner asked).
 - Brighter, more dramatic muzzle flashes (owner asked): a VFEZ-style cartoon
   cel flash (`CelFlash`) layered OVER the existing flashes (unchanged) of
   the plasma cannon, machine gun, rocket launcher, the boss's chaingun

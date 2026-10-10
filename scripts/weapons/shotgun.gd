@@ -192,6 +192,8 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 				dir = dir.slerp(to_sec, assist_strength).normalized()
 		_fire_stream(space, exclude, shooter, from, dir, leave, primary, assisted)
 	_flash.play(muzzle_flash_intensity)
+	# Fiery blast rings out of the barrel cluster, left where it fired.
+	ShotgunBlastRing.spawn(get_tree(), centre + aim_dir * 0.15, aim_dir)
 	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
 	fire_sounds += 1
 	shots_fired += 1
@@ -257,6 +259,9 @@ static func land_stream(tree: SceneTree, hit: Dictionary) -> void:
 	PlasmaFx.impact(tree, at, hit.normal, col is StaticBody3D, hit.color, hit.hot)
 	# Magma Cannon style fire burst (streams on the same spot merge).
 	MagmaImpact.spawn(tree, at, hit.normal)
+	# A molten splat on the wall / floor it hit (fixed scenery only).
+	if col is StaticBody3D:
+		MagmaSplat.spawn(tree, at, hit.normal)
 
 
 ## Centre of the barrel cluster (the hub between the five barrels).
