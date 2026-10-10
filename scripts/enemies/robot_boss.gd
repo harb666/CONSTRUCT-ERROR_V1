@@ -42,6 +42,12 @@ const TURN_LEFT := &"Heavy_Turn_L"
 const TURN_RIGHT := &"Heavy_Turn_R"
 const TURN_STEP_DEG := 45.0
 const WORN_SHADER := preload("res://scripts/vfx/worn_armour.gdshader")
+## Where each clip's feet land (s into the clip; tools: foot heights back
+## at the floor after lifting). Heavy_Walk / Heavy_Step: left 0.70, right
+## 1.60; turn steps: the leading foot 0.47, the other 0.90.
+const STEP_TIMES := {
+	&"Heavy_Walk": [0.70, 1.60], &"Heavy_Step": [0.70, 1.60],
+	&"Heavy_Turn_L": [0.47, 0.90], &"Heavy_Turn_R": [0.47, 0.90]}
 ## Heavy_Walk's in-place speed at playback 1 (model units/s, at scale 1;
 ## from tools/author_boss_walk.gd: 2 * STEP / CYCLE).
 const WALK_CLIP_SPEED := 0.6 / 1.8
@@ -134,22 +140,18 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 @export var chaingun_shot_starts: Array[float] = [2.631, 3.519, 4.005, 4.175, 4.475, 4.831]
 @export var chaingun_shot_len := 0.13
 @export var chaingun_shot_fade := 0.03
-## Footsteps (Sfx.MINI_BOSS_WALKING, the owner's recording of three heavy
-## stomps): every time one of its feet lands - walking, turning on the
-## spot, any speed - it plays ONE stomp cut from the file (at one of
-## `step_sound_starts` s, just before the stomp's hit, `step_sound_len` s
-## long with its servo whine, fading at the end), so each stomp lands
-## exactly with a foot. A foot has landed when it comes back down to within
-## `foot_plant_height` m of its lowest point after lifting more than
-## `foot_lift_height` m.
-@export var step_sound_db := 0.0
-@export var step_sound_near := 8.0
-@export var step_sound_far := 60.0
-@export var step_sound_starts: Array[float] = [0.065, 1.065, 2.065]
-@export var step_sound_len := 0.92
-@export var step_sound_fade := 0.15
-@export var foot_lift_height := 0.12
-@export var foot_plant_height := 0.03
+## Footsteps: the owner's walking sound cut into three stomps, each
+## starting right at its impact (Sfx.MINI_BOSS_STEPS, tools/cut_boss_steps.py).
+## A stomp plays at the exact moment a foot lands in the clip playing
+## (`STEP_TIMES`, measured from the clips' foot heights), so every footfall
+## is heard, in sync, at any walking speed and in the turn steps; a
+## different stomp from the last each time.
+@export var step_sound_db := 3.0
+@export var step_sound_near := 10.0
+@export var step_sound_far := 80.0
+## Starts each stomp this much clip time before the foot lands (makes up
+## for the frame the clip is read in, so the hit lands on the frame).
+@export var step_lead := 0.025
 ## Projectile speed (m/s).
 @export var chaingun_bullet_speed := 46.0
 @export var chaingun_damage := 0.4
@@ -232,15 +234,14 @@ var chaingun_sounds := 0
 var missile_sounds := 0
 var _mg_voices: Array[DynamicSound] = []
 var _mg_left: Array[float] = []
-## Footsteps: stomps played (tests), voices, their time left, and per foot
-## [bone, lowest height seen, lifted?].
+## Footsteps: stomps played (tests), voices, and where the clip was.
 var step_sounds := 0
-var last_step_foot := -1
+var last_step_time := -1.0
 var _step_voices: Array[DynamicSound] = []
-var _step_left: Array[float] = []
 var _step_next := 0
 var _step_pick := -1
-var _feet: Array = []
+var _step_clip := &""
+var _step_pos := 0.0
 var _mg_next := 0
 var _mg_shot := 0
 ## Direction of the last chaingun round (tests).
@@ -1066,60 +1067,48 @@ func _process(_delta: float) -> void:
 		core_fx.forward = _visual.global_basis.z.normalized()
 
 
-## Footsteps: watches both feet (relative to the body, so slopes and steps
-## don't matter) and plays a stomp the moment one lands.
-func _update_steps(delta: float) -> void:
-	for i in _step_voices.size():
-		if _step_left[i] > 0.0:
-			_step_left[i] -= delta
-			var v := _step_voices[i]
-			if _step_left[i] <= 0.0:
-				v.stop()
-				v.fade = 1.0
-			elif _step_left[i] < step_sound_fade:
-				v.fade = _step_left[i] / step_sound_fade
-	if not alive or _sk == null or not is_instance_valid(_sk):
+## Footsteps: a stomp each time the playing clip passes a foot landing
+## (`STEP_TIMES`), looping and chained turn steps included.
+func _update_steps(_delta: float) -> void:
+	if not alive or anim == null:
+		_step_clip = &""
 		return
-	if _feet.is_empty():
-		for b in [&"mixamorig_LeftFoot", &"mixamorig_RightFoot"]:
-			var bi := _sk.find_bone(b)
-			if bi >= 0:
-				_feet.append([bi, INF, false])
-	var up := global_basis.y.normalized()
-	for k in _feet.size():
-		var f: Array = _feet[k]
-		var h := ((_sk.global_transform * _sk.get_bone_global_pose(f[0])).origin - global_position).dot(up)
-		f[1] = minf(f[1], h)
-		if h > f[1] + foot_lift_height:
-			f[2] = true
-		elif f[2] and h <= f[1] + foot_plant_height:
-			f[2] = false
-			last_step_foot = k
-			_step_sound()
+	var clip := anim.current_animation
+	if not STEP_TIMES.has(clip) or not anim.is_playing():
+		_step_clip = &""
+		return
+	var pos := anim.current_animation_position
+	if clip == _step_clip:
+		for t0: float in STEP_TIMES[clip]:
+			var t := maxf(t0 - step_lead, 0.0)
+			var crossed := (_step_pos < t and t <= pos) if pos >= _step_pos else (t > _step_pos or t <= pos)
+			if crossed:
+				last_step_time = t0
+				_step_sound()
+	_step_clip = clip
+	_step_pos = pos
 
 
-## One stomp from the owner's walking recording (a different one from the
-## last, voices in turn; each fades and stops in _update_steps).
+## One of the owner's stomps (a different one from the last), voices in
+## turn so overlapping steps don't cut each other off.
 func _step_sound() -> void:
-	if step_sound_starts.is_empty():
-		return
 	if _step_voices.is_empty():
 		for i in 3:
-			var v := Sfx.emitter(self, Sfx.MINI_BOSS_WALKING, step_sound_db, step_sound_near, step_sound_far)
+			var v := Sfx.emitter(self, Sfx.MINI_BOSS_STEPS[0], step_sound_db, step_sound_near, step_sound_far)
 			v.name = "StepSound%d" % i
 			_step_voices.append(v)
-			_step_left.append(0.0)
 	var v := _step_voices[_step_next]
-	if is_instance_valid(v) and v.is_inside_tree():
-		var pick := randi() % step_sound_starts.size()
-		if pick == _step_pick and step_sound_starts.size() > 1:
-			pick = (pick + 1) % step_sound_starts.size()
-		_step_pick = pick
-		v.fade = 1.0
-		v.play(step_sound_starts[pick])
-		_step_left[_step_next] = step_sound_len
-		step_sounds += 1
 	_step_next = (_step_next + 1) % _step_voices.size()
+	if not is_instance_valid(v) or not v.is_inside_tree():
+		return
+	var pick := randi() % Sfx.MINI_BOSS_STEPS.size()
+	if pick == _step_pick:
+		pick = (pick + 1 + randi() % (Sfx.MINI_BOSS_STEPS.size() - 1)) % Sfx.MINI_BOSS_STEPS.size()
+	_step_pick = pick
+	v.stream = Sfx.MINI_BOSS_STEPS[pick]
+	v.pitch_scale = randf_range(0.97, 1.03)
+	v.play()
+	step_sounds += 1
 
 
 ## The floor under a point (where the player stands, even mid-jump).

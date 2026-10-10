@@ -3176,8 +3176,11 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 	var feet := [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
 	var walked := {"frames": 0, "speed_err": 0.0}
 	var tracks := [[], []]
-	# Footsteps: when each stomp plays, where the walk clip is.
+	# Footsteps: stomp frames vs the frames a foot comes down (ground truth
+	# from the feet themselves).
 	var step_at := []
+	var stomp_frames := []
+	var foot_h := [[], []]
 	var steps0 := boss.step_sounds
 	for i in 150:
 		var s_before := boss.step_sounds
@@ -3186,6 +3189,9 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 			step_at.append(snappedf(boss.anim.current_animation_position, 0.01))
 		if i < 60 or boss.anim.current_animation != RobotBoss.WALK_CLIP:
 			continue
+		stomp_frames.append(boss.step_sounds - s_before)
+		for k in 2:
+			foot_h[k].append((sk.global_transform * sk.get_bone_global_pose(feet[k]).origin).y - boss.global_position.y)
 		walked.frames += 1
 		var v := Vector2(boss.linear_velocity.x, boss.linear_velocity.z).length()
 		walked.speed_err = maxf(walked.speed_err, absf(v - boss.walk_anim_ground_speed()))
@@ -3193,11 +3199,36 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 			tracks[k].append(sk.global_transform * sk.get_bone_global_pose(feet[k]).origin)
 	_check(walked.frames > 60, "boss: walks with its heavy walk (%d frames)" % walked.frames)
 	# Heavy_Walk's feet land at 0.70 s (left) and 1.60 s (right).
-	var in_sync := step_at.filter(func(t: float) -> bool: return absf(t - 0.7) < 0.12 or absf(t - 1.6) < 0.12)
-	_check(step_at.size() >= 1 and in_sync.size() == step_at.size(),
-		"boss: a stomp from the owner's walking sound plays each time a foot lands (walk clip at %s s; feet land at 0.70 / 1.60)" % [step_at])
+	var in_sync := step_at.filter(func(t: float) -> bool: return absf(t - 0.7) < 0.03 or absf(t - 1.6) < 0.03)
+	_check(step_at.size() >= 2 and in_sync.size() == step_at.size(),
+		"boss: a stomp plays each time a foot lands (walk clip at %s s; feet land at 0.70 / 1.60)" % [step_at])
+	# Every footfall the feet show has its stomp within 2 frames, and no extra.
+	var plants := 0
+	var matched := 0
+	for k in 2:
+		var hs: Array = foot_h[k]
+		if hs.is_empty():
+			continue
+		var hs_lo: float = hs.min()
+		var up := false
+		for f in hs.size():
+			if hs[f] > hs_lo + 0.1:
+				up = true
+			elif up and hs[f] <= hs_lo + 0.01:
+				up = false
+				plants += 1
+				for g in range(maxi(f - 2, 0), mini(f + 3, stomp_frames.size())):
+					if stomp_frames[g] > 0:
+						matched += 1
+						break
+	var stomps_walking: int = stomp_frames.reduce(func(a: int, b: int) -> int: return a + b, 0)
+	_check(plants >= 2 and matched == plants and stomps_walking == plants,
+		"boss: every footfall is heard, in sync (%d feet down, %d with a stomp within 2 frames, %d stomps)" % [plants, matched, stomps_walking])
 	var sv: DynamicSound = boss._step_voices[0] if not boss._step_voices.is_empty() else null
-	_check(sv != null and sv.stream == Sfx.MINI_BOSS_WALKING and boss.step_sounds > steps0, "boss: footsteps use the owner's walking sound (%d stomps)" % (boss.step_sounds - steps0))
+	_check(sv != null and Sfx.MINI_BOSS_STEPS.has(sv.stream) and boss.step_sounds > steps0 and sv.base_db >= 0.0,
+		"boss: footsteps are stomps cut from the owner's walking sound (%d stomps)" % (boss.step_sounds - steps0))
+	_check(Sfx.MINI_BOSS_STEPS.all(func(a: AudioStream) -> bool: return a.get_length() > 0.6 and a.get_length() < 0.95),
+		"boss: three single-stomp files (%s s)" % [Sfx.MINI_BOSS_STEPS.map(func(a: AudioStream) -> String: return "%.2f" % a.get_length())])
 	_check(walked.speed_err < 0.05, "boss: walk animation speed matches the ground speed (worst %.3f m/s off)" % walked.speed_err)
 	# Planted foot: lowest stretch of each foot's track.
 	var worst_slide := 0.0

@@ -54,8 +54,10 @@
 - `assets/audio/enemies/mini_boss_walking.mp3` - the robot boss's footsteps,
   supplied by the owner (sha256
   d5dc01543c919ef0a022ff3fd73bd315f501919fee6069ae7c95163a1d37768e). Three
-  heavy stomps: `RobotBoss` plays one stomp cut from it each time one of its
-  feet lands (`step_sound_starts`, `_update_steps`), so it stays in sync.
+  heavy stomps, cut (owner allowed editing for sync) by
+  `tools/cut_boss_steps.py` into `mini_boss_step_1/2/3.ogg`, each starting
+  at its impact; `RobotBoss` plays one each time a foot lands in the clip
+  (`STEP_TIMES`, `_update_steps`), so every step is heard, in sync.
 
 - `assets/audio/weapons/rocket_launcher_firing.ogg` (sha256
   7e547e4c9ced3b9f03cc9db1ca55c946d38c39fcfb24c3f8c9ebfcd6289a8642) - the
