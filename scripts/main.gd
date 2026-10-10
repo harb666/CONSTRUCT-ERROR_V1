@@ -122,6 +122,10 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
 		_add_hit_flash(player)
+		# Crash report breadcrumbs: weapon changes.
+		var crumb_holder := player.get_node("WeaponHolder") as WeaponHolder
+		crumb_holder.slot_equipped.connect(func(side: String, def: WeaponDefinition) -> void:
+			DebugHud.note("%s %s" % [side.substr(0, 1), def.display_name if def else "-"]))
 		# Tap-to-target: selector (what is selected) -> command target_id ->
 		# player's TargetLock (validates) -> WeaponHolder auto-fires.
 		var selector := TargetSelector.new()

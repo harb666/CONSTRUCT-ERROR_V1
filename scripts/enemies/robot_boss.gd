@@ -238,7 +238,6 @@ var _mg_left: Array[float] = []
 var step_sounds := 0
 var last_step_time := -1.0
 var _step_voices: Array[DynamicSound] = []
-var _step_next := 0
 var _step_pick := -1
 var _step_clip := &""
 var _step_pos := 0.0
@@ -1001,6 +1000,7 @@ func fire_missile(at: Vector3) -> BossMissile:
 		snd.play(missile_sound_start)
 		missile_sounds += 1
 	missile_launched.emit(point)
+	DebugHud.note("boss missile")
 	_chest_open_t = chest_open_delay
 	return last_missile
 
@@ -1092,20 +1092,20 @@ func _update_steps(_delta: float) -> void:
 ## One of the owner's stomps (a different one from the last), voices in
 ## turn so overlapping steps don't cut each other off.
 func _step_sound() -> void:
+	# One voice per stomp, each keeping its own sound (no stream swapping:
+	# lighter on the browser's audio).
 	if _step_voices.is_empty():
-		for i in 3:
-			var v := Sfx.emitter(self, Sfx.MINI_BOSS_STEPS[0], step_sound_db, step_sound_near, step_sound_far)
-			v.name = "StepSound%d" % i
-			_step_voices.append(v)
-	var v := _step_voices[_step_next]
-	_step_next = (_step_next + 1) % _step_voices.size()
-	if not is_instance_valid(v) or not v.is_inside_tree():
-		return
+		for i in Sfx.MINI_BOSS_STEPS.size():
+			var e := Sfx.emitter(self, Sfx.MINI_BOSS_STEPS[i], step_sound_db, step_sound_near, step_sound_far)
+			e.name = "StepSound%d" % i
+			_step_voices.append(e)
 	var pick := randi() % Sfx.MINI_BOSS_STEPS.size()
 	if pick == _step_pick:
 		pick = (pick + 1 + randi() % (Sfx.MINI_BOSS_STEPS.size() - 1)) % Sfx.MINI_BOSS_STEPS.size()
 	_step_pick = pick
-	v.stream = Sfx.MINI_BOSS_STEPS[pick]
+	var v := _step_voices[pick]
+	if not is_instance_valid(v) or not v.is_inside_tree():
+		return
 	v.pitch_scale = randf_range(0.97, 1.03)
 	v.play()
 	step_sounds += 1
@@ -1158,6 +1158,7 @@ func _update_chest(delta: float) -> void:
 				_exposed_t = core_exposed_time
 				_core_glow.visible = true
 				core_exposed.emit()
+				DebugHud.note("boss core open")
 	if exposed:
 		_exposed_t -= delta
 		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 9.0)
@@ -1259,6 +1260,7 @@ func die(_info: DamageInfo = null) -> void:
 	core_fx.failure()
 	_core_glow.visible = true
 	died.emit()
+	DebugHud.note("boss died")
 	if respawn_time >= 0.0:
 		get_tree().create_timer(respawn_time + death_collapse_time, false).timeout.connect(_respawn)
 
@@ -1318,6 +1320,7 @@ func _collapse() -> void:
 func _respawn() -> void:
 	if not is_inside_tree():
 		return
+	DebugHud.note("boss respawn")
 	freeze = false
 	global_transform = _spawn_xf
 	linear_velocity = Vector3.ZERO

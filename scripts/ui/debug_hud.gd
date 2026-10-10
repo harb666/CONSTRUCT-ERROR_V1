@@ -1,5 +1,13 @@
+class_name DebugHud
 extends Label
 ## Minimal on-screen readout to help tune movement on device.
+
+## Web only: the last few game events (boss missile, core open, death...)
+## with their time, saved the moment they happen, so a crash report says
+## what was going on just before (`note()`).
+const MAX_NOTES := 6
+static var _notes: PackedStringArray = []
+static var _clock := 0.0
 
 var player: PlayerController
 var _build := ""
@@ -43,6 +51,10 @@ func _ready() -> void:
 			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, memory %s MB, graphics %s MB, character %s, weapon %s, build %s" % [
 				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
 				int(d.get("nodes", 0)), str(d.get("mem", "?")), str(d.get("vmem", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+		var ev = JavaScriptBridge.eval("localStorage.getItem('ce_events') || ''")
+		if _last_session != "" and ev != null and str(ev) != "":
+			_last_session += ", last events: " + str(ev)
+		JavaScriptBridge.eval("try { localStorage.removeItem('ce_events'); } catch (e) {}")
 		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
@@ -108,6 +120,7 @@ func _process(delta: float) -> void:
 
 func _record(delta: float) -> void:
 	_session_t += delta
+	_clock = _session_t
 	_rec_t += delta
 	if _rec_t < 2.0:
 		return
@@ -132,6 +145,17 @@ func _record(delta: float) -> void:
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
 		"vmem": snappedf(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, 1.0)}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
+
+
+## Remember a game event for the crash report (web only; saved at once).
+static func note(what: String) -> void:
+	if not OS.has_feature("web"):
+		return
+	var m := int(_clock)
+	_notes.append("%dm%02ds %s" % [m / 60, m % 60, what])
+	if _notes.size() > MAX_NOTES:
+		_notes.remove_at(0)
+	JavaScriptBridge.eval("try { localStorage.setItem('ce_events', %s); } catch (e) {}" % JSON.stringify(" | ".join(_notes)))
 
 
 static func _secs(v) -> String:

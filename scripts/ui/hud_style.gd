@@ -112,6 +112,8 @@ static func seg_bar(ci: CanvasItem, r: Rect2, frac: float, col: Color, segments 
 	var inner := r.grow(-2.0)
 	var gap := 2.0
 	var w := (inner.size.x - gap * (segments - 1)) / segments
+	if w < 1.0 or inner.size.y < 1.0:
+		return  # too small to draw (no degenerate polygons)
 	frac = clampf(frac, 0.0, 1.0)
 	trail = clampf(trail, frac, 1.0)
 	var fill := col.lerp(Color.WHITE, flash * 0.6)
@@ -140,6 +142,8 @@ static func seg_bar(ci: CanvasItem, r: Rect2, frac: float, col: Color, segments 
 
 ## Draws the left `k` (from `from`) of a slanted segment polygon.
 static func _part(ci: CanvasItem, poly: PackedVector2Array, k: float, col: Color, from := 0.0) -> void:
+	if k - from < 0.02:
+		return
 	var tl := poly[0].lerp(poly[1], from)
 	var bl := poly[3].lerp(poly[2], from)
 	var tr := poly[0].lerp(poly[1], k)
