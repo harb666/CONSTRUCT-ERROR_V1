@@ -3001,6 +3001,8 @@ func _robot_boss_tests(main: Node) -> void:
 	_check(top_y > launch_y + boss.missile_climb_height * 0.8, "boss: missile climbs high before arcing over (%.1f m above the launcher)" % (top_y - launch_y))
 	_check(always_seen and engine_on, "boss: missile, engine flame and smoke trail visible the whole flight")
 	_check(m._trail._pts.size() > 10, "boss: smoke trail follows the curved path (%d points)" % m._trail._pts.size())
+	_check(m._trail.mesh == SmokeTrail._shared_ribbon() and m._trail.material_override is ShaderMaterial and int(m._trail.material_override.get_shader_parameter("count")) == m._trail._pts.size(),
+		"smoke trails: one fixed shared mesh shaped by the shader (no graphics buffers rebuilt per frame)")
 	_check(events.boom != Vector3.INF and (events.boom as Vector3).distance_to(boss.last_missile_target) < 0.5, "boss: missile lands on the recorded point (%.2f m off)" % (events.boom as Vector3).distance_to(boss.last_missile_target))
 	_check((events.boom as Vector3).distance_to(p.global_position) > 3.0, "boss: missile doesn't chase the player who moved away")
 	_check(marker_moved < 0.01, "boss: marker stays fixed while the player moves")

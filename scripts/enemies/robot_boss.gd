@@ -694,6 +694,7 @@ func is_staggered() -> bool:
 func _start_windup() -> void:
 	state = State.WINDUP
 	_windup_t = missile_windup
+	DebugHud.note("boss windup")
 
 
 func _windup(delta: float) -> void:
@@ -1139,6 +1140,7 @@ func close_chest() -> void:
 	if exposed:
 		exposed = false
 		core_protected.emit()
+		DebugHud.note("boss core closed")
 	_exposed_t = 0.0
 	if chest_player.current_animation != &"Chest_Closed":
 		chest_player.play(&"Chest_Close")

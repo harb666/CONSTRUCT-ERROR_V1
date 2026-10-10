@@ -313,6 +313,7 @@ func _explode(at: Vector3) -> void:
 	MissileBlast.spawn(get_parent(), at, blast_radius)
 	Sfx.play_at(get_parent(), Sfx.BH_EXPLODE, at, -3.0, 6.0, 70.0)
 	exploded.emit(at)
+	DebugHud.note("boss missile hit")
 	# The model and engine go; the smoke trail lingers and fades.
 	_trail.emitting = false
 	_set_flying(false)

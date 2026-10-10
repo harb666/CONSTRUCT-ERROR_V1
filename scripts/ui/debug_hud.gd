@@ -5,7 +5,7 @@ extends Label
 ## Web only: the last few game events (boss missile, core open, death...)
 ## with their time, saved the moment they happen, so a crash report says
 ## what was going on just before (`note()`).
-const MAX_NOTES := 6
+const MAX_NOTES := 10
 static var _notes: PackedStringArray = []
 static var _clock := 0.0
 
@@ -27,6 +27,8 @@ var _last_session_t := 0.0
 ## first play (seconds since the page opened), to check start-up audio.
 var _ready_at := -1.0
 var _audio_text := ""
+var _vmem0 := -1.0
+var _vpeak := 0.0
 
 
 func _ready() -> void:
@@ -48,9 +50,9 @@ func _ready() -> void:
 		var prev = JavaScriptBridge.eval("localStorage.getItem('ce_session') || ''")
 		var d = JSON.parse_string(str(prev)) if prev != null and str(prev) != "" else null
 		if d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
-			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, memory %s MB, graphics %s MB, character %s, weapon %s, build %s" % [
+			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, memory %s MB, graphics %s MB (start %s, peak %s), character %s, weapon %s, build %s" % [
 				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
-				int(d.get("nodes", 0)), str(d.get("mem", "?")), str(d.get("vmem", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+				int(d.get("nodes", 0)), str(d.get("mem", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
 		var ev = JavaScriptBridge.eval("localStorage.getItem('ce_events') || ''")
 		if _last_session != "" and ev != null and str(ev) != "":
 			_last_session += ", last events: " + str(ev)
@@ -122,7 +124,7 @@ func _record(delta: float) -> void:
 	_session_t += delta
 	_clock = _session_t
 	_rec_t += delta
-	if _rec_t < 2.0:
+	if _rec_t < 1.0:
 		return
 	_rec_t = 0.0
 	var alive := 0
@@ -143,7 +145,7 @@ func _record(delta: float) -> void:
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0,
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
-		"vmem": snappedf(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, 1.0)}
+		"vmem": snappedf(_vmem(), 1.0), "vmem0": snappedf(_vmem0, 1.0), "vpeak": snappedf(_vpeak, 1.0)}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
 
 
@@ -156,6 +158,15 @@ static func note(what: String) -> void:
 	if _notes.size() > MAX_NOTES:
 		_notes.remove_at(0)
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_events', %s); } catch (e) {}" % JSON.stringify(" | ".join(_notes)))
+
+
+## Graphics memory now (MB); the first reading in play and the highest.
+func _vmem() -> float:
+	var v := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
+	if _vmem0 < 0.0:
+		_vmem0 = v
+	_vpeak = maxf(_vpeak, v)
+	return v
 
 
 static func _secs(v) -> String:

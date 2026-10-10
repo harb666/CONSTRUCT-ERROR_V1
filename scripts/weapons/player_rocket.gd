@@ -357,6 +357,7 @@ func _explode(at: Vector3, struck: Node) -> void:
 	MissileBlast.spawn(get_parent(), at, blast_radius, 1.0, on_ground, floor_point)
 	_explode_sound(at)
 	exploded.emit(at)
+	DebugHud.note("rocket hit")
 	# The rocket and engine go; the smoke trail lingers and fades.
 	_trail.emitting = false
 	_set_flying(false)
