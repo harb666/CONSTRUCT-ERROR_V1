@@ -172,6 +172,10 @@
 - Branch `saved/approved-2026-10-09` (commit 730b224): the owner said
   everything is good. It's the known-good state to compare against or roll
   back to. Never push to, move or delete `saved/*` branches.
+- Branch `saved/approved-2026-10-10` (commit 139bd7b): the owner said it's
+  good (cel muzzle flashes on every gun incl. grunts / skirmishers / black
+  hole gun, the black hole portal, shotgun splats and blast rings). The
+  newest known-good state.
 
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`
