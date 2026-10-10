@@ -16,6 +16,8 @@ imported or exported: .gdignore). Output: assets/characters/harbinger/harbinger.
    standing she only touched the ground with her heels. A constant local
    correction on each Foot bone (the smallest tilt that makes the idle's
    soles level; no twist) is applied to every key of every clip.
+2b. The painted halo ring above her head is removed; the game draws a
+   glowing electric ring there instead (scripts/character/halo_ring.gd).
 3. Clips get the Grinch's names (the CharacterAnimator uses them):
    Idle_9 -> "Idle 9", Fall_Dead_from_Abdominal_Injury -> "Dead",
    Jump_Over_Obstacle_2 -> "Climb Attempt and Fall 5" (unused) ... She has no
@@ -221,6 +223,10 @@ def build_prep():
         region = P[:, 0] * sx > 0.55
         P, N, UV, J, W, I, removed = clip_mesh(P, N, UV, J, W, I, d, region)
         print("%s arm end: cut %.3f m past the elbow, %d triangles removed/clipped" % (side, CUT[side], removed))
+    # Halo: the model's painted halo (its own separate ring of geometry above
+    # the head) is removed; the game draws a glowing electric ring in its
+    # place (scripts/character/halo_ring.gd, fitted to these numbers).
+    I = remove_halo(P, I)
     # Drop unused vertices.
     used = np.zeros(len(P), bool)
     used[I.ravel()] = True
@@ -320,6 +326,30 @@ def sole_normal(rig, joints, ibm, P, J, W, mask, clip, t, corr=None):
     k = np.linalg.lstsq(A, q[:, 1], rcond=None)[0]
     n = np.array([-k[0], 1.0, -k[1]])
     return n / np.linalg.norm(n)
+
+
+def remove_halo(P, I):
+    """Drops the separate ring of geometry floating above the head."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    _, inv = np.unique(np.round(P, 5), axis=0, return_inverse=True)
+    inv = inv.ravel()
+    T = inv[I]
+    n = inv.max() + 1
+    r = np.r_[T[:, 0], T[:, 1], T[:, 2]]
+    c = np.r_[T[:, 1], T[:, 2], T[:, 0]]
+    _, lab = connected_components(coo_matrix((np.ones(len(r)), (r, c)), shape=(n, n)), directed=False)
+    vl = lab[inv]
+    halo = [k for k in np.unique(vl) if P[vl == k][:, 1].min() > 1.6]
+    m = np.isin(vl, halo)
+    q = P[m]
+    cen = q.mean(0)
+    nrm = np.linalg.svd(q - cen)[2][2]
+    d = q - cen
+    rad = np.linalg.norm(d - np.outer(d @ nrm, nrm), axis=1)
+    print("halo removed: %d triangles; centre %s, normal %s, radius %.3f..%.3f" % (
+        m[I].any(1).sum(), np.round(cen, 4), np.round(nrm, 3), np.percentile(rad, 1), np.percentile(rad, 99)))
+    return I[~m[I].any(1)]
 
 
 def clip_mesh(P, N, UV, J, W, I, d, region):

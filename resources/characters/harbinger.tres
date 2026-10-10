@@ -18,3 +18,4 @@ accent_color = Color(0.3, 0.6, 1, 1)
 preview_model_path = "res://assets/characters/harbinger/harbinger.glb"
 preview_caps = ExtResource("4")
 preview_animation = "Idle 9"
+preview_extra_path = "res://scenes/characters/harbinger_halo.tscn"

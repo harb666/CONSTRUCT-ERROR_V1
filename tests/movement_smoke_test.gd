@@ -3716,6 +3716,22 @@ func _harbinger_tests() -> void:
 				furthest[side] = maxf(furthest[side], (v - fa.origin).dot(ax))
 	_check(furthest.Left < 0.375 and furthest.Right < 0.403, "harbinger: arm ends cut at the gauntlets (%.3f / %.3f m past the elbows)" % [furthest.Left, furthest.Right])
 	_check(mi.mesh.get_surface_count() >= 1 and vis.mesh_caps != null and vis.mesh_caps.caps.size() > 0, "harbinger: gauntlet openings sealed (caps)")
+	# Halo: the painted ring is gone from her mesh; a glowing ring follows her head.
+	var halo := vis.get_node_or_null("HaloRing") as HaloRing
+	var att := halo.ring.get_parent() as BoneAttachment3D if halo and halo.ring else null
+	# Mesh points on the old ring (its plane, its radius) - should be none.
+	var high := 0
+	if halo:
+		var n := halo.normal.normalized()
+		for v in verts:
+			var d := v - halo.centre
+			var along := d.dot(n)
+			if absf(along) < 0.012 and absf((d - n * along).length() - halo.radius) < 0.02:
+				high += 1
+	_check(att != null and att.bone_name == "mixamorig_Head" and halo.ring.get_child_count() == 3 and high < 10,
+		"harbinger: glowing halo on her head (core, glow, arcs) replaces the painted one (%d old-ring points left)" % high)
+	_check(halo.ring.get_children().all(func(m: Node) -> bool: return m is MeshInstance3D and (m as MeshInstance3D).material_override is ShaderMaterial and not m.find_children("*", "Light3D").size()),
+		"harbinger: halo is shader-only (no textures, no lights)")
 	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.028), "harbinger: each arm's open end measured separately")
 	# Every weapon mounts on both arms.
 	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry

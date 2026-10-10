@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/character/character_animator.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/characters/harbinger/harbinger.glb" id="2"]
 [ext_resource type="Resource" path="res://assets/characters/harbinger/harbinger_caps.res" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/characters/harbinger_halo.tscn" id="4"]
 
 [node name="HarbingerVisual" type="Node3D"]
 script = ExtResource("1")
@@ -15,3 +16,5 @@ arm_end_right_extra = 0.028
 
 [node name="Model" parent="." instance=ExtResource("2")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
+
+[node name="HaloRing" parent="." instance=ExtResource("4")]

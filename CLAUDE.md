@@ -104,7 +104,8 @@
   scene, only her visual swapped). Her arm-end blasters are cut off at the
   end of the blue gauntlets so weapons plug in like the Grinch's; her foot
   angle is corrected in her clips so her soles sit flat; her clips play a
-  little slower (longer legs) so her feet don't slide.
+  little slower (longer legs) so her feet don't slide. Her halo is a
+  glowing blue electric ring (owner asked; shader-only, light on memory).
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this

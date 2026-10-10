@@ -26,6 +26,9 @@ extends Resource
 ## Caps sealing open holes in the model, as on the player.
 @export var preview_caps: MeshCaps
 @export var preview_animation := ""
+## Extra parts added to the preview model (e.g. Harbinger's glowing halo,
+## which isn't part of her model).
+@export_file("*.tscn") var preview_extra_path := ""
 ## Model yaw that faces the viewer (+Z).
 @export var preview_yaw_degrees := 0.0
 

@@ -208,6 +208,8 @@ func _make_preview() -> void:
 	_preview_pivot.add_child(model)
 	if selected.preview_caps:
 		selected.preview_caps.apply(model)
+	if selected.preview_extra_path != "":
+		model.add_child((load(selected.preview_extra_path) as PackedScene).instantiate())
 	var ap := model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if ap and selected.preview_animation != "" and ap.has_animation(selected.preview_animation):
 		ap.get_animation(selected.preview_animation).loop_mode = Animation.LOOP_LINEAR
