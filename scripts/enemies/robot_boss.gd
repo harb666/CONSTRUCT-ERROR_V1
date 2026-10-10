@@ -258,6 +258,7 @@ var gun_player: AnimationPlayer
 var core: MeshInstance3D
 var rotor: Node3D
 var chaingun_muzzle: Node3D
+var gun_cel_flash: CelFlash
 var gun_aim: BossGunAim
 var missile_socket: Node3D
 var flap: Node3D
@@ -472,6 +473,16 @@ func _build_model() -> void:
 	gun_flash.size = 5.5
 	gun_flash.smoke = true
 	_flash_pivot.add_child(gun_flash)
+	# Large dramatic cartoon cel flash over it, every round (owner asked).
+	gun_cel_flash = CelFlash.new()
+	gun_cel_flash.name = "CelFlash"
+	gun_cel_flash.size = 0.6 * model_scale
+	gun_cel_flash.cone_length = 2.1
+	gun_cel_flash.sparks = 7
+	gun_cel_flash.duration = 0.085
+	gun_cel_flash.glow_size = 2.4
+	chaingun_muzzle.add_child(gun_cel_flash)
+	gun_cel_flash.setup(BULLET_COLOR, BULLET_HOT)
 
 
 ## Worn, chipped armour (robot's own atlas + procedural wear) on the
@@ -950,6 +961,8 @@ func _fire_bullet() -> void:
 		bolt.size = chaingun_tracer_size
 		bolt.max_range = chaingun_range + 10.0
 	gun_flash.fire(_spin, 1.0)
+	if gun_cel_flash:
+		gun_cel_flash.fire(m.origin, m.basis.z.normalized(), randf_range(0.9, 1.15))
 	_chaingun_sound()
 	last_shot_dir = dir
 	bullets_fired += 1

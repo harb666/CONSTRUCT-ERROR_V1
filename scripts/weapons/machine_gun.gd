@@ -107,6 +107,8 @@ var heat := 0.0
 var overheated := false
 ## Shared intensity of every effect (0..1).
 var energy := 0.0
+## Extra cartoon cel flash over the usual muzzle flash (brighter shots).
+var cel_flash: CelFlash
 ## Trigger held (a target is locked) this tick.
 var trigger := false
 ## Times this gun has overheated.
@@ -161,6 +163,16 @@ func _ready() -> void:
 	_fx.model = model
 	_fx.model_scale = ms
 	_body.add_child(_fx)
+	cel_flash = CelFlash.new()
+	cel_flash.name = "CelFlash"
+	cel_flash.size = 0.52
+	cel_flash.cone_length = 2.2
+	cel_flash.cones = 2
+	cel_flash.sparks = 3
+	cel_flash.duration = 0.075
+	cel_flash.glow_size = 1.8
+	add_child(cel_flash)
+	cel_flash.setup(bolt_color, bolt_hot_color)
 	_flash = MachineGunFlash.new()
 	_flash.name = "MuzzleFlash"
 	_flash.toon = true
@@ -307,6 +319,8 @@ func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
 	heat += heat_per_shot
 	if _flash:
 		_flash.fire(energy, muzzle_flash_intensity)
+	if cel_flash and _muzzle:
+		cel_flash.fire(_muzzle.global_position, get_barrel_direction(), 0.85 + 0.3 * energy)
 	if not _fire_voices.is_empty() and _snd_t <= 0.0 and _fire_voices[0].is_inside_tree():
 		_voice = (_voice + 1) % _fire_voices.size()
 		_fire_snd = _fire_voices[_voice]

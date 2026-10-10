@@ -145,6 +145,10 @@
   white-hot then the hit colour, and show a POW star; the player also gets
   a red screen-edge flash, but no camera shake on hits (owner asked).
   The boss doesn't squash.
+- Brighter, more dramatic muzzle flashes (owner asked): a VFEZ-style cartoon
+  cel flash (`CelFlash`) layered OVER the existing flashes (unchanged) of
+  the plasma cannon, machine gun, rocket launcher and the boss's chaingun
+  (large, every round). Shotgun unchanged.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this

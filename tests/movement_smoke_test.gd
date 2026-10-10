@@ -2051,6 +2051,7 @@ func _rocket_launcher_tests(main: Node) -> void:
 	_check(R.recoil_strength >= 1.0 and recoil_peak > 0.3, "heavy recoil kick on each rocket (strength %.1f, arm kick %.2f)" % [R.recoil_strength, recoil_peak])
 	_check(ra.hits > hits0[0] and rb.hits > hits0[1] and ra.health < 99999.0 and rb.health < 99999.0, "rockets fly to and hit each arm's target")
 	_check((R.find_child("Warhead", true, false) as Node3D).visible or R.reload_left() > 0.0, "the next rocket is back in the bore when it's ready")
+	_check(R.cel_flash.flashes == shots.Right.size() and L.cel_flash.flashes == shots.Left.size(), "rocket launcher: big cartoon cel flash with every rocket (%d + %d)" % [R.cel_flash.flashes, L.cel_flash.flashes])
 	_check(R.fire_sounds == shots.Right.size() and L.fire_sounds == shots.Left.size() and R._voices.size() > 0 and R._voices[0].stream == Sfx.ROCKET_FIRING,
 		"each rocket fired plays the owner's rocket launcher sound (%d + %d sounds)" % [R.fire_sounds, L.fire_sounds])
 	_check(PlayerRocket.explode_sounds > booms0 and PlayerRocket.last_explode_sound in [Sfx.ROCKET_EXPLODE_0, Sfx.ROCKET_EXPLODE_1, Sfx.ROCKET_EXPLODE_2],
@@ -3495,6 +3496,8 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 		if boss.bullets_fired - b0 > 12:
 			break
 	_check(boss.bullets_fired > b0 and boss.gun_flash.flashes - f0 == boss.bullets_fired - b0, "boss: one muzzle flash per chaingun round (%d / %d)" % [boss.gun_flash.flashes - f0, boss.bullets_fired - b0])
+	_check(boss.gun_cel_flash != null and boss.gun_cel_flash.flashes >= boss.bullets_fired - b0 and boss.gun_cel_flash.size >= 2.0,
+		"boss: large cartoon cel flash on every chaingun round, over its own flash (%d)" % boss.gun_cel_flash.flashes)
 	_check(boss.chaingun_sounds - cs0 == boss.bullets_fired - b0 and boss._mg_voices.size() == 4 and boss._mg_voices[0].stream == Sfx.MINI_BOSS_MG, "boss: one shot of the owner's machine gun sound per chaingun round (%d / %d)" % [boss.chaingun_sounds - cs0, boss.bullets_fired - b0])
 	const MG_SHA := "8a8a3c992550305ef893b8ccd1b67ab3f9920c118f17e2776ba5728b9d20c978"
 	if FileAccess.file_exists("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3"):
@@ -4894,9 +4897,11 @@ func _shot_audio_tests(main: Node) -> void:
 	var gun := h.weapon("Right") as PlasmaCannon
 	var s0 := gun.fire_sounds
 	var f0 := gun.shots_fired
+	var cf0 := gun.cel_flash.flashes
 	sel.tap_target(r.get_node("Targetable"))
 	await _ticks(90)
 	_check(gun.shots_fired > f0 and gun.fire_sounds - s0 == gun.shots_fired - f0, "audio: default cannon - a shot sound per shot (%d)" % (gun.fire_sounds - s0))
+	_check(gun.cel_flash.flashes - cf0 == gun.shots_fired - f0, "vfx: plasma cannon - a cartoon cel flash over its muzzle flash every shot (%d)" % (gun.cel_flash.flashes - cf0))
 	var playing := 0
 	for v in gun._voices:
 		playing += int(v.playing or v.get_playback_position() > 0.0)

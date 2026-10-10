@@ -30,10 +30,20 @@ var _voices: Array[DynamicSound] = []
 var _voice := 0
 var _cool := 0.0
 var _muzzle: Node3D
+## Extra cartoon cel flash over the usual muzzle flash (brighter shots).
+var cel_flash: CelFlash
 
 
 func _ready() -> void:
 	_muzzle = find_marker(MUZZLE_MARKER)
+	cel_flash = CelFlash.new()
+	cel_flash.name = "CelFlash"
+	cel_flash.size = 0.68
+	cel_flash.cone_length = 2.0
+	cel_flash.sparks = 5
+	cel_flash.duration = 0.13
+	add_child(cel_flash)
+	cel_flash.setup(bolt_color, bolt_hot_color)
 	# 4 voices: the 0.84 s shot overlaps itself at 4 shots/s.
 	_voices = Sfx.voices(self, Sfx.PISTOL_CANNON, 4, fire_sound_db, fire_sound_near, fire_sound_far,
 		_muzzle.position if _muzzle and _muzzle.get_parent() == self else Vector3.ZERO)
@@ -65,6 +75,7 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if b:
 		b.arm_side = arm_side
 	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color, true)
+	cel_flash.fire(from, dir)
 	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
 	fire_sounds += 1
 	shots_fired += 1

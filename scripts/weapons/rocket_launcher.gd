@@ -56,11 +56,22 @@ var _puffs: Array[ToonPuff] = []
 const SMOKE_PUFFS := 7
 const FIRE_PUFFS := 2
 var _smoke_t := 99.0
+## Extra big cartoon cel flash over the launch blast (more dramatic shots).
+var cel_flash: CelFlash
 
 
 func _ready() -> void:
 	_muzzle = find_marker(MUZZLE_MARKER)
 	_warhead = find_child("Warhead", true, false) as Node3D
+	cel_flash = CelFlash.new()
+	cel_flash.name = "CelFlash"
+	cel_flash.size = 1.1
+	cel_flash.cone_length = 1.5
+	cel_flash.sparks = 9
+	cel_flash.duration = 0.2
+	cel_flash.glow_size = 2.6
+	add_child(cel_flash)
+	cel_flash.setup(Color(1.0, 0.42, 0.06), Color(1.0, 0.85, 0.35))
 	if _warhead:
 		_warhead_rest = _warhead.transform
 
@@ -142,6 +153,7 @@ func fire_at(shooter: Node3D, _target_point: Vector3) -> bool:
 		_blast_i = (_blast_i + 1) % _blasts.size()
 	if flash:
 		flash.fire(Transform3D(mouth, muzzle_position()))
+	cel_flash.fire(muzzle_position(), mouth.z)
 	_puff_out(mouth.z, muzzle_position())
 	_voice = Sfx.play_next(_voices, _voice, Vector2(0.96, 1.04))
 	fire_sounds += 1
