@@ -41,6 +41,10 @@ const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_
 ## MINI_BOSS_MISSILE: the robot boss launching a missile (the launch blast
 ## starts ~1.04 s into the file; RobotBoss plays it from there).
 const MINI_BOSS_MISSILE := preload("res://assets/audio/enemies/mini_boss_missile_firing.mp3")
+## MINI_BOSS_WALKING: the owner's robot boss walking sound (three heavy
+## stomps, each with its servo whine); RobotBoss plays one stomp from it
+## every time one of its feet lands. Keep this exact file.
+const MINI_BOSS_WALKING := preload("res://assets/audio/enemies/mini_boss_walking.mp3")
 ## The owner's Rocket Launcher sounds - keep these exact files; never
 ## replace or regenerate them without asking. ROCKET_FIRING: each launch.
 ## ROCKET_EXPLODE_*: a rocket blowing up (one of the three at random, never

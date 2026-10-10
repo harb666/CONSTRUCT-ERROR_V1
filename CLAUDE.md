@@ -51,6 +51,11 @@
   5e7a586a472f453020cf2148a1fdd17f37be59de52b3e981e5d46ea41229b7c7).
   `RobotBoss.fire_missile()` plays it from the blast's onset
   (`missile_sound_start` 1.03 s) so it is in sync with the launch.
+- `assets/audio/enemies/mini_boss_walking.mp3` - the robot boss's footsteps,
+  supplied by the owner (sha256
+  d5dc01543c919ef0a022ff3fd73bd315f501919fee6069ae7c95163a1d37768e). Three
+  heavy stomps: `RobotBoss` plays one stomp cut from it each time one of its
+  feet lands (`step_sound_starts`, `_update_steps`), so it stays in sync.
 
 - `assets/audio/weapons/rocket_launcher_firing.ogg` (sha256
   7e547e4c9ced3b9f03cc9db1ca55c946d38c39fcfb24c3f8c9ebfcd6289a8642) - the

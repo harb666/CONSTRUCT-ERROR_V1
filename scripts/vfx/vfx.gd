@@ -216,12 +216,14 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	items.append(fire)
 	items.append(toon_flash(0, Color.ORANGE, Color.WHITE, Color.DARK_RED, Vector2.ONE * 0.3))
 	items.append(toon_flash(1, Color.ORANGE, Color.WHITE, Color.DARK_RED, Vector2.ONE * 0.3))
-	var beam := MeshInstance3D.new()
-	beam.mesh = QuadMesh.new()
-	var bm := ShaderMaterial.new()
-	bm.shader = preload("res://scripts/vfx/toon_beam.gdshader")
-	beam.material_override = bm
-	items.append(beam)
+	for sh: Shader in [preload("res://scripts/vfx/toon_beam.gdshader"), preload("res://scripts/vfx/magma_stream.gdshader"),
+			preload("res://scripts/vfx/fire_bolt.gdshader"), preload("res://scripts/vfx/toon_ring.gdshader")]:
+		var beam := MeshInstance3D.new()
+		beam.mesh = QuadMesh.new()
+		var bm := ShaderMaterial.new()
+		bm.shader = sh
+		beam.material_override = bm
+		items.append(beam)
 	var holo := MeshInstance3D.new()
 	var sph := SphereMesh.new()
 	sph.radius = 0.15

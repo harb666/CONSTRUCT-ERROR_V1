@@ -2957,6 +2957,9 @@ func _robot_boss_tests(main: Node) -> void:
 		if c is AudioStreamPlayer3D and c.stream == Sfx.MINI_BOSS_MISSILE and c.playing:
 			launch_snd = c
 	_check(boss.missile_sounds - ms0 == 1 and launch_snd != null and absf(launch_snd.get_playback_position() - boss.missile_sound_start) < 0.05 and launch_snd.global_position.distance_to(boss.missile_socket.global_position) < 0.05, "boss: the owner's missile firing sound starts at its launch blast the moment the missile fires")
+	const WALK_SHA := "d5dc01543c919ef0a022ff3fd73bd315f501919fee6069ae7c95163a1d37768e"
+	if FileAccess.file_exists("res://assets/audio/enemies/mini_boss_walking.mp3"):
+		_check(FileAccess.get_sha256("res://assets/audio/enemies/mini_boss_walking.mp3") == WALK_SHA, "audio: mini boss walking sound file is the owner's original, unchanged")
 	const MISSILE_SHA := "5e7a586a472f453020cf2148a1fdd17f37be59de52b3e981e5d46ea41229b7c7"
 	if FileAccess.file_exists("res://assets/audio/enemies/mini_boss_missile_firing.mp3"):
 		_check(FileAccess.get_sha256("res://assets/audio/enemies/mini_boss_missile_firing.mp3") == MISSILE_SHA, "audio: mini boss missile firing sound file is the owner's original, unchanged")
@@ -3173,8 +3176,14 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 	var feet := [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
 	var walked := {"frames": 0, "speed_err": 0.0}
 	var tracks := [[], []]
+	# Footsteps: when each stomp plays, where the walk clip is.
+	var step_at := []
+	var steps0 := boss.step_sounds
 	for i in 150:
+		var s_before := boss.step_sounds
 		await _ticks(1)
+		if boss.step_sounds > s_before and i >= 60 and boss.anim.current_animation == RobotBoss.WALK_CLIP:
+			step_at.append(snappedf(boss.anim.current_animation_position, 0.01))
 		if i < 60 or boss.anim.current_animation != RobotBoss.WALK_CLIP:
 			continue
 		walked.frames += 1
@@ -3183,6 +3192,12 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 		for k in 2:
 			tracks[k].append(sk.global_transform * sk.get_bone_global_pose(feet[k]).origin)
 	_check(walked.frames > 60, "boss: walks with its heavy walk (%d frames)" % walked.frames)
+	# Heavy_Walk's feet land at 0.70 s (left) and 1.60 s (right).
+	var in_sync := step_at.filter(func(t: float) -> bool: return absf(t - 0.7) < 0.12 or absf(t - 1.6) < 0.12)
+	_check(step_at.size() >= 1 and in_sync.size() == step_at.size(),
+		"boss: a stomp from the owner's walking sound plays each time a foot lands (walk clip at %s s; feet land at 0.70 / 1.60)" % [step_at])
+	var sv: DynamicSound = boss._step_voices[0] if not boss._step_voices.is_empty() else null
+	_check(sv != null and sv.stream == Sfx.MINI_BOSS_WALKING and boss.step_sounds > steps0, "boss: footsteps use the owner's walking sound (%d stomps)" % (boss.step_sounds - steps0))
 	_check(walked.speed_err < 0.05, "boss: walk animation speed matches the ground speed (worst %.3f m/s off)" % walked.speed_err)
 	# Planted foot: lowest stretch of each foot's track.
 	var worst_slide := 0.0
@@ -3356,6 +3371,7 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 	p.velocity = Vector3.ZERO
 	p.reset_physics_interpolation()
 	var steps0 := boss.turn_steps
+	var stomps0 := boss.step_sounds
 	var feet := [sk.find_bone("mixamorig_LeftFoot"), sk.find_bone("mixamorig_RightFoot")]
 	var span := [null, null]
 	var slide := 0.0
@@ -3386,6 +3402,8 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 	_check(p.global_position.distance_to(boss.global_position) < 8.0, "boss: (turn test: player stayed behind it)")
 	var steps := boss.turn_steps - steps0
 	_check(steps >= 3 and steps <= 5, "boss: 180-degree turn is several heavy steps (%d)" % steps)
+	var stomps := boss.step_sounds - stomps0
+	_check(stomps >= steps * 2 - 1 and stomps <= steps * 2 + 1, "boss: turning on the spot stomps with each foot (%d stomps for %d steps)" % [stomps, steps])
 	_check(absf(wrapf(boss._want_yaw - boss._yaw, -PI, PI)) < deg_to_rad(boss.turn_start_deg), "boss: ends up facing the player")
 	_check(slide < 0.05 * sc, "boss: planted feet stay put while it turns (%.3f m)" % slide)
 	_check(hips_jump < 0.06 * sc, "boss: steps hand over without a pop (%.3f m per tick)" % hips_jump)
@@ -3843,9 +3861,12 @@ func _vfx_tests() -> void:
 	_check(st._beam_shader_mat.shader == preload("res://scripts/vfx/magma_stream.gdshader") and st._beam.get_surface_count() == 1 and ShotgunStream.BEAM_WIDTH >= 0.25,
 		"vfx: shotgun streams are fat cartoon magma jets (Magma Cannon style)")
 	_check(st._bolt.get_surface_count() == ShotgunStream.BOLTS, "vfx: jagged fire bolts crackle round each stream (%d)" % st._bolt.get_surface_count())
-	var jag0: Vector2 = st._jags[0][1]
-	await _ticks(4)
-	_check(st._jags[0][1] != jag0, "vfx: the bolts re-jag as they crackle")
+	_check(st._bolt_mat.shader == preload("res://scripts/vfx/fire_bolt.gdshader") and float(st._bolt_mat.get_shader_parameter("rejag")) > 0.0, "vfx: the bolts re-jag as they crackle (in the shader)")
+	# No graphics buffers rebuilt every frame: meshes are built once per shot.
+	var builds0 := st.mesh_builds
+	var surf0 := st._beam.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] as PackedVector3Array
+	await _ticks(6)
+	_check(st.mesh_builds == builds0 and st._beam.surface_get_arrays(0)[Mesh.ARRAY_VERTEX] == surf0, "vfx: shotgun stream meshes are built once per shot, not every frame")
 	_check(sg._flash._fan.size() >= 5 and sg._flash.flame_length > 1.2, "vfx: shotgun blast has a fan of long fire tongues")
 	sg._flash.play()
 	await _ticks(2)

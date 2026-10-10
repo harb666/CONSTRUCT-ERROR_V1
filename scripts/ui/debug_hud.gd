@@ -40,9 +40,9 @@ func _ready() -> void:
 		var prev = JavaScriptBridge.eval("localStorage.getItem('ce_session') || ''")
 		var d = JSON.parse_string(str(prev)) if prev != null and str(prev) != "" else null
 		if d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
-			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, character %s, weapon %s, build %s" % [
+			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, memory %s MB, graphics %s MB, character %s, weapon %s, build %s" % [
 				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
-				int(d.get("nodes", 0)), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+				int(d.get("nodes", 0)), str(d.get("mem", "?")), str(d.get("vmem", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
 		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
@@ -128,7 +128,9 @@ func _record(delta: float) -> void:
 				_secs(_ready_at), _secs(a.running), _secs(a.firstSound), _secs(a.posReady)]
 	var d := {"t": snappedf(_session_t, 0.1), "fps": Engine.get_frames_per_second(), "robots": alive,
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
-		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0}
+		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0,
+		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
+		"vmem": snappedf(Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0, 1.0)}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
 
 

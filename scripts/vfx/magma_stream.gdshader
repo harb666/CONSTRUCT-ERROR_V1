@@ -12,6 +12,24 @@ uniform vec4 rim : source_color = vec4(0.6, 0.08, 0.02, 1.0);
 // 0..1: the core thins out as the trail fades.
 uniform float core = 1.0;
 uniform float seed = 0.0;
+// The ribbon is built once per shot along the whole path (VERTEX = point on
+// the path, NORMAL = path direction, UV2 = (share of the path, barrel
+// taper)) and turned to face the camera here; the part past the head (how
+// far it has flown) collapses onto `head_pos`. No per-frame mesh rebuilds.
+uniform float head = 1.0;
+uniform vec3 head_pos;
+uniform float width = 0.3;
+uniform float fade = 1.0;
+
+void vertex() {
+	vec3 p = VERTEX;
+	if (UV2.x > head) {
+		p = head_pos;
+	}
+	vec3 side = normalize(cross(normalize(NORMAL), normalize(CAMERA_POSITION_WORLD - p)));
+	VERTEX = p + side * (UV.y * 2.0 - 1.0) * width * 0.5 * UV2.y;
+	COLOR = vec4(1.0, 1.0, 1.0, fade);
+}
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
