@@ -1137,6 +1137,8 @@ func _respawn() -> void:
 	set_physics_process(true)
 	if _targetable:
 		_targetable.revive()
+	# Teleports back in (hologram materialising from the feet up).
+	Hologram.teleport_in(_visual, 0.0, Color(1.0, 0.35, 0.3))
 
 
 ## Angle (deg) between where the upper body faces and the target (tests).

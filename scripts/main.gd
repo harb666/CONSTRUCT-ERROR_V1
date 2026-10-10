@@ -54,6 +54,8 @@ func open_front_end() -> void:
 	_menu_camera.fov = 60.0
 	add_child(_menu_camera)
 	_menu_camera.make_current()
+	# Prepare the cartoon effects' shaders behind the title screen.
+	Vfx.warm_up(_menu_camera, 1.5)
 	var layer := CanvasLayer.new()
 	layer.name = "FrontEndLayer"
 	layer.layer = 20
@@ -100,6 +102,9 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	player.add_child(input)
 	player.input = input
 	players_root.add_child(player)
+	# Teleports in: materialises from the feet up (hologram).
+	Hologram.teleport_in(player.get_node("Visual"), 2.0)
+	player.respawned.connect(func() -> void: Hologram.teleport_in(player.get_node("Visual"), 2.0))
 	players[player_id] = player
 	player.add_to_group(&"players")  # enemies look for these
 	player.can_die = players_can_die

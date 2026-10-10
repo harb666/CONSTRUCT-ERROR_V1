@@ -1,9 +1,10 @@
 class_name MissileBlast
 extends Node3D
 ## Missile explosion (pooled, short and punchy): a white-hot impact flash,
-## a bright core, expanding orange/red fireballs, a mini SHOCKWAVE (a ring
+## a bright core, puffy 3D cartoon fireballs that burn from white-hot to
+## orange and roll into dark smoke clouds (ToonPuff), a mini SHOCKWAVE (a ring
 ## racing out along the ground plus a pressure ring facing the camera),
-## sparks, flying debris, thick smoke, a brief strong light and a scorch
+## sparks, flying debris, a brief strong light and a scorch
 ## mark that fades away. `spawn()` takes a pooled one (restarts it).
 ## Also used, smaller (`fx_scale`), for the boss core's internal explosion.
 
@@ -24,14 +25,15 @@ var _t := 99.0
 var _roll := 0.0
 var _flash: MeshInstance3D
 var _core: MeshInstance3D
-var _fire: Array[MeshInstance3D] = []
+## Fireballs (burn into smoke) then the smoke clouds left behind.
+var _fire: Array[ToonPuff] = []
+var _clouds: Array[ToonPuff] = []
 var _wave: MeshInstance3D
 var _wave_air: MeshInstance3D
 var _scorch: MeshInstance3D
 var _light: OmniLight3D
 var _sparks: CPUParticles3D
 var _debris: CPUParticles3D
-var _smoke: CPUParticles3D
 
 
 static func spawn(parent: Node, at: Vector3, blast_radius: float, scale_fx := 1.0, on_ground := true) -> MissileBlast:
@@ -79,10 +81,15 @@ func _ready() -> void:
 	sm.set_shader_parameter("tex", Vfx.TEX.scorch)
 	_scorch.material_override = sm
 	add_child(_scorch)
-	for k in 2:
-		var f := Vfx.quad("fireball", Color(1.0, 0.62, 0.22) if k == 0 else Color(1.0, 0.3, 0.06), Vector2.ONE)
+	for k in 5:
+		var f := ToonPuff.new()
 		add_child(f)
 		_fire.append(f)
+	for k in 3:
+		var c := ToonPuff.new()
+		c.set_colors(Color(0.36, 0.34, 0.33))
+		add_child(c)
+		_clouds.append(c)
 	_core = Vfx.quad("glow", Color(1.0, 0.92, 0.7), Vector2.ONE)
 	add_child(_core)
 	_flash = Vfx.quad("flare", Color(1.0, 0.97, 0.85), Vector2.ONE)
@@ -126,31 +133,6 @@ func _ready() -> void:
 	_debris.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_debris.emitting = false
 	add_child(_debris)
-	_smoke = CPUParticles3D.new()
-	var sq := QuadMesh.new()
-	sq.size = Vector2.ONE * 1.6
-	sq.material = Vfx.mix_material("smoke")
-	_smoke.mesh = sq
-	_smoke.amount = 16
-	_smoke.lifetime = 2.0
-	_smoke.one_shot = true
-	_smoke.explosiveness = 0.8
-	_smoke.local_coords = false
-	_smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	_smoke.emission_sphere_radius = 0.6
-	_smoke.direction = Vector3.UP
-	_smoke.spread = 60.0
-	_smoke.initial_velocity_min = 1.0
-	_smoke.initial_velocity_max = 3.0
-	_smoke.gravity = Vector3(0, 0.9, 0)
-	_smoke.damping_min = 1.2
-	_smoke.damping_max = 2.0
-	_smoke.angle_max = 180.0
-	_smoke.scale_amount_curve = Vfx.curve([Vector2(0, 0.5), Vector2(1, 1.8)])
-	_smoke.color_ramp = Vfx.ramp([Color(0.35, 0.3, 0.26, 0.0), Color(0.25, 0.22, 0.2, 0.75), Color(0.2, 0.2, 0.2, 0.0)], [0.0, 0.12, 1.0])
-	_smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_smoke.emitting = false
-	add_child(_smoke)
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.55, 0.2)
 	_light.shadow_enabled = false
@@ -169,13 +151,33 @@ func _start(at: Vector3) -> void:
 	# Ground ring and scorch lie flat (just above the ground point).
 	_wave.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), at + Vector3.UP * 0.08)
 	_scorch.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0).rotated(Vector3.UP, _roll).scaled(Vector3.ONE * r * 1.4), at + Vector3.UP * 0.04)
-	for p: CPUParticles3D in [_sparks, _debris, _smoke]:
+	for p: CPUParticles3D in [_sparks, _debris]:
 		p.scale_amount_min = fx_scale
 		p.scale_amount_max = fx_scale * (1.3 if p == _debris else 1.0)
 		p.restart()
 		p.emitting = true
 	_sparks.initial_velocity_max = 14.0 * sqrt(fx_scale)
 	_light.omni_range = r * 3.5
+	var base := at + Vector3.UP * 0.3 * fx_scale
+	for i in _fire.size():
+		var f := _fire[i]
+		var off := Vector3(randf_range(-1, 1), randf_range(0.0, 0.8), randf_range(-1, 1)) * r * (0.0 if i == 0 else 0.3)
+		f.size = r * (0.5 if i == 0 else randf_range(0.3, 0.42))
+		f.burn_time = randf_range(0.3, 0.45)
+		f.life = randf_range(1.1, 1.4)
+		f.rise = r * randf_range(0.25, 0.45)
+		f.drift = off * 0.6
+		f.delay = 0.0 if i == 0 else randf_range(0.0, 0.07)
+		f.play(base + off, true)
+	for i in _clouds.size():
+		var c := _clouds[i]
+		var off := Vector3(randf_range(-1, 1), 0.2, randf_range(-1, 1)) * r * 0.32
+		c.size = r * randf_range(0.42, 0.55)
+		c.life = randf_range(1.6, 2.0)
+		c.rise = r * randf_range(0.6, 0.9)
+		c.drift = off
+		c.delay = randf_range(0.18, 0.3)
+		c.play(base + off + Vector3.UP * r * 0.2, false)
 	visible = true
 	set_process(true)
 	_update()
@@ -207,11 +209,6 @@ func _update() -> void:
 	if _core.visible:
 		Vfx.face_camera(_core, r * (0.9 + 0.6 * ck))
 		Vfx.set_alpha(_core, 1.0 - ck)
-	for i in _fire.size():
-		var fs := r * (0.8 + 1.4 * sqrt(k)) * (1.0 if i == 0 else 1.25)
-		_fire[i].visible = k < 1.0
-		Vfx.face_camera(_fire[i], fs, _roll + i * 1.7 + k * (0.6 if i == 0 else -0.4))
-		Vfx.set_alpha(_fire[i], minf(fade * (1.6 if i == 0 else 1.1), 1.0))
 	# Shockwave: races out and thins.
 	var wk := clampf(_t / shockwave_time, 0.0, 1.0)
 	var we := 1.0 - pow(1.0 - wk, 3.0)

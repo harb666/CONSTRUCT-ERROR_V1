@@ -37,6 +37,10 @@ var _arc_ends: Array[Vector3] = []
 var _arc_t := 0.0
 var _sparks: CPUParticles3D
 var _roll := 0.0
+var _toon_star: MeshInstance3D
+var _toon_tongue: MeshInstance3D
+var _toon := false
+var _dir := Vector3.FORWARD
 var _color := GREEN
 var _hot := HOT
 static var _ramps := {}
@@ -45,11 +49,14 @@ static var _ramps := {}
 # --- Public API ---
 
 ## Green flash at a cannon muzzle, pointing along `dir`.
-static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3, col := GREEN, hot := HOT) -> void:
+## `toon`: the player's cartoon flash (a solid star burst and flame tongue
+## with a white-hot centre and dark rim, toon_flash.gdshader) instead of the
+## soft additive one the robots use.
+static func muzzle_flash(tree: SceneTree, at: Vector3, dir: Vector3, col := GREEN, hot := HOT, toon := false) -> void:
 	var f := _take(tree, Kind.FLASH)
 	if f:
 		f._recolor(col, hot)
-		f._start_flash(at, dir)
+		f._start_flash(at, dir, toon)
 	_flash_light(tree, at + dir * 0.1, col)
 
 
@@ -174,6 +181,10 @@ func _ready() -> void:
 		_ring = Vfx.quad("star", HOT, Vector2.ONE)  # hot core
 		add_child(_flash)
 		add_child(_ring)
+		_toon_star = Vfx.toon_flash(0, GREEN, HOT, GREEN.darkened(0.55), Vector2.ONE, 8.0)
+		_toon_tongue = Vfx.toon_flash(1, GREEN, HOT, GREEN.darkened(0.55), Vector2.ONE)
+		add_child(_toon_tongue)
+		add_child(_toon_star)
 	else:
 		_scorch = Vfx.quad("scorch", GREEN, Vector2.ONE)
 		add_child(_scorch)
@@ -201,8 +212,21 @@ func _ready() -> void:
 	set_process(false)
 
 
-func _start_flash(at: Vector3, dir: Vector3) -> void:
+func _start_flash(at: Vector3, dir: Vector3, toon := false) -> void:
 	global_position = at + dir * 0.06
+	_dir = dir.normalized()
+	_toon = toon
+	_flash.visible = not toon
+	_ring.visible = not toon
+	_toon_star.visible = toon
+	_toon_tongue.visible = toon
+	if toon:
+		for q in [_toon_star, _toon_tongue]:
+			var m := (q as MeshInstance3D).material_override as ShaderMaterial
+			m.set_shader_parameter("color", _color)
+			m.set_shader_parameter("hot", _hot)
+			m.set_shader_parameter("rim", _color.darkened(0.55))
+			Vfx.toon_reseed(q)
 	_t = 0.0
 	_life = 0.09
 	_roll = randf() * TAU
@@ -247,6 +271,21 @@ func _process(delta: float) -> void:
 		for a in _arcs:
 			a.visible = false
 		set_process(false)
+		return
+	if kind == Kind.FLASH and _toon:
+		var k := _t / _life
+		var grow := 1.0 - pow(1.0 - minf(k * 3.0, 1.0), 2.0)
+		Vfx.face_camera(_toon_star, lerpf(0.35, 0.62, grow), _roll)
+		Vfx.set_alpha(_toon_star, 1.0 - smoothstep(0.6, 1.0, k))
+		# Tongue along the shot, turned to face the camera round its axis.
+		var cam := get_viewport().get_camera_3d()
+		if cam:
+			var y := _dir
+			var x := y.cross((cam.global_position - global_position).normalized()).normalized()
+			if x.length_squared() > 0.01:
+				var l := lerpf(0.35, 0.75, grow)
+				_toon_tongue.global_transform = Transform3D(Basis(x * l * 0.42, y * l, x.cross(y)), global_position + y * l * 0.42)
+		Vfx.set_alpha(_toon_tongue, 1.0 - smoothstep(0.5, 1.0, k))
 		return
 	if kind == Kind.FLASH:
 		var k := _t / _life

@@ -113,10 +113,42 @@ static func face_camera(node: Node3D, size: float, roll := 0.0) -> void:
 	node.global_basis = Basis(x * c + y * s, -x * s + y * c, z).scaled(Vector3.ONE * size)
 
 
-## Fade an additive quad (its unique material) to `alpha`.
+## Fade an effect quad (its unique material) to `alpha`.
 static func set_alpha(mi: MeshInstance3D, alpha: float) -> void:
+	var sm := mi.material_override as ShaderMaterial
+	if sm:
+		sm.set_shader_parameter("fade", clampf(alpha, 0.0, 1.0))
+		return
 	var m := mi.material_override as StandardMaterial3D
 	m.albedo_color.a = clampf(alpha, 0.0, 1.0)
+
+
+const TOON_FLASH := preload("res://scripts/vfx/toon_flash.gdshader")
+
+
+## Cartoon flash quad (toon_flash.gdshader): `shape` 0 = star burst, 1 =
+## flame tongue along +Y. Unique material; fade with set_alpha, reshuffle
+## the spikes with toon_reseed.
+static func toon_flash(shape: int, color: Color, hot: Color, rim: Color, size: Vector2, spikes := 8.0) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = size
+	mi.mesh = q
+	var m := ShaderMaterial.new()
+	m.shader = TOON_FLASH
+	m.set_shader_parameter("shape", shape)
+	m.set_shader_parameter("color", color)
+	m.set_shader_parameter("hot", hot)
+	m.set_shader_parameter("rim", rim)
+	m.set_shader_parameter("spikes", spikes)
+	m.set_shader_parameter("seed", randf() * 100.0)
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+static func toon_reseed(mi: MeshInstance3D) -> void:
+	(mi.material_override as ShaderMaterial).set_shader_parameter("seed", randf() * 100.0)
 
 
 ## Alpha-blended (not additive) unshaded material, so effects can be dark
@@ -165,3 +197,44 @@ static func curve(points: Array) -> Curve:
 	for pt: Vector2 in points:
 		c.add_point(pt)
 	return c
+
+
+## Draws one of each cartoon effect material for a moment just in front of
+## `cam` (hidden behind the title screen), so phones prepare their shaders
+## before the match rather than stuttering the first time one is used.
+static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
+	if cam == null:
+		return
+	var root := Node3D.new()
+	root.name = "ShaderWarmUp"
+	cam.add_child(root)
+	# Tiny, in a bottom corner, under the title screen's dark backdrop.
+	root.position = Vector3(-2.4, -1.4, -3.0)
+	var items: Array[Node3D] = []
+	var fire := ToonPuff.new()
+	fire.top_level = false
+	items.append(fire)
+	items.append(toon_flash(0, Color.ORANGE, Color.WHITE, Color.DARK_RED, Vector2.ONE * 0.3))
+	items.append(toon_flash(1, Color.ORANGE, Color.WHITE, Color.DARK_RED, Vector2.ONE * 0.3))
+	var beam := MeshInstance3D.new()
+	beam.mesh = QuadMesh.new()
+	var bm := ShaderMaterial.new()
+	bm.shader = preload("res://scripts/vfx/toon_beam.gdshader")
+	beam.material_override = bm
+	items.append(beam)
+	var holo := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = 0.15
+	sph.height = 0.3
+	holo.mesh = sph
+	var hm := ShaderMaterial.new()
+	hm.shader = Hologram.SHADER
+	holo.material_override = hm
+	items.append(holo)
+	for i in items.size():
+		root.add_child(items[i])
+		items[i].position = Vector3(i * 0.06, 0, 0)
+		items[i].scale = Vector3.ONE * 0.05
+		items[i].visible = true
+	fire.set_process(false)
+	root.get_tree().create_timer(seconds, true).timeout.connect(root.queue_free)

@@ -97,6 +97,8 @@ signal damaged(info: DamageInfo)
 ## Health or armour changed (damage, pickups, respawn).
 signal vitals_changed
 signal died
+## Back at the spawn point (after dying or falling out of the level).
+signal respawned
 var damage_taken := 0.0
 
 @export_group("Health")
@@ -391,4 +393,5 @@ func respawn() -> void:
 	health = max_health
 	armour = minf(start_armour, max_armour)
 	vitals_changed.emit()
+	respawned.emit()
 	RecoveryDrops.clear_all(get_tree())

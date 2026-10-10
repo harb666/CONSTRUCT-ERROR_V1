@@ -28,6 +28,10 @@ const SPARK_COUNT := 18
 @export var size := 1.0
 ## A little smoke drifting off the muzzle while it fires.
 @export var smoke := false
+## The player's cartoon look: solid flame tongues and a star burst with a
+## white-hot centre and dark rim (toon_flash.gdshader) that read over the
+## bright arena. Off for the robots (their soft additive flash).
+@export var toon := false
 
 ## Flashes shown (one per round).
 var flashes := 0
@@ -56,14 +60,16 @@ var _since := 99.0
 func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	for k in 2:
-		var q := Vfx.quad("muzzle" if k == 0 else "flame_a", flame_color, Vector2(0.55, 1.0))
+		var q := Vfx.toon_flash(1, flame_color, hot_color, flame_color.darkened(0.55), Vector2(0.55, 1.0)) if toon \
+			else Vfx.quad("muzzle" if k == 0 else "flame_a", flame_color, Vector2(0.55, 1.0))
 		q.visible = false
 		add_child(q)
 		_tongues.append(q)
 	_glow = Vfx.quad("glow", flame_color, Vector2.ONE)
 	_glow.visible = false
 	add_child(_glow)
-	_core = Vfx.quad("star", hot_color, Vector2.ONE)
+	_core = Vfx.toon_flash(0, flame_color, hot_color, flame_color.darkened(0.55), Vector2.ONE, 8.0) if toon \
+		else Vfx.quad("star", hot_color, Vector2.ONE)
 	_core.visible = false
 	add_child(_core)
 	for i in 2:
@@ -138,6 +144,10 @@ func fire(energy: float, intensity := 1.0) -> void:
 		q.visible = true
 	_core.visible = true
 	_glow.visible = true
+	if toon:
+		Vfx.toon_reseed(_core)
+		for q in _tongues:
+			Vfx.toon_reseed(q)
 	# Tiny arcs licking out of the muzzle rim.
 	for i in _arcs.size():
 		var on := randf() < 0.35 + 0.6 * energy
@@ -178,7 +188,7 @@ func _process(delta: float) -> void:
 	_core.visible = on
 	_glow.visible = on
 	if on:
-		Vfx.face_camera(_core, 0.13 * _scale * gs * (1.0 - 0.4 * k), _roll)
+		Vfx.face_camera(_core, (0.24 if toon else 0.13) * _scale * gs * (1.0 - 0.4 * k), _roll)
 		Vfx.set_alpha(_core, 1.0 - k)
 		Vfx.face_camera(_glow, 0.32 * _scale * gs, -_roll)
 		Vfx.set_alpha(_glow, 0.55 * (1.0 - k))

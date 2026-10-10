@@ -508,6 +508,7 @@ func _run() -> void:
 	await _battle_arena_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
+	await _vfx_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
 
@@ -3657,6 +3658,56 @@ func _battle_arena_tests() -> void:
 	await _ticks(5)
 
 
+## Cartoon VFX (owner asked): puffy 3D fireballs / smoke, cartoon muzzle
+## flashes and shotgun beams on the player's weapons, hologram teleport-ins.
+func _vfx_tests() -> void:
+	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(20)
+	var p: PlayerController = main.players[1]
+	_check(not p.get_node("Visual").find_children("*", "Hologram", false, false).is_empty(), "vfx: the player teleports in (hologram) when spawned")
+	await _ticks(70)
+	_check(p.get_node("Visual").find_children("*", "Hologram", false, false).is_empty()
+		and Hologram._model_meshes(p.get_node("Visual")).all(func(g: GeometryInstance3D) -> bool: return g.material_overlay == null),
+		"vfx: teleport-in finishes and leaves the model as it was")
+	p.respawn()
+	await _ticks(2)
+	_check(not p.get_node("Visual").find_children("*", "Hologram", false, false).is_empty(), "vfx: respawning teleports the player in again")
+	# Explosion: 3D toon fireballs and clouds.
+	var b := MissileBlast.spawn(main, Vector3(0, 0, 30), 2.0)
+	await _ticks(3)
+	var puffs := b.find_children("*", "ToonPuff", false, false)
+	_check(puffs.size() == 8 and puffs.any(func(x: ToonPuff) -> bool: return x.visible), "vfx: explosions are puffy 3D fireballs + smoke clouds (%d)" % puffs.size())
+	await _ticks(200)
+	_check(not b.active and puffs.all(func(x: ToonPuff) -> bool: return not x.visible), "vfx: explosion clouds dissolve and the blast frees up")
+	# Weapons: player flashes are the cartoon ones, robots keep theirs.
+	var h := p.get_node("WeaponHolder") as WeaponHolder
+	h.equip(load("res://resources/weapons/machine_gun.tres"), "Right")
+	h.equip(load("res://resources/weapons/shotgun.tres"), "Left")
+	await _ticks(3)
+	var mg_flash := h.weapon("Right").find_child("MuzzleFlash", true, false) as MachineGunFlash
+	var sg := h.weapon("Left") as Shotgun
+	_check(mg_flash.toon and (mg_flash._core.material_override is ShaderMaterial), "vfx: machine gun flash is the cartoon one")
+	_check((sg._flash._fireball.material_override is ShaderMaterial) and (sg._flash._flames[0][0].material_override is ShaderMaterial), "vfx: shotgun flash is the cartoon one")
+	var rl := load("res://resources/weapons/rocket_launcher.tres") as WeaponDefinition
+	h.equip(rl, "Right")
+	await _ticks(3)
+	var launcher := h.weapon("Right") as RocketLauncher
+	_check(launcher._puffs.size() == RocketLauncher.SMOKE_PUFFS + RocketLauncher.FIRE_PUFFS, "vfx: rocket launcher blows out puffy 3D smoke")
+	var boss := main.find_children("*", "RobotBoss", true, false)
+	_check(boss.is_empty() or not (boss[0] as RobotBoss).gun_flash.toon, "vfx: the robots keep their own muzzle flashes")
+	# Shotgun stream: cartoon beam.
+	var st := ShotgunStream.fire(self, Vector3(0, 1, 30), Vector3(0, 1, 20), Vector3.FORWARD, 150.0, Color(1, 0.45, 0.05), Color(1, 0.95, 0.7), {})
+	await _ticks(2)
+	_check(st._beam_shader_mat.shader == preload("res://scripts/vfx/toon_beam.gdshader") and st._beam.get_surface_count() == 1, "vfx: shotgun streams are cartoon beams")
+	# Pads: weapons materialise with a faint hologram coat.
+	var spawner := main.get_node("ShotgunSpawnPad").find_child("WeaponSpawner", true, false) as WeaponSpawner
+	_check(spawner.display != null and Hologram._model_meshes(spawner.display).all(func(g: GeometryInstance3D) -> bool: return g.material_overlay is ShaderMaterial),
+		"vfx: pad weapons have a hologram coat")
+	main.queue_free()
+	await _ticks(5)
+
+
 ## Harbinger: playable like the Grinch (same player, her model), arm ends
 ## cut and sealed, weapons on both arms, soles flat, picked in the front end.
 func _harbinger_tests() -> void:
@@ -3684,7 +3735,7 @@ func _harbinger_tests() -> void:
 	await _ticks(30)
 	var p: PlayerController = main.players[1]
 	var vis := p.get_node_or_null("Visual/HarbingerVisual") as CharacterAnimator
-	_check(p.character == hdef and vis != null and p.get_node("Visual").get_child_count() == 1, "harbinger: DEPLOY spawns her (her model only)")
+	_check(p.character == hdef and vis != null and p.get_node("Visual").find_children("*", "CharacterAnimator", false, false).size() == 1, "harbinger: DEPLOY spawns her (her model only)")
 	var grinch: PlayerController = preload("res://scenes/player.tscn").instantiate()
 	var same := true
 	for prop in grinch.get_property_list():

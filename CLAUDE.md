@@ -107,6 +107,13 @@
   little slower (longer legs) so her feet don't slide. Her halo is a
   glowing blue electric ring (owner asked; shader-only, light on memory).
 
+- Cartoon VFX (owner asked, from the GDQuest VFX repo review): puffy 3D
+  fireballs/smoke for rocket + boss missile explosions and the rocket
+  launcher's smoke; cartoon muzzle flashes (plasma cannon, shotgun, machine
+  gun - player only, robots keep theirs) and cartoon shotgun beams;
+  hologram teleport-in for players, respawning robots, pad weapons and the
+  character-select preview; faint hologram coat on pad weapons.
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.

@@ -1,7 +1,8 @@
 class_name ShotgunStream
 extends Node3D
-## One shotgun energy stream (pooled), drawn like a railgun trail: a solid
-## white-hot core beam with a wide orange glow, wrapped in a spiral ribbon
+## One shotgun energy stream (pooled), drawn like a railgun trail: a cartoon
+## beam (solid white-hot core, orange body, dark rim, pulses racing along
+## it - toon_beam.gdshader), wrapped in a spiral ribbon
 ## and sparkling motes. It races from its barrel to the impact at `speed`
 ## (feels instant, but visible), then the whole trail lingers, the spiral
 ## slowly widening and fading. The path may curve slightly (a stream
@@ -20,8 +21,9 @@ const TWIST := 1.5
 const RIBBON := 0.07
 const SEGMENTS_PER_M := 14.0
 const BEAM_SEGMENTS := 10
-const CORE_WIDTH := 0.075
-const GLOW_WIDTH := 0.2
+## Width of the cartoon beam (core + body + rim).
+const BEAM_WIDTH := 0.13
+const BEAM_SHADER := preload("res://scripts/vfx/toon_beam.gdshader")
 const HELIX_SHADER := preload("res://scripts/vfx/rail_helix.gdshader")
 
 static var _pool: Array[ShotgunStream] = []
@@ -49,10 +51,9 @@ var _beam_mi: MeshInstance3D
 var _helix: ArrayMesh
 var _helix_mi: MeshInstance3D
 var _helix_mat: ShaderMaterial
+var _beam_shader_mat: ShaderMaterial
 var _mm: MultiMesh
 var _head: MeshInstance3D
-static var _beam_mat: StandardMaterial3D
-static var _glow_mat: StandardMaterial3D
 
 
 ## Fire a stream from `from` to `to`. `leave_dir` is the direction it leaves
@@ -95,11 +96,8 @@ func _ready() -> void:
 	top_level = true
 	global_transform = Transform3D.IDENTITY
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	if _beam_mat == null:
-		# Hot core adds light; the orange glow is alpha-blended so it stays
-		# orange (and each stream distinct) even over bright surfaces.
-		_beam_mat = Vfx.material("glow", Color.WHITE, BaseMaterial3D.BILLBOARD_DISABLED, true)
-		_glow_mat = Vfx.mix_material("dot", BaseMaterial3D.BILLBOARD_DISABLED)
+	_beam_shader_mat = ShaderMaterial.new()
+	_beam_shader_mat.shader = BEAM_SHADER
 	_beam = ImmediateMesh.new()
 	_beam_mi = MeshInstance3D.new()
 	_beam_mi.mesh = _beam
@@ -156,6 +154,9 @@ func _launch(from: Vector3, to: Vector3, leave_dir: Vector3, speed: float, color
 	_n2 = d.cross(_n1).normalized()
 	_build_helix()
 	_helix_mat.set_shader_parameter("color", Color(color.r, color.g, color.b, 0.95))
+	_beam_shader_mat.set_shader_parameter("color", color)
+	_beam_shader_mat.set_shader_parameter("hot", hot)
+	_beam_shader_mat.set_shader_parameter("rim", color.darkened(0.5))
 	_helix_mat.set_shader_parameter("hot", hot)
 	_helix_mat.set_shader_parameter("head", 0.0)
 	_helix_mat.set_shader_parameter("fade", 1.0)
@@ -253,33 +254,30 @@ func _process(delta: float) -> void:
 		Vfx.face_camera(_head, 0.42, _t * 20.0)
 
 
-## Camera-facing beam strips (glow + core) from the barrel to the head.
+## Camera-facing cartoon beam (toon_beam.gdshader: white-hot core, orange
+## body, dark rim, racing pulses) from the barrel to the head.
 func _draw_beam(head: float, fade: float, linger: float) -> void:
 	_beam.clear_surfaces()
 	var cam := get_viewport().get_camera_3d()
 	if cam == null or head <= 0.0:
 		return
-	var core_a := fade * fade * fade  # the hot core goes first
-	var glow_a := fade * fade * 0.75
-	var glow_col := Color(_color.r, _color.g, _color.b, glow_a)
-	var core_col := Color(_hot.r, _hot.g, _hot.b, core_a)
-	for layer in 2:
-		var width := (GLOW_WIDTH * (1.0 + linger * 0.6)) if layer == 0 else CORE_WIDTH
-		var col := glow_col if layer == 0 else core_col
-		_beam.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _glow_mat if layer == 0 else _beam_mat)
-		for i in BEAM_SEGMENTS + 1:
-			var u := head * float(i) / BEAM_SEGMENTS
-			var p := _point(u)
-			var side := _tangent(u).cross((cam.global_position - p).normalized()).normalized()
-			# Taper in at the barrel.
-			var w := width * 0.5 * clampf(u * _len / 0.35, 0.3, 1.0)
-			_beam.surface_set_color(col)
-			_beam.surface_set_uv(Vector2(0.5, 0.0))
-			_beam.surface_add_vertex(p - side * w)
-			_beam.surface_set_color(col)
-			_beam.surface_set_uv(Vector2(0.5, 1.0))
-			_beam.surface_add_vertex(p + side * w)
-		_beam.surface_end()
+	_beam_shader_mat.set_shader_parameter("core", fade * fade)
+	var col := Color(1, 1, 1, fade * fade)
+	var width := BEAM_WIDTH * (1.0 + linger * 0.5) * (0.6 + 0.4 * fade)
+	_beam.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _beam_shader_mat)
+	for i in BEAM_SEGMENTS + 1:
+		var u := head * float(i) / BEAM_SEGMENTS
+		var p := _point(u)
+		var side := _tangent(u).cross((cam.global_position - p).normalized()).normalized()
+		# Taper in at the barrel.
+		var w := width * 0.5 * clampf(u * _len / 0.35, 0.3, 1.0)
+		_beam.surface_set_color(col)
+		_beam.surface_set_uv(Vector2(u * _len, 0.0))
+		_beam.surface_add_vertex(p - side * w)
+		_beam.surface_set_color(col)
+		_beam.surface_set_uv(Vector2(u * _len, 1.0))
+		_beam.surface_add_vertex(p + side * w)
+	_beam.surface_end()
 
 
 func _finish() -> void:

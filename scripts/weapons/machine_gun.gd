@@ -163,6 +163,7 @@ func _ready() -> void:
 	_body.add_child(_fx)
 	_flash = MachineGunFlash.new()
 	_flash.name = "MuzzleFlash"
+	_flash.toon = true
 	_flash.position = _muzzle.position if _muzzle else Vector3(0.44, 0, 0)
 	_flash.length = 0.42
 	_flash.flash_life = 0.045

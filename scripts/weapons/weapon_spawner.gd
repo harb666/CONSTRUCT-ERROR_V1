@@ -58,6 +58,9 @@ func spawn_display() -> void:
 	display.position = -display.get_visual_center() * weapon.display_scale
 	display.on_displayed()
 	_update_pivot()
+	# A faint hologram coat in the weapon's colour; it materialises in.
+	Hologram.idle(display, weapon.accent_color.lightened(0.3))
+	Hologram.teleport_in(display, 0.0, weapon.accent_color.lightened(0.3), 0.6)
 	# A player may already be standing in the zone.
 	for body in _area.get_overlapping_bodies():
 		_on_body_entered(body)

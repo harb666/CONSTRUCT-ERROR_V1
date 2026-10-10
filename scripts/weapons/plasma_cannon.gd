@@ -64,7 +64,7 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	var b := PlasmaBolt.fire(get_tree(), from, dir, shooter, bolt_speed, damage, bolt_color, bolt_hot_color, pass_group)
 	if b:
 		b.arm_side = arm_side
-	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color)
+	PlasmaFx.muzzle_flash(get_tree(), from, dir, bolt_color, bolt_hot_color, true)
 	_voice = Sfx.play_next(_voices, _voice, fire_sound_pitch)
 	fire_sounds += 1
 	shots_fired += 1

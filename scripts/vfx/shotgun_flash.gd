@@ -2,9 +2,10 @@ class_name ShotgunFlash
 extends Node3D
 ## Flaming muzzle flash for the five-barrel shotgun, owned by the gun (child
 ## of its root; +X = firing direction) and restarted on every shot:
-##  - a long flame tongue out of every barrel (three layered flame sprites,
-##    crossed so they read from any angle),
-##  - a rolling fireball and a white-hot flare across the barrel cluster,
+##  - a long cartoon flame tongue out of every barrel (two crossed solid
+##    tongues with a white-hot centre and dark red rim - toon_flash.gdshader,
+##    they show over the bright arena - plus a soft hot core),
+##  - a cartoon star-burst fireball and a white-hot flare across the barrels,
 ##    with a wide orange glow,
 ##  - flame licks that keep burning and curl away for a moment afterwards,
 ##  - a spray of sparks, a little smoke and a bright orange light.
@@ -14,6 +15,7 @@ extends Node3D
 const ORANGE := Color(1.0, 0.42, 0.05)
 const YELLOW := Color(1.0, 0.72, 0.2)
 const WHITE_HOT := Color(1.0, 0.95, 0.8)
+const RIM := Color(0.62, 0.12, 0.02)
 
 ## Barrel muzzle positions (local to the gun).
 var barrels: Array[Vector3] = []
@@ -44,8 +46,10 @@ func _ready() -> void:
 	_centre /= maxf(barrels.size(), 1)
 	for i in barrels.size():
 		var layers: Array = []
-		layers.append(Vfx.quad("flame_a" if i % 2 == 0 else "flame_b", ORANGE, Vector2.ONE))
-		layers.append(Vfx.quad("flame_b" if i % 2 == 0 else "flame_a", ORANGE, Vector2.ONE))
+		# Two crossed cartoon flame tongues (solid, white-hot centre, dark
+		# red rim: they read over the bright arena) and a soft hot core.
+		layers.append(Vfx.toon_flash(1, ORANGE, WHITE_HOT, RIM, Vector2.ONE))
+		layers.append(Vfx.toon_flash(1, ORANGE, WHITE_HOT, RIM, Vector2.ONE))
 		layers.append(Vfx.quad("flame_c", YELLOW, Vector2.ONE))
 		for q: MeshInstance3D in layers:
 			q.visible = false
@@ -55,7 +59,7 @@ func _ready() -> void:
 	_glow.top_level = true
 	_glow.visible = false
 	add_child(_glow)
-	_fireball = Vfx.quad("fireball", YELLOW, Vector2.ONE)
+	_fireball = Vfx.toon_flash(0, ORANGE, WHITE_HOT, RIM, Vector2.ONE, 10.0)
 	_fireball.top_level = true
 	_fireball.visible = false
 	add_child(_fireball)
@@ -156,6 +160,10 @@ func play(strength := 1.0) -> void:
 	intensity = maxf(strength, 0.0)
 	_t = 0.0
 	_roll = randf() * TAU
+	Vfx.toon_reseed(_fireball)
+	for layers: Array in _flames:
+		Vfx.toon_reseed(layers[0])
+		Vfx.toon_reseed(layers[1])
 	for layers: Array in _flames:
 		for q: MeshInstance3D in layers:
 			q.visible = true

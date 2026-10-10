@@ -40,6 +40,11 @@ var flash: RocketMuzzleFlash
 var _blasts: Array[LauncherBlast] = []
 var _blast_i := 0
 var _barrel_smoke: CPUParticles3D
+## Puffy cartoon smoke clouds blown out of the muzzle (ToonPuff), plus two
+## fire puffs at the mouth.
+var _puffs: Array[ToonPuff] = []
+const SMOKE_PUFFS := 7
+const FIRE_PUFFS := 2
 var _smoke_t := 99.0
 
 
@@ -57,7 +62,9 @@ func on_equipped(owner_player: Node) -> void:
 			var b := LauncherBlast.new()
 			b.smoke_scale = smoke_scale
 			b.smoke_speed = smoke_speed
-			b.smoke_amount = smoke_amount
+			# The thick smoke is the puffy 3D clouds below; the blast keeps
+			# only a few wisps of its own.
+			b.smoke_amount = 0.1
 			# Clear at first so the fire flash shows, then thick grey smoke.
 			b.smoke_ramp = Vfx.ramp([Color(0.9, 0.6, 0.35, 0.0), Color(0.55, 0.5, 0.46, 0.85), Color(0.4, 0.39, 0.38, 0.8), Color(0.38, 0.37, 0.36, 0.0)], [0.0, 0.07, 0.4, 1.0])
 			add_child(b)
@@ -66,6 +73,11 @@ func on_equipped(owner_player: Node) -> void:
 		add_child(_barrel_smoke)
 		flash = RocketMuzzleFlash.new()
 		add_child(flash)
+		for k in SMOKE_PUFFS + FIRE_PUFFS:
+			var pf := ToonPuff.new()
+			pf.set_colors(Color(0.6, 0.58, 0.56))
+			add_child(pf)
+			_puffs.append(pf)
 
 
 func _process(delta: float) -> void:
@@ -117,12 +129,44 @@ func fire_at(shooter: Node3D, _target_point: Vector3) -> bool:
 		_blast_i = (_blast_i + 1) % _blasts.size()
 	if flash:
 		flash.fire(Transform3D(mouth, muzzle_position()))
+	_puff_out(mouth.z, muzzle_position())
 	if _barrel_smoke:
 		_barrel_smoke.restart()
 		_smoke_t = 0.0
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
 	return true
+
+
+## Thick puffy smoke blown out of the muzzle along `dir`, spreading and
+## rolling upwards; two short fire puffs right at the mouth.
+func _puff_out(dir: Vector3, at: Vector3) -> void:
+	if _puffs.is_empty():
+		return
+	var side := dir.cross(Vector3.UP).normalized()
+	if side.length_squared() < 0.01:
+		side = Vector3.RIGHT
+	var up := side.cross(dir).normalized()
+	for i in _puffs.size():
+		var p := _puffs[i]
+		if i < FIRE_PUFFS:
+			p.size = randf_range(0.32, 0.42) * smoke_scale * 0.8
+			p.burn_time = 0.16
+			p.life = 0.55
+			p.rise = 0.1
+			p.drift = dir * 0.5
+			p.delay = 0.0
+			p.play(at + dir * (0.1 + 0.15 * i), true)
+			continue
+		var k := float(i - FIRE_PUFFS) / maxf(SMOKE_PUFFS - 1, 1)
+		var spread := (side * randf_range(-1, 1) + up * randf_range(-0.6, 1)) * (0.15 + 0.35 * k)
+		p.size = lerpf(0.28, 0.55, k) * randf_range(0.85, 1.15) * smoke_scale * 0.5
+		p.burn_time = 0.0
+		p.life = randf_range(1.1, 1.6)
+		p.rise = randf_range(0.4, 0.8)
+		p.drift = dir * (0.5 + 1.3 * k) * smoke_speed * 2.0 + spread * 1.5
+		p.delay = 0.02 + 0.05 * k
+		p.play(at + dir * (0.15 + 0.5 * k) + spread * 0.3, false)
 
 
 ## +Z out of the barrel.
