@@ -381,6 +381,7 @@ func _run() -> void:
 		# Portal frames follow the size: opening cells while growing, closing
 		# cells while collapsing, ring always `ring` x the core's size.
 		var pt := BlackHolePortal.new()
+		pt.process_mode = Node.PROCESS_MODE_DISABLED
 		root.add_child(pt)
 		var ok_sync := true
 		for fr in [0.15, 0.4, 0.75, 0.95]:
@@ -398,7 +399,7 @@ func _run() -> void:
 			"vfx: portal opens / closes frame by frame with the black hole's size (half size -> ring %.2f of open)" % f5)
 		pt.reveal(1.0, false)
 		var l0 := pt.cells()
-		await _ticks(30)
+		pt._process(0.5)  # (stepped by hand: this flight test is timing-sensitive)
 		_check(pt.cells().y < BlackHolePortal.LOOP_CELLS and pt.cells() != l0, "vfx: open portal loops the video's swirl")
 		pt.queue_free()
 		await _ticks(12)
