@@ -374,6 +374,8 @@ func _run() -> void:
 	if projs.size() > n_before:
 		var pr: BlackHoleProjectile = projs[n_before]
 		_check(pr._size < 0.4, "fired black hole is still chamber-sized leaving the gun (%.2f m)" % pr._size)
+		var bg := holder.current as BlackHoleGenerator
+		_check(bg.cel_flash != null and bg.cel_flash.flashes > 0 and bg.cel_flash.size >= 1.4, "vfx: black hole gun - big cartoon cel flash on launch")
 		await _ticks(12)
 		_check(is_instance_valid(pr) and pr._size > 2.5, "then expands to ~3 m (%.2f m)" % (pr._size if is_instance_valid(pr) else -1.0))
 		if is_instance_valid(pr):
@@ -971,6 +973,7 @@ func _robot_combat_tests(main: Node) -> void:
 	_check(r.shots_fired >= 6, "fires bursts from its cannons (%d shots in 6 s)" % r.shots_fired)
 	_check(r.shots_fired < 40, "bursts, not constant spam (%d shots in 6 s)" % r.shots_fired)
 	_check(bolts_max > 0, "green plasma bolts fly (%d at once)" % bolts_max)
+	_check(r.cel_flashes > 0, "vfx: grunt fires with a green cartoon cel flash (%d)" % r.cel_flashes)
 	_check(p.damage_taken > hits_before, "plasma hits the player (%.0f hits)" % (p.damage_taken - hits_before))
 	var m0 := r._aim.muzzle_position(0)
 	var m1 := r._aim.muzzle_position(1)
@@ -1700,6 +1703,10 @@ func _skirmisher_tests(main: Node) -> void:
 		jumps += q.jumps
 		turns += q.turns
 	_check(squad.all(func(q: RobotSkirmisher) -> bool: return q.target == p), "skirmishers engage the player")
+	var sk_cel := 0
+	for q: RobotSkirmisher in squad:
+		sk_cel += q.cel_flashes
+	_check(sk_cel > 0, "vfx: skirmishers fire with yellow cartoon cel flashes (%d)" % sk_cel)
 	_check(jumps == 0 and evades > 0, "skirmishers never jump (owner turned it off; %d evades: sidesteps / dives)" % evades)
 	_check(max_speed > 4.2, "skirmishers are fast (top %.1f m/s; first robot 2.6)" % max_speed)
 	_check(samples > 0 and float(still) / samples < 0.15, "skirmishers keep moving while fighting (%.0f%% of the time still)" % (100.0 * still / maxf(samples, 1)))

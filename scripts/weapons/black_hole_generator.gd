@@ -8,6 +8,9 @@ signal fired(projectile: BlackHoleProjectile)
 
 const CHAMBER_MARKER := "Black_Hole_Projectile_Spawn"
 
+## Big cartoon cel flash on each shot (over the usual muzzle flash).
+var cel_flash: CelFlash
+
 @export var core_scene: PackedScene
 @export var projectile_scene: PackedScene
 ## Size of the core inside the chamber (m across).
@@ -208,6 +211,20 @@ func _launch() -> void:
 	var muzzle := find_marker(MUZZLE_MARKER)
 	if muzzle:
 		MuzzleFlash.spawn(muzzle)
+	# Big dramatic cartoon cel flash over it (purple / pink, long, many sparks).
+	if cel_flash == null:
+		cel_flash = CelFlash.new()
+		cel_flash.name = "CelFlash"
+		cel_flash.size = 1.5
+		cel_flash.cone_length = 2.1
+		cel_flash.cones = 4
+		cel_flash.sparks = 12
+		cel_flash.duration = 0.32
+		cel_flash.glow_size = 3.0
+		cel_flash.glow_strength = 1.0
+		add_child(cel_flash)
+		cel_flash.setup(Vfx.PURPLE, Vfx.PINK)
+	cel_flash.fire(muzzle.global_position if muzzle else start, dir)
 	# Rides along with the gun so it stays with the player while they move.
 	var shot := Sfx.emitter(muzzle if muzzle else self, Sfx.BH_FIRE, fire_volume_db, fire_near, fire_far)
 	shot.finished.connect(shot.queue_free)

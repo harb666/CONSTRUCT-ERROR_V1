@@ -147,8 +147,9 @@
   The boss doesn't squash.
 - Brighter, more dramatic muzzle flashes (owner asked): a VFEZ-style cartoon
   cel flash (`CelFlash`) layered OVER the existing flashes (unchanged) of
-  the plasma cannon, machine gun, rocket launcher and the boss's chaingun
-  (large, every round). Shotgun unchanged.
+  the plasma cannon, machine gun, rocket launcher, the boss's chaingun
+  (large, every round) and the black hole gun (big, purple / pink); grunts
+  (green) and skirmishers (yellow) get smaller ones. Shotgun unchanged.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this

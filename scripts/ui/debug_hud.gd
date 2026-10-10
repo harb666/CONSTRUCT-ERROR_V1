@@ -28,6 +28,8 @@ var _last_session_t := 0.0
 var _ready_at := -1.0
 var _audio_text := ""
 var _vmem0 := -1.0
+var _heap0 := -1.0
+var _hpeak := 0.0
 var _vpeak := 0.0
 
 
@@ -50,9 +52,9 @@ func _ready() -> void:
 		var prev = JavaScriptBridge.eval("localStorage.getItem('ce_session') || ''")
 		var d = JSON.parse_string(str(prev)) if prev != null and str(prev) != "" else null
 		if d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
-			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, memory %s MB, graphics %s MB (start %s, peak %s), character %s, weapon %s, build %s" % [
+			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), character %s, weapon %s, build %s" % [
 				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
-				int(d.get("nodes", 0)), str(d.get("mem", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+				int(d.get("nodes", 0)), str(d.get("heap", "?")), str(d.get("heap0", "?")), str(d.get("hpeak", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
 		var ev = JavaScriptBridge.eval("localStorage.getItem('ce_events') || ''")
 		if _last_session != "" and ev != null and str(ev) != "":
 			_last_session += ", last events: " + str(ev)
@@ -145,7 +147,8 @@ func _record(delta: float) -> void:
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0,
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
-		"vmem": snappedf(_vmem(), 1.0), "vmem0": snappedf(_vmem0, 1.0), "vpeak": snappedf(_vpeak, 1.0)}
+		"vmem": snappedf(_vmem(), 1.0), "vmem0": snappedf(_vmem0, 1.0), "vpeak": snappedf(_vpeak, 1.0),
+		"heap": snappedf(_heap(), 1.0), "heap0": snappedf(_heap0, 1.0), "hpeak": snappedf(_hpeak, 1.0)}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
 
 
@@ -158,6 +161,18 @@ static func note(what: String) -> void:
 	if _notes.size() > MAX_NOTES:
 		_notes.remove_at(0)
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_events', %s); } catch (e) {}" % JSON.stringify(" | ".join(_notes)))
+
+
+## The browser's memory for the game (its WebAssembly heap, MB; it only
+## grows): now, the first reading in play and the highest.
+func _heap() -> float:
+	var v = JavaScriptBridge.eval("(function(){ try { return engine.rtenv.HEAP8.length / 1048576; } catch (e) { return -1; } })()")
+	var h := float(v) if v != null else -1.0
+	if h > 0.0:
+		if _heap0 < 0.0:
+			_heap0 = h
+		_hpeak = maxf(_hpeak, h)
+	return h
 
 
 ## Graphics memory now (MB); the first reading in play and the highest.

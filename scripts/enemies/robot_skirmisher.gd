@@ -1091,6 +1091,15 @@ func _fire_one() -> void:
 		_glow_pulse[i] = 1.0
 	if _cam_d < fx_distance:
 		_flash(muzzle, dir)
+		var f := CelFlash.shared(get_tree(), "skirmisher", PLASMA_YELLOW, PLASMA_HOT, func(n: CelFlash) -> void:
+			n.size = 0.5
+			n.cone_length = 2.0
+			n.cones = 2
+			n.sparks = 4
+			n.duration = 0.07
+			n.glow_size = 1.9)
+		f.fire(muzzle, dir)
+		cel_flashes += 1
 
 
 ## Shared pool of machine-gun muzzle flashes (the player's yellow flash).

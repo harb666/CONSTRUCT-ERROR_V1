@@ -155,6 +155,10 @@ var _pulled_frame := -100
 
 ## Global switch (tests turn robot AI off for deterministic checks).
 static var ai_enabled := true
+## Cartoon cel muzzle flashes (over the usual ones) within this camera
+## distance (m); counted for tests.
+@export var cel_flash_distance := 35.0
+var cel_flashes := 0
 ## Cannon muzzles (the green tips) in each hand bone's space.
 const MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(0.017, 0.146, 0.009)}
 ## Current combat target (a player) or null.
@@ -765,6 +769,23 @@ func _update_fire(delta: float, dist: float) -> void:
 		_on_burst_start()
 
 
+## Cartoon cel flash over the green muzzle flash (shared pool; near the
+## camera only).
+func _cel_flash(at: Vector3, dir: Vector3) -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null or cam.global_position.distance_to(at) > cel_flash_distance:
+		return
+	var f := CelFlash.shared(get_tree(), "grunt", PlasmaFx.GREEN, PlasmaFx.HOT, func(n: CelFlash) -> void:
+		n.size = 0.42
+		n.cone_length = 1.8
+		n.cones = 2
+		n.sparks = 4
+		n.duration = 0.09
+		n.glow_size = 2.0)
+	f.fire(at, dir)
+	cel_flashes += 1
+
+
 ## A burst begins (subclasses: sound).
 func _on_burst_start() -> void:
 	pass
@@ -788,6 +809,7 @@ func _fire_one() -> void:
 		dir = dir.rotated(right.normalized(), randf_range(-spread, spread) * 0.6)
 	PlasmaBolt.fire(get_tree(), muzzle, dir, self, bolt_speed, bolt_damage)
 	PlasmaFx.muzzle_flash(get_tree(), muzzle, dir)
+	_cel_flash(muzzle, dir)
 	if _shot_voices.is_empty():
 		# 4 voices: a 3-4 shot burst of the 0.9 s sound, each left to finish.
 		_shot_voices = Sfx.voices(self, Sfx.ENEMY_TROOP_1_FIRING, 4, shot_sound_db, shot_sound_near, shot_sound_far, Vector3.UP * 1.3)

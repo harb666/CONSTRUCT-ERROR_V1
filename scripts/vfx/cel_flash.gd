@@ -22,6 +22,9 @@ const SHADER := preload("res://scripts/vfx/cel_flash.gdshader")
 @export var glow_strength := 0.9
 
 var flashes := 0
+## Shared pools (robots): key -> Array[CelFlash].
+static var _pools := {}
+const POOL_SIZE := 4
 var _t := 99.0
 var _strength := 1.0
 var _star: MeshInstance3D
@@ -30,6 +33,32 @@ var _sparks: Array[MeshInstance3D] = []
 var _spark_dir: Array[Vector3] = []
 var _glow: MeshInstance3D
 var _mats: Array[ShaderMaterial] = []
+
+
+## A free flash from a small shared pool (robots: many shooters, one look
+## each); `make` configures a new one (sizes) before setup. The oldest is
+## reused when all are busy. Parented to the scene, positioned per shot.
+static func shared(tree: SceneTree, key: String, base: Color, hot: Color, make: Callable) -> CelFlash:
+	var pool: Array = _pools.get(key, [])
+	pool = pool.filter(func(f) -> bool: return is_instance_valid(f) and f.is_inside_tree())
+	_pools[key] = pool
+	for f: CelFlash in pool:
+		if not f.is_flashing():
+			return f
+	if pool.size() < POOL_SIZE:
+		var f := CelFlash.new()
+		f.name = "CelFlash_" + key
+		make.call(f)
+		var host: Node = tree.current_scene if tree.current_scene else tree.root
+		host.add_child(f)
+		f.setup(base, hot)
+		pool.append(f)
+		return f
+	var oldest: CelFlash = pool[0]
+	for f: CelFlash in pool:
+		if f._t > oldest._t:
+			oldest = f
+	return oldest
 
 
 ## `base` = the weapon's colour; the palette is built from it (white-hot
