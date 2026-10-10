@@ -17,16 +17,28 @@ extends SkeletonModifier3D
 @export var max_kick_speed := 14.0
 ## Bone that leans (light robots use the same reaction).
 @export var bone_name := &"mixamorig_Spine1"
+## Cartoon flinch (light robots and players; 0 = off, the boss): the upper
+## body squashes down and bulges out on the hit, springs up into a stretch
+## and wobbles back - squash per unit of kick, and its springy wobble.
+@export var squash := 0.0
+@export var squash_bone := &"mixamorig_Spine"
+@export var squash_stiffness := 260.0
+@export var squash_damping := 9.0
+@export var max_squash := 0.32
 
 var _bone := -1
 var _axis := Vector3.RIGHT
 var _r := 0.0
 var _v := 0.0
 var _shake := 0.0
+var _sq_bone := -1
+var _q := 0.0
+var _qv := 0.0
 
 
 func setup(skel: Skeleton3D) -> void:
 	_bone = skel.find_bone(bone_name)
+	_sq_bone = skel.find_bone(squash_bone)
 
 
 ## A hit: `strength` 0..1 (1 = heavy), from world direction `dir` (the way
@@ -43,6 +55,14 @@ func kick(strength: float, dir: Vector3) -> void:
 	_axis = Vector3.UP.cross(d.normalized()).normalized()
 	_v = minf(_v + 9.0 * clampf(strength, 0.0, 1.5), max_kick_speed)
 	_shake = minf(_shake + strength, 1.5)
+	if squash > 0.0:
+		_qv -= 14.0 * squash * clampf(strength, 0.0, 1.5)
+		_qv = maxf(_qv, -14.0 * max_squash * 1.5)
+
+
+## Current squash (-squash, +stretch) for tests.
+func squash_amount() -> float:
+	return _q
 
 
 ## Current lean (0..~1) for tests.
@@ -60,7 +80,17 @@ func _process_modification() -> void:
 	for i in steps:
 		_v += (-stiffness * _r - damping * _v) * h
 		_r += _v * h
+		_qv += (-squash_stiffness * _q - squash_damping * _qv) * h
+		_q = clampf(_q + _qv * h, -max_squash, max_squash)
 	_shake = move_toward(_shake, 0.0, dt * 4.0)
+	if absf(_q) < 1e-4 and absf(_qv) < 1e-3:
+		_q = 0.0
+		_qv = 0.0
+	elif _sq_bone >= 0:
+		# Squash (q < 0): shorter and wider; stretch (q > 0): taller, thinner.
+		var gq := skel.get_bone_global_pose(_sq_bone)
+		var sc := Basis.from_scale(Vector3(1.0 - _q * 0.5, 1.0 + _q, 1.0 - _q * 0.5))
+		skel.set_bone_global_pose(_sq_bone, Transform3D(sc * gq.basis, gq.origin))
 	if absf(_r) < 1e-4 and absf(_v) < 1e-3 and _shake <= 0.0:
 		_r = 0.0
 		_v = 0.0

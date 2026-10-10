@@ -4,10 +4,12 @@ extends Node
 ## reusable by any enemy with a skeleton and body mesh. Nothing here changes
 ## damage, AI or animation playback: reactions are layered on top.
 ##
-## Per hit (`on_hit`): an additive upper-body lean + mechanical shake away
-## from the shot (BossHitReact, the boss's reaction, reused), a very brief
-## additive tint over the body in the weapon's colour, and electrical
-## sparks at the nearest joint. Strength comes from the hit's severity
+## Per hit (`on_hit`): a cartoon flinch - the upper body snaps back away
+## from the shot, squashes down and springs back up with a wobble, with a
+## mechanical shake (BossHitReact, the boss's reaction, reused, plus its
+## squash) - a cartoon hit flash over the body (white-hot, then the
+## weapon's colour), a cartoon "POW" star burst where it was hit (HitStar,
+## bigger for harder hits) and electrical sparks at the nearest joint. Strength comes from the hit's severity
 ## (damage as a share of max health + impact force) and the weapon:
 ## plasma = medium jolt, machine gun = tiny twitches with occasional
 ## flicker, shotgun = big burst + scrap + stagger up close, black hole =
@@ -47,9 +49,19 @@ const PROFILES := {
 @export var tier_kick := Vector3(0.18, 0.4, 0.8)
 ## Spark strength per tier (JointSparks strength).
 @export var tier_sparks := Vector3(0.2, 0.4, 0.8)
-## Body tint brightness and how long it shows (s).
-@export var flash_strength := 0.9
-@export var flash_time := 0.05
+## Body tint brightness and how long it shows (s); the first `white_share`
+## of it is a white-hot cartoon flash.
+@export var flash_strength := 1.5
+@export var flash_time := 0.11
+@export var white_share := 0.4
+## Cartoon flinch: lean (deg per kick), shake (deg) and squash per kick.
+@export var flinch_lean_deg := 15.0
+@export var flinch_shake_deg := 3.0
+@export var flinch_squash := 0.3
+## "POW" star size per tier (m, times the robot's size) and min seconds
+## between stars on one robot.
+@export var star_size := Vector3(0.45, 0.7, 1.0)
+@export var star_gap := 0.06
 ## Min seconds between staggers of one robot.
 @export var stagger_cooldown := 1.2
 ## Particles / sparks only within this camera distance (m).
@@ -75,6 +87,11 @@ var _arm_hits := {}
 
 var _clock := 0.0
 var _flash_left := 0.0
+var _flash_total := 0.0
+var _flash_col := Color.WHITE
+var _flash_k := 1.0
+var _last_star := -10.0
+var stars := 0
 var _last_spark := -10.0
 var _last_flash := -10.0
 var _last_stagger := -10.0
@@ -93,8 +110,9 @@ func setup(r: Node3D, skel: Skeleton3D, meshes: Array[GeometryInstance3D]) -> vo
 	flash_meshes = meshes
 	react = BossHitReact.new()
 	react.name = "HitReact"
-	react.max_lean_deg = 9.0
-	react.shake_deg = 2.2
+	react.max_lean_deg = flinch_lean_deg
+	react.shake_deg = flinch_shake_deg
+	react.squash = flinch_squash
 	react.max_kick_speed = 12.0
 	skel.add_child(react)
 	# Before the arm aim so the cannons stay on target while the body jerks.
@@ -158,6 +176,11 @@ func on_hit(info: DamageInfo, max_health: float) -> void:
 		stagger.call()
 	if _cam_distance() > fx_distance:
 		return
+	# Cartoon "POW" star where it was hit (machine gun: now and then).
+	if _clock - _last_star >= star_gap and (w != &"machine_gun" or randf() < 0.45):
+		_last_star = _clock
+		stars += 1
+		HitStar.spawn(get_tree(), info.impact_position, COLORS.get(w, Color.WHITE), star_size[tier] * _size())
 	# Electrical twitch at the nearest joint.
 	if _clock - _last_spark >= prof[2]:
 		_last_spark = _clock
@@ -186,6 +209,8 @@ func on_death(info: DamageInfo, broke_apart: bool) -> void:
 		return
 	var w := weapon_of(info)
 	var col: Color = COLORS.get(w, Color.WHITE)
+	stars += 1
+	HitStar.spawn(get_tree(), info.impact_position, col, star_size.z * 1.3 * _size())
 	var big := randf_range(1.4, 2.1) + (0.4 if broke_apart else 0.0)
 	PlasmaFx.impact(get_tree(), info.impact_position, -info.impact_direction, false, col, Color(1, 0.95, 0.85), 0.3, true, big)
 	_scrap(info.impact_position, info.impact_direction, randi_range(scrap_chips.x, scrap_chips.y))
@@ -195,11 +220,14 @@ func on_death(info: DamageInfo, broke_apart: bool) -> void:
 func _process(delta: float) -> void:
 	_clock += delta
 	if _flash_left > 0.0:
+		var was := _flash_left
 		_flash_left -= delta
+		# White-hot first, then the weapon's colour.
+		var turn := _flash_total * (1.0 - white_share)
+		if was > turn and _flash_left <= turn and _flash_left > 0.0:
+			_set_overlay(_overlay(_flash_col, flash_strength * _flash_k))
 		if _flash_left <= 0.0:
-			for m in flash_meshes:
-				if is_instance_valid(m):
-					m.material_overlay = null
+			_set_overlay(null)
 	# Held by a gravity well: crackles and shudders now and then.
 	if robot and robot.has_method(&"in_gravity_well") and robot.in_gravity_well():
 		_well_t -= delta
@@ -218,11 +246,30 @@ func flash_active() -> bool:
 func _flash(col: Color, k: float) -> void:
 	_last_flash = _clock
 	flashes += 1
-	var mat := _overlay(col, flash_strength * k)
-	for m in flash_meshes:
-		if is_instance_valid(m) and m.visible:
-			m.material_overlay = mat
+	_flash_col = col
+	_flash_k = k
+	_set_overlay(_overlay(Color(1, 1, 0.92), flash_strength * k * 0.8))
 	_flash_left = flash_time * (1.0 + 0.5 * (k - 1.0))
+	_flash_total = _flash_left
+
+
+## Our tint over the body meshes (`null` = off). Leaves any other overlay
+## (e.g. a hologram coat) alone.
+func _set_overlay(mat: Material) -> void:
+	for m in flash_meshes:
+		if not is_instance_valid(m):
+			continue
+		var cur := m.material_overlay
+		if cur != null and not _overlays.values().has(cur):
+			continue
+		if mat == null or m.visible:
+			m.material_overlay = mat
+
+
+## The robot's size (skirmishers are bigger).
+func _size() -> float:
+	var s = robot.get(&"size_scale") if robot else null
+	return float(s) if s != null else 1.0
 
 
 ## Shared additive tint per colour/brightness (no per-robot copies): a

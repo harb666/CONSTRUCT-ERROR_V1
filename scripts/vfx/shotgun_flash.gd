@@ -7,9 +7,11 @@ extends Node3D
 ##    they show over the bright arena - plus a soft hot core),
 ##  - a cartoon star-burst fireball and a white-hot flare across the barrels,
 ##    with a wide orange glow,
+##  - a FAN of long fire tongues bursting out in a cone (the Magma Cannon
+##    blast from Ratchet: Gladiator), each one jagged and a little different,
 ##  - flame licks that keep burning and curl away for a moment afterwards,
 ##  - a spray of sparks, a little smoke and a bright orange light.
-## Strong and short (the core flash ~0.11 s, licks ~0.4 s). Built once; no
+## Strong and short (the core flash ~0.16 s, licks ~0.4 s). Built once; no
 ## allocations while firing.
 
 const ORANGE := Color(1.0, 0.42, 0.05)
@@ -19,10 +21,14 @@ const RIM := Color(0.62, 0.12, 0.02)
 
 ## Barrel muzzle positions (local to the gun).
 var barrels: Array[Vector3] = []
-@export var duration := 0.11
-@export var flame_length := 0.95
-@export var light_energy := 9.0
-@export var light_range := 7.0
+@export var duration := 0.16
+@export var flame_length := 1.5
+@export var light_energy := 14.0
+@export var light_range := 9.0
+## The fan of fire tongues: how many, how long (m), cone half-angle (deg).
+@export var fan_tongues := 7
+@export var fan_length := 2.4
+@export var fan_cone_deg := 34.0
 
 var intensity := 1.0
 var _t := 99.0
@@ -37,6 +43,9 @@ var _sparks: CPUParticles3D
 var _smoke: CPUParticles3D
 var _light: OmniLight3D
 var _roll := 0.0
+## Fan tongues and each one's [direction (local), length scale, roll].
+var _fan: Array[MeshInstance3D] = []
+var _fan_dir: Array = []
 
 
 func _ready() -> void:
@@ -55,6 +64,12 @@ func _ready() -> void:
 			q.visible = false
 			add_child(q)
 		_flames.append(layers)
+	for i in fan_tongues:
+		var t := Vfx.toon_flash(1, ORANGE, WHITE_HOT, RIM, Vector2.ONE)
+		t.visible = false
+		add_child(t)
+		_fan.append(t)
+		_fan_dir.append([Vector3.RIGHT, 1.0, 0.0])
 	_glow = Vfx.quad("glow", ORANGE, Vector2.ONE)
 	_glow.top_level = true
 	_glow.visible = false
@@ -167,6 +182,15 @@ func play(strength := 1.0) -> void:
 	for layers: Array in _flames:
 		for q: MeshInstance3D in layers:
 			q.visible = true
+	# A fresh fan: tongues spread round the cone, each a little random.
+	var cone := deg_to_rad(fan_cone_deg)
+	for i in _fan.size():
+		var a := TAU * (i + randf_range(-0.3, 0.3)) / _fan.size() + _roll
+		var off := cone * randf_range(0.45, 1.0)
+		var d := Vector3(cos(off), sin(off) * cos(a), sin(off) * sin(a))
+		_fan_dir[i] = [d.normalized(), randf_range(0.6, 1.1), randf() * TAU]
+		Vfx.toon_reseed(_fan[i])
+		_fan[i].visible = true
 	_glow.visible = true
 	_fireball.visible = true
 	_flare.visible = true
@@ -191,6 +215,8 @@ func _process(delta: float) -> void:
 			for q: MeshInstance3D in layers:
 				q.visible = false
 		_glow.visible = false
+		for t in _fan:
+			t.visible = false
 		_fireball.visible = false
 		_flare.visible = false
 		_light.visible = false
@@ -214,14 +240,32 @@ func _process(delta: float) -> void:
 			var b := Basis(Vector3(1, 0, 0), roll) * Basis(Vector3(0, 0, 1), -PI * 0.5)
 			q.transform = Transform3D(b.scaled(Vector3(w, l, 1.0)), barrels[i] + Vector3(l * 0.46, 0, 0))
 			Vfx.set_alpha(q, fade * (0.95 if j < 2 else 1.0))
+	# Fan: long tongues shooting out round the cone, flat to the camera
+	# (rolled about their own axis so the camera sees their width).
+	var cam := get_viewport().get_camera_3d()
+	for i in _fan.size():
+		var t := _fan[i]
+		var d: Vector3 = _fan_dir[i][0]
+		var l: float = fan_length * float(_fan_dir[i][1]) * intensity * (0.4 + 0.75 * punch) * randf_range(0.9, 1.1)
+		var w := l * 0.22
+		var base := _centre + Vector3(0.1, 0, 0)
+		var y := global_basis * d
+		var mid := to_global(base + d * l * 0.5)
+		var view := (cam.global_position - mid).normalized() if cam else global_basis.z
+		var x := y.cross(view).normalized()
+		if x.length_squared() < 0.01:
+			x = global_basis.y
+		var z := x.cross(y).normalized()
+		t.global_transform = Transform3D(Basis(x * w, y.normalized() * l, z), mid)
+		Vfx.set_alpha(t, fade)
 	var c := to_global(_centre + Vector3(0.18 * intensity, 0, 0))
 	_fireball.global_position = c
-	Vfx.face_camera(_fireball, 0.9 * intensity * (0.7 + 0.6 * k), _roll + _t * 6.0)
+	Vfx.face_camera(_fireball, 1.5 * intensity * (0.7 + 0.6 * k), _roll + _t * 6.0)
 	Vfx.set_alpha(_fireball, fade)
 	_flare.global_position = c
-	Vfx.face_camera(_flare, 1.5 * intensity * (1.0 - 0.6 * k), _roll * 0.5)
+	Vfx.face_camera(_flare, 2.2 * intensity * (1.0 - 0.6 * k), _roll * 0.5)
 	Vfx.set_alpha(_flare, fade * fade)
 	_glow.global_position = c
-	Vfx.face_camera(_glow, 2.3 * intensity * (0.8 + 0.4 * k))
+	Vfx.face_camera(_glow, 3.2 * intensity * (0.8 + 0.4 * k))
 	Vfx.set_alpha(_glow, 0.85 * fade)
 	_light.light_energy = light_energy * intensity * fade

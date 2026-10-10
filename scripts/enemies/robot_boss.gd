@@ -1110,6 +1110,11 @@ func _update_targetable() -> void:
 
 # --- damage ---
 
+## Cartoon hit stars shown (tests).
+var hit_stars := 0
+var _last_star_ms := -1000
+
+
 func apply_damage(info: DamageInfo) -> void:
 	if not alive:
 		return
@@ -1119,6 +1124,12 @@ func apply_damage(info: DamageInfo) -> void:
 	if stagger:
 		stagger.add(info)
 	health -= amount
+	# Cartoon "POW" star where it was hit (bigger on the core), throttled.
+	var now := Time.get_ticks_msec()
+	if now - _last_star_ms >= 80:
+		_last_star_ms = now
+		hit_stars += 1
+		HitStar.spawn(get_tree(), info.impact_position, HitFeedback.COLORS.get(HitFeedback.weapon_of(info), Color.WHITE), 1.1 if on_core else 0.6)
 	if on_core:
 		core_hits += 1
 		core_hit.emit(amount)

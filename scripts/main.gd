@@ -106,6 +106,10 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	Hologram.teleport_in(player.get_node("Visual"), 2.0)
 	player.respawned.connect(func() -> void: Hologram.teleport_in(player.get_node("Visual"), 2.0))
 	players[player_id] = player
+	# Cartoon flinch, body flash and "POW" star when hit.
+	var hurt := PlayerHitFeedback.new()
+	hurt.name = "HitFeedback"
+	player.add_child(hurt)
 	player.add_to_group(&"players")  # enemies look for these
 	player.can_die = players_can_die
 
@@ -117,7 +121,7 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 		var local_input := input as LocalPlayerInput
 		local_input.camera_rig = rig
 		touch_controls.look_dragged.connect(local_input.add_touch_look)
-		_add_hit_flash(player)
+		_add_hit_flash(player, rig)
 		# Tap-to-target: selector (what is selected) -> command target_id ->
 		# player's TargetLock (validates) -> WeaponHolder auto-fires.
 		var selector := TargetSelector.new()
@@ -197,7 +201,10 @@ func _test_hooks(player: PlayerController, selector: TargetSelector) -> void:
 
 
 ## Brief green flash at the screen edges when the local player is hit.
-func _add_hit_flash(player: PlayerController) -> void:
+## Damage on the local player: a red flash round the screen edges (it
+## pops in, holds a moment, then fades) and a camera jolt, both stronger
+## for bigger hits.
+func _add_hit_flash(player: PlayerController, rig: CameraRig) -> void:
 	var rect := TextureRect.new()
 	rect.name = "HitFlash"
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -209,15 +216,26 @@ func _add_hit_flash(player: PlayerController) -> void:
 	g.fill_from = Vector2(0.5, 0.5)
 	g.fill_to = Vector2(1.05, 0.5)
 	var grad := Gradient.new()
-	grad.set_color(0, Color(0.3, 1.0, 0.25, 0.0))
-	grad.set_color(1, Color(0.3, 1.0, 0.25, 0.75))
-	grad.add_point(0.6, Color(0.3, 1.0, 0.25, 0.0))
+	grad.set_color(0, Color(1.0, 0.12, 0.08, 0.0))
+	grad.set_color(1, Color(1.0, 0.12, 0.08, 0.9))
+	grad.add_point(0.55, Color(1.0, 0.12, 0.08, 0.0))
+	grad.add_point(0.85, Color(1.0, 0.3, 0.18, 0.4))
 	g.gradient = grad
 	rect.texture = g
 	rect.modulate.a = 0.0
 	$UI.add_child(rect)
 	$UI.move_child(rect, 0)
-	player.damaged.connect(func(_info: DamageInfo) -> void:
-		rect.modulate.a = 0.8
+	var last := [-10.0]
+	player.damaged.connect(func(info: DamageInfo) -> void:
+		if info.damage_type == DamageInfo.Type.SUPERNOVA or info.source == player:
+			return
+		var share := info.damage_amount * player.incoming_damage_scale / maxf(player.max_health, 1.0)
+		var k := clampf(0.55 + share * 6.0, 0.55, 1.0)
+		rect.modulate.a = maxf(rect.modulate.a, k)
 		var tw := rect.create_tween()
-		tw.tween_property(rect, "modulate:a", 0.0, 0.3))
+		tw.tween_interval(0.08)
+		tw.tween_property(rect, "modulate:a", 0.0, 0.45)
+		var now := Time.get_ticks_msec() / 1000.0
+		if is_instance_valid(rig) and now - last[0] > 0.1:
+			last[0] = now
+			rig.kick(clampf(0.35 + share * 5.0, 0.35, 0.9)))

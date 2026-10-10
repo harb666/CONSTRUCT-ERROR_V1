@@ -3,7 +3,7 @@ extends Weapon
 ## Five-barrel energy shotgun. Every shot fires all five barrels at once:
 ## one extremely fast spiral energy stream per barrel (ShotgunStream), a
 ## combined flaming muzzle flash across the barrel cluster (ShotgunFlash) and
-## orange impacts (pooled PlasmaFx). Self-contained: any WeaponSlot can hold
+## orange impacts (pooled PlasmaFx) with a fire burst (MagmaImpact). Self-contained: any WeaponSlot can hold
 ## it (either arm, alongside any other weapon); all behaviour lives here.
 ##
 ## Shotgun behaviour: the streams leave in a pattern around the aim line whose
@@ -255,6 +255,8 @@ static func land_stream(tree: SceneTree, hit: Dictionary) -> void:
 	elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 		(col as RigidBody3D).apply_impulse(dir * force * 0.6, at - (col as RigidBody3D).global_position)
 	PlasmaFx.impact(tree, at, hit.normal, col is StaticBody3D, hit.color, hit.hot)
+	# Magma Cannon style fire burst (streams on the same spot merge).
+	MagmaImpact.spawn(tree, at, hit.normal)
 
 
 ## Centre of the barrel cluster (the hub between the five barrels).

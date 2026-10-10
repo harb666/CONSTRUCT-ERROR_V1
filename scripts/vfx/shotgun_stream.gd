@@ -1,9 +1,11 @@
 class_name ShotgunStream
 extends Node3D
-## One shotgun energy stream (pooled), drawn like a railgun trail: a cartoon
-## beam (solid white-hot core, orange body, dark rim, pulses racing along
-## it - toon_beam.gdshader), wrapped in a spiral ribbon
-## and sparkling motes. It races from its barrel to the impact at `speed`
+## One shotgun energy stream (pooled), a cartoon MAGMA jet like Ratchet:
+## Gladiator's Magma Cannon: a fat flame body with ragged licking edges,
+## white-hot core and dark red rim (magma_stream.gdshader), two jagged
+## crackling fire bolts zig-zagging around it (toon_beam.gdshader, re-jagged
+## every few frames), a cartoon fireball at its head, wrapped in a spiral
+## ribbon and sparkling motes. It races from its barrel to the impact at `speed`
 ## (feels instant, but visible), then the whole trail lingers, the spiral
 ## slowly widening and fading. The path may curve slightly (a stream
 ## assisted towards a secondary enemy leaves along its spread direction and
@@ -20,10 +22,20 @@ const RADIUS := 0.085
 const TWIST := 1.5
 const RIBBON := 0.07
 const SEGMENTS_PER_M := 14.0
-const BEAM_SEGMENTS := 10
-## Width of the cartoon beam (core + body + rim).
-const BEAM_WIDTH := 0.13
-const BEAM_SHADER := preload("res://scripts/vfx/toon_beam.gdshader")
+const BEAM_SEGMENTS := 16
+## Width of the magma jet (core + flames + rim).
+const BEAM_WIDTH := 0.3
+const BEAM_SHADER := preload("res://scripts/vfx/magma_stream.gdshader")
+const BOLT_SHADER := preload("res://scripts/vfx/toon_beam.gdshader")
+## Jagged fire bolts around the jet: count, width, zig-zag size (m), kink
+## spacing (m), seconds between re-jags, and how long into the linger
+## they last (share of LINGER).
+const BOLTS := 2
+const BOLT_WIDTH := 0.055
+const BOLT_JAG := 0.15
+const BOLT_STEP := 0.4
+const BOLT_REJAG := 0.035
+const BOLT_LINGER := 0.4
 const HELIX_SHADER := preload("res://scripts/vfx/rail_helix.gdshader")
 
 static var _pool: Array[ShotgunStream] = []
@@ -54,6 +66,10 @@ var _helix_mat: ShaderMaterial
 var _beam_shader_mat: ShaderMaterial
 var _mm: MultiMesh
 var _head: MeshInstance3D
+var _bolt: ImmediateMesh
+var _bolt_mat: ShaderMaterial
+var _jag_t := 0.0
+var _jags: Array[PackedVector2Array] = []
 
 
 ## Fire a stream from `from` to `to`. `leave_dir` is the direction it leaves
@@ -126,7 +142,18 @@ func _ready() -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 60.0
 	add_child(mi)
-	_head = Vfx.quad("star", Color.WHITE, Vector2.ONE)
+	_bolt_mat = ShaderMaterial.new()
+	_bolt_mat.shader = BOLT_SHADER
+	_bolt = ImmediateMesh.new()
+	var bmi := MeshInstance3D.new()
+	bmi.mesh = _bolt
+	bmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	bmi.extra_cull_margin = 60.0
+	add_child(bmi)
+	for k in BOLTS:
+		_jags.append(PackedVector2Array())
+	# Head: a cartoon fireball star.
+	_head = Vfx.toon_flash(0, Color(1.0, 0.5, 0.08), Color(1.0, 0.97, 0.8), Color(0.6, 0.1, 0.02), Vector2.ONE, 9.0)
 	_head.top_level = true
 	add_child(_head)
 	_mote_u.resize(MOTES)
@@ -157,6 +184,12 @@ func _launch(from: Vector3, to: Vector3, leave_dir: Vector3, speed: float, color
 	_beam_shader_mat.set_shader_parameter("color", color)
 	_beam_shader_mat.set_shader_parameter("hot", hot)
 	_beam_shader_mat.set_shader_parameter("rim", color.darkened(0.5))
+	_beam_shader_mat.set_shader_parameter("seed", randf() * 50.0)
+	_bolt_mat.set_shader_parameter("color", color.lerp(hot, 0.45))
+	_bolt_mat.set_shader_parameter("hot", Color(1, 1, 0.92))
+	_bolt_mat.set_shader_parameter("rim", color.darkened(0.35))
+	_jag_t = 0.0
+	_rejag()
 	_helix_mat.set_shader_parameter("hot", hot)
 	_helix_mat.set_shader_parameter("head", 0.0)
 	_helix_mat.set_shader_parameter("fade", 1.0)
@@ -164,7 +197,7 @@ func _launch(from: Vector3, to: Vector3, leave_dir: Vector3, speed: float, color
 	for i in MOTES:
 		_mote_u[i] = (i + randf()) / MOTES
 		_mote_a[i] = randf() * TAU
-	(_head.material_override as StandardMaterial3D).albedo_color = Color(hot.r, hot.g, hot.b, 1.0)
+	Vfx.toon_reseed(_head)
 	active = true
 	visible = true
 	set_process(true)
@@ -231,6 +264,11 @@ func _process(delta: float) -> void:
 	_helix_mat.set_shader_parameter("fade", fade * fade)
 	_helix_mat.set_shader_parameter("expand", linger * 0.12)
 	_draw_beam(head, fade, linger)
+	_jag_t += delta
+	if _jag_t >= BOLT_REJAG:
+		_jag_t = 0.0
+		_rejag()
+	_draw_bolts(head, linger)
 	# Motes: sparkle along the revealed spiral, drifting outwards as it fades.
 	var spin := _t * 6.0
 	var count := 0
@@ -251,7 +289,8 @@ func _process(delta: float) -> void:
 	_head.visible = not _arrived
 	if not _arrived:
 		_head.global_position = _point(head)
-		Vfx.face_camera(_head, 0.42, _t * 20.0)
+		Vfx.face_camera(_head, 0.62, _t * 20.0)
+		Vfx.set_alpha(_head, 1.0)
 
 
 ## Camera-facing cartoon beam (toon_beam.gdshader: white-hot core, orange
@@ -280,12 +319,56 @@ func _draw_beam(head: float, fade: float, linger: float) -> void:
 	_beam.surface_end()
 
 
+## New random kinks for the fire bolts (offsets across the jet, per kink).
+func _rejag() -> void:
+	var n := clampi(int(_len / BOLT_STEP), 2, 80) + 1
+	for k in BOLTS:
+		var j := _jags[k]
+		j.resize(n)
+		for i in n:
+			j[i] = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * BOLT_JAG
+		_jags[k] = j
+
+
+## Jagged crackling fire bolts zig-zagging round the jet, from the barrel
+## to the head; they snap off early in the linger.
+func _draw_bolts(head: float, linger: float) -> void:
+	_bolt.clear_surfaces()
+	var cam := get_viewport().get_camera_3d()
+	var bf := 1.0 - linger / BOLT_LINGER
+	if cam == null or head <= 0.0 or bf <= 0.0:
+		return
+	var col := Color(1, 1, 1, bf)
+	_bolt_mat.set_shader_parameter("core", bf)
+	for k in BOLTS:
+		var j := _jags[k]
+		var n := j.size() - 1
+		var last := clampi(int(ceil(head * n)), 1, n)
+		_bolt.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, _bolt_mat)
+		for i in last + 1:
+			var u := minf(float(i) / n, head)
+			var p := _point(u)
+			# Kinks grow from nothing at the barrel; the tip meets the head.
+			var grow := clampf(u * _len / 0.6, 0.0, 1.0) * (0.0 if i == last else 1.0)
+			p += (_n1 * j[i].x + _n2 * j[i].y) * grow
+			var side := _tangent(u).cross((cam.global_position - p).normalized()).normalized()
+			var w := BOLT_WIDTH * 0.5 * (0.6 + 0.4 * bf)
+			_bolt.surface_set_color(col)
+			_bolt.surface_set_uv(Vector2(u * _len, 0.0))
+			_bolt.surface_add_vertex(p - side * w)
+			_bolt.surface_set_color(col)
+			_bolt.surface_set_uv(Vector2(u * _len, 1.0))
+			_bolt.surface_add_vertex(p + side * w)
+		_bolt.surface_end()
+
+
 func _finish() -> void:
 	if not _arrived and not _hit.is_empty():
 		_arrived = true
 		Shotgun.land_stream(get_tree(), _hit)
 	_hit = {}
 	_beam.clear_surfaces()
+	_bolt.clear_surfaces()
 	active = false
 	visible = false
 	set_process(false)

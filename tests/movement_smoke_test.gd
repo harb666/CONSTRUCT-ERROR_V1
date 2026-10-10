@@ -3018,6 +3018,7 @@ func _robot_boss_tests(main: Node) -> void:
 	boss.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, leg_at + boss.model.global_basis.z * 0.3, -boss.model.global_basis.z, 2.0))
 	var leg_dmg := h0 - boss.health
 	_check(absf(core_dmg - 1.0) < 0.01 and absf(leg_dmg - boss.armour_damage_scale) < 0.01 and boss.core_hits == 1, "boss: open core takes full damage (%.2f), armour only %.2f" % [core_dmg, leg_dmg])
+	_check(boss.hit_stars >= 1 and boss.hit_react.squash == 0.0, "boss: hits show a cartoon POW star (%d); the boss itself doesn't squash" % boss.hit_stars)
 	# Stays open ~3 s, then closes.
 	for i in 300:
 		await _ticks(1)
@@ -3628,11 +3629,20 @@ func _hit_feedback_tests(main: Node) -> void:
 	g.health = 100.0
 	var clip: StringName = g._anim.current_animation
 	g.apply_damage(_shot(g, &"plasma", 0.45, 2.0))
+	var white_mat := g._whole.material_overlay
 	await _ticks(3)
 	var lean: float = fx.react.amount()
 	_check(lean > 0.05 and fx.flash_active() and g._whole.material_overlay != null and fx.sparks == 1, "hits: plasma jolts the upper body, tints the body, sparks (lean %.2f)" % lean)
+	_check(fx.react.squash > 0.0 and fx.react.squash_amount() < -0.03, "hits: cartoon flinch - the upper body squashes (%.2f)" % fx.react.squash_amount())
+	_check(fx.stars == 1 and HitStar.busy_count() >= 1, "hits: a cartoon POW star bursts where it was hit")
+	await _ticks(2)
+	_check(fx.flash_active() and g._whole.material_overlay != white_mat and g._whole.material_overlay != null, "hits: hit flash goes white-hot, then the weapon's colour")
+	var stretched := false
+	for i in 15:
+		await _ticks(1)
+		stretched = stretched or fx.react.squash_amount() > 0.01
+	_check(stretched, "hits: ...then springs up into a stretch (wobble)")
 	_check(g._anim.current_animation == clip, "hits: the clip keeps playing (no restart)")
-	await _ticks(20)
 	_check(not fx.flash_active() and g._whole.material_overlay == null and fx.react.amount() < lean, "hits: tint gone in a few frames, lean settling")
 	var plasma_lean := lean
 	# Shotgun close: stronger than plasma.
@@ -3725,6 +3735,37 @@ func _hit_feedback_tests(main: Node) -> void:
 	g2.queue_free()
 	r.queue_free()
 	drops.clear()
+
+	# The player: cartoon flinch, body flash and POW star; screen flash.
+	var pf := p.get_node("HitFeedback") as PlayerHitFeedback
+	var flash_rect := main.get_node("UI/HitFlash") as TextureRect
+	await _ticks(10)
+	var star0 := HitStar.spawned
+	var flinch0 := pf.flinches
+	var hp0 := p.health
+	p.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.ENERGY, p.global_position + Vector3(0, 1.2, -0.3), Vector3.BACK, 2.0, 0.0, null))
+	await _ticks(3)
+	var pskel := p.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	var body_mi: MeshInstance3D = pf._meshes[0] if pf and not pf._meshes.is_empty() else null
+	_check(pf != null and pf.react != null and pf.react.get_parent() == pskel and pf.react.get_index() < pskel.get_children().filter(func(c: Node) -> bool: return c is ArmAimModifier)[0].get_index(),
+		"player hit: flinch modifier on the character's skeleton, before the arm aim")
+	_check(pf.flinches == flinch0 + 1 and pf.react.amount() > 0.05 and pf.react.squash_amount() < -0.03, "player hit: cartoon flinch - snaps back and squashes (lean %.2f, squash %.2f)" % [pf.react.amount(), pf.react.squash_amount()])
+	_check(pf.flash_active() and body_mi != null and body_mi.material_overlay != null and HitStar.spawned == star0 + 1, "player hit: body flashes and a POW star bursts")
+	_check(flash_rect.modulate.a > 0.4, "player hit: red flash round the screen edges (%.2f)" % flash_rect.modulate.a)
+	_check(p.health < hp0, "player hit: damage unchanged by the feedback")
+	await _ticks(40)
+	_check(not pf.flash_active() and body_mi.material_overlay == null and absf(pf.react.squash_amount()) < 0.05, "player hit: flash gone and the flinch settles")
+	# Rapid hits (boss chaingun) are throttled.
+	var fl0 := pf.flinches
+	for i in 6:
+		p.apply_damage(DamageInfo.make(0.1, DamageInfo.Type.BULLET, p.global_position + Vector3.UP, Vector3.BACK, 1.0, 0.0, null))
+	_check(pf.flinches == fl0 + 1, "player hit: rapid hits in one instant flinch once")
+	# Their own black hole never hurts them: no reaction either.
+	await _ticks(10)
+	fl0 = pf.flinches
+	p.apply_damage(DamageInfo.make(1.0, DamageInfo.Type.SUPERNOVA, p.global_position, Vector3.BACK, 0.0, 5.0, p))
+	_check(pf.flinches == fl0, "player hit: no flinch from their own black hole")
+	p.health = p.max_health
 	p.can_die = true
 	RobotEnemy.ai_enabled = was_ai
 
@@ -3799,7 +3840,21 @@ func _vfx_tests() -> void:
 	# Shotgun stream: cartoon beam.
 	var st := ShotgunStream.fire(self, Vector3(0, 1, 30), Vector3(0, 1, 20), Vector3.FORWARD, 150.0, Color(1, 0.45, 0.05), Color(1, 0.95, 0.7), {})
 	await _ticks(2)
-	_check(st._beam_shader_mat.shader == preload("res://scripts/vfx/toon_beam.gdshader") and st._beam.get_surface_count() == 1, "vfx: shotgun streams are cartoon beams")
+	_check(st._beam_shader_mat.shader == preload("res://scripts/vfx/magma_stream.gdshader") and st._beam.get_surface_count() == 1 and ShotgunStream.BEAM_WIDTH >= 0.25,
+		"vfx: shotgun streams are fat cartoon magma jets (Magma Cannon style)")
+	_check(st._bolt.get_surface_count() == ShotgunStream.BOLTS, "vfx: jagged fire bolts crackle round each stream (%d)" % st._bolt.get_surface_count())
+	var jag0: Vector2 = st._jags[0][1]
+	await _ticks(4)
+	_check(st._jags[0][1] != jag0, "vfx: the bolts re-jag as they crackle")
+	_check(sg._flash._fan.size() >= 5 and sg._flash.flame_length > 1.2, "vfx: shotgun blast has a fan of long fire tongues")
+	sg._flash.play()
+	await _ticks(2)
+	_check(sg._flash._fan.all(func(t: MeshInstance3D) -> bool: return t.visible), "vfx: the fan bursts out with the flash")
+	var mi0 := MagmaImpact.spawned
+	MagmaImpact.spawn(self, Vector3(0, 0.5, 30), Vector3.UP)
+	MagmaImpact.spawn(self, Vector3(0.2, 0.5, 30), Vector3.UP)
+	await _ticks(2)
+	_check(MagmaImpact.spawned == mi0 + 1 and MagmaImpact.busy_count() >= 1, "vfx: shotgun impacts burst into fire; streams on one spot merge into one bigger burst")
 	# Pads: weapons materialise with a faint hologram coat.
 	var spawner := main.get_node("ShotgunSpawnPad").find_child("WeaponSpawner", true, false) as WeaponSpawner
 	_check(spawner.display != null and Hologram._model_meshes(spawner.display).all(func(g: GeometryInstance3D) -> bool: return g.material_overlay is ShaderMaterial),
