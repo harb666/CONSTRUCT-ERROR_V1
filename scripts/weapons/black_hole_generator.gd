@@ -109,7 +109,7 @@ func _spawn_core() -> void:
 			_lens.mesh = QuadMesh.new()
 			var m := ShaderMaterial.new()
 			m.shader = BlackHoleFlightVfx.DISTORTION
-			m.render_priority = -1
+			m.render_priority = -2  # under the portal (-1)
 			m.set_shader_parameter("strength", chamber_lens_strength)
 			m.set_shader_parameter("swirl", 1.2)
 			m.set_shader_parameter("spin_speed", 0.9)
@@ -132,6 +132,9 @@ func _apply_core_scale() -> void:
 		# Charging: swell and shudder.
 		var pulse := 1.0 + charge * (0.28 + 0.08 * sin(_t * 70.0))
 		core.scale = Vector3.ONE * maxf(core_size * g * pulse, 0.001)
+		# The portal opens with it, frame by frame as it grows.
+		if core.portal:
+			core.portal.reveal(g)
 
 
 func _charge_amount() -> float:

@@ -376,6 +376,31 @@ func _run() -> void:
 		_check(pr._size < 0.4, "fired black hole is still chamber-sized leaving the gun (%.2f m)" % pr._size)
 		var bg := holder.current as BlackHoleGenerator
 		_check(bg.cel_flash != null and bg.cel_flash.flashes > 0 and bg.cel_flash.size >= 1.4, "vfx: black hole gun - big cartoon cel flash on launch")
+		_check(pr.core.portal != null and pr.core.portal.visible and pr.core.portal.amount >= 1.0 and not pr.core.portal.closing,
+			"vfx: the owner's portal is open around the flying black hole")
+		# Portal frames follow the size: opening cells while growing, closing
+		# cells while collapsing, ring always `ring` x the core's size.
+		var pt := BlackHolePortal.new()
+		root.add_child(pt)
+		var ok_sync := true
+		for fr in [0.15, 0.4, 0.75, 0.95]:
+			for cl in [false, true]:
+				pt.reveal(fr, cl)
+				var cc := pt.cells()
+				var lo_c := BlackHolePortal.CLOSE_FIRST if cl else BlackHolePortal.OPEN_FIRST
+				var in_range := cc.y >= lo_c and cc.y < lo_c + 10
+				if not in_range:
+					ok_sync = false
+		pt.reveal(0.5, false)
+		var c5 := pt.cells()
+		var f5 := lerpf(BlackHolePortal.OPEN_SIZES[c5.x - BlackHolePortal.OPEN_FIRST], BlackHolePortal.OPEN_SIZES[c5.y - BlackHolePortal.OPEN_FIRST], c5.z)
+		_check(ok_sync and absf(f5 - 0.5) < 0.01 and absf(pt.scale.x * BlackHolePortal.MATTE_FRACTION * f5 - pt.ring) < 0.001,
+			"vfx: portal opens / closes frame by frame with the black hole's size (half size -> ring %.2f of open)" % f5)
+		pt.reveal(1.0, false)
+		var l0 := pt.cells()
+		await _ticks(30)
+		_check(pt.cells().y < BlackHolePortal.LOOP_CELLS and pt.cells() != l0, "vfx: open portal loops the video's swirl")
+		pt.queue_free()
 		await _ticks(12)
 		_check(is_instance_valid(pr) and pr._size > 2.5, "then expands to ~3 m (%.2f m)" % (pr._size if is_instance_valid(pr) else -1.0))
 		if is_instance_valid(pr):

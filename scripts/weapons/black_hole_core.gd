@@ -7,6 +7,10 @@ extends Node3D
 
 const ANIM := "Accretion_Disk_Rotation"
 
+## The owner's animated portal around it (replaces the look of the big
+## gravity-lens disc; see BlackHolePortal).
+var portal: BlackHolePortal
+
 
 func _ready() -> void:
 	var planet := find_child("Planet", true, false) as Node3D
@@ -17,3 +21,5 @@ func _ready() -> void:
 		ap.play(ANIM)
 	for gi: GeometryInstance3D in find_children("*", "GeometryInstance3D", true, false):
 		gi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	portal = BlackHolePortal.new()
+	add_child(portal)

@@ -391,6 +391,7 @@ func _collapse() -> void:
 	if _fizzle:
 		var f := 1.0 - clampf(_state_t / fizzle_time, 0.0, 1.0)
 		_set_size(_collapse_from * f)
+		_portal_close()
 		if f <= 0.0:
 			_finish()
 		return
@@ -398,6 +399,7 @@ func _collapse() -> void:
 	# compression (bright pinpoint), then the supernova.
 	var k := clampf(_state_t / collapse_time, 0.0, 1.0)
 	_set_size(lerpf(_collapse_from, 0.03, k * k * k))
+	_portal_close()
 	_set_anim_speed(4.0 + k * 6.0)
 	if _star:
 		var glow := clampf((_state_t - collapse_time * 0.5) / (collapse_time * 0.5 + compression_hold), 0.0, 1.0)
@@ -479,7 +481,15 @@ func _exit_tree() -> void:
 		well.release_all_now()
 
 
+## The portal closes with it: its closing frames matched to the size left.
+func _portal_close() -> void:
+	if core and core.portal:
+		core.portal.reveal(_size / maxf(_collapse_from, 0.001), true)
+
+
 func _set_anim_speed(s: float) -> void:
+	if core and core.portal:
+		core.portal.speed = s
 	if core:
 		var ap := core.find_child("AnimationPlayer", true, false) as AnimationPlayer
 		if ap:

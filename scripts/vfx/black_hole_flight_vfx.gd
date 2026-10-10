@@ -22,6 +22,8 @@ var _infall: CPUParticles3D
 var trail: VortexTrail
 ## Gravitational lens: how strongly the background bends around it.
 var lens_strength := 0.75
+## Lens disc diameter (x the black hole's size): the portal's ring.
+var lens_size := 1.7
 var _lightning: BlackHoleLightning
 var _t := 0.0
 var _crackle_t := 0.0
@@ -40,7 +42,7 @@ func _ready() -> void:
 		_distortion.mesh = q
 		var m := ShaderMaterial.new()
 		m.shader = DISTORTION
-		m.render_priority = -1
+		m.render_priority = -2  # under the portal (-1)
 		m.set_shader_parameter("strength", lens_strength)
 		_distortion.material_override = m
 		_distortion.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -93,7 +95,9 @@ func _process(delta: float) -> void:
 	if follow and is_instance_valid(follow):
 		global_position = follow.get_global_transform_interpolated().origin
 	if _distortion:
-		Vfx.face_camera(_distortion, size * 2.3)
+		# Only as wide as the portal ring (was 2.3: its outer layers showed
+		# as a big striped disc around the portal; owner asked to reduce it).
+		Vfx.face_camera(_distortion, size * lens_size)
 	Vfx.face_camera(_ring, size * 1.45, _t * 0.5)
 	_swirl_a += delta * 2.4 * (1.0 + instability * 2.5)
 	_swirl_b -= delta * 1.7 * (1.0 + instability * 2.5)

@@ -151,6 +151,13 @@
   (large, every round) and the black hole gun (big, purple / pink); grunts
   (green) and skirmishers (yellow) get smaller ones. Shotgun unchanged.
 
+- Black hole portal (owner asked, owner's Purple_Portal video): an animated
+  portal around every black hole (`BlackHolePortal`, child of the core,
+  ring 1.7 x its size) that opens / collapses frame by frame exactly with
+  the black hole's size (chamber growth, collapse, fizzle). The gravity
+  lens disc is cut from 2.3 to 1.7 x (its outer layers were the big striped
+  disc). Everything else on the black hole is unchanged.
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.
