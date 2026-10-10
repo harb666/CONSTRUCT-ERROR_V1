@@ -3789,6 +3789,8 @@ func _hit_feedback_tests(main: Node) -> void:
 	var pf := p.get_node("HitFeedback") as PlayerHitFeedback
 	var flash_rect := main.get_node("UI/HitFlash") as TextureRect
 	await _ticks(10)
+	var rig := main.find_children("*", "CameraRig", true, false)[0] as CameraRig
+	rig._kick_t = 99.0
 	var star0 := HitStar.spawned
 	var flinch0 := pf.flinches
 	var hp0 := p.health
@@ -3801,6 +3803,7 @@ func _hit_feedback_tests(main: Node) -> void:
 	_check(pf.flinches == flinch0 + 1 and pf.react.amount() > 0.05 and pf.react.squash_amount() < -0.03, "player hit: cartoon flinch - snaps back and squashes (lean %.2f, squash %.2f)" % [pf.react.amount(), pf.react.squash_amount()])
 	_check(pf.flash_active() and body_mi != null and body_mi.material_overlay != null and HitStar.spawned == star0 + 1, "player hit: body flashes and a POW star bursts")
 	_check(flash_rect.modulate.a > 0.4, "player hit: red flash round the screen edges (%.2f)" % flash_rect.modulate.a)
+	_check(rig._kick_t > 50.0, "player hit: no camera shake")
 	_check(p.health < hp0, "player hit: damage unchanged by the feedback")
 	await _ticks(40)
 	_check(not pf.flash_active() and body_mi.material_overlay == null and absf(pf.react.squash_amount()) < 0.05, "player hit: flash gone and the flinch settles")

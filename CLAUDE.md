@@ -140,7 +140,8 @@
   in the muzzle blast, fire bursts on impact. Hits are cartoon (owner
   asked): enemies and players flinch (snap back, squash and wobble), flash
   white-hot then the hit colour, and show a POW star; the player also gets
-  a red screen-edge flash and a camera jolt. The boss doesn't squash.
+  a red screen-edge flash, but no camera shake on hits (owner asked).
+  The boss doesn't squash.
 
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
