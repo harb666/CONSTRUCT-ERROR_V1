@@ -121,6 +121,9 @@
   4-player co-op squad shown with open slots until online play exists) ->
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
+- Lock-on reticles in the owner's sci-fi HUD reference style (owner asked):
+  lock-in snap animation, segmented / tick rings, notches, brackets and a
+  readout (arm, distance, target health); arm colours unchanged.
 
 - Harbinger (owner's model) plays exactly like the Grinch (same player
   scene, only her visual swapped). Her arm-end blasters are cut off at the

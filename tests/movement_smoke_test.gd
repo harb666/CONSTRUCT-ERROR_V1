@@ -1987,6 +1987,12 @@ func _rocket_launcher_tests(main: Node) -> void:
 	sel.tap_target(rb.get_node("Targetable"))
 	sel.forget_last_tap()
 	sel.tap_target(ra.get_node("Targetable"))
+	var marker = main.get_node("UI/TargetMarker")
+	await _ticks(2)
+	var acq0: float = marker.acquire_amount(p.get_node("TargetLock"))
+	await _ticks(30)
+	_check(acq0 < 0.5 and marker.acquire_amount(p.get_node("TargetLock")) == 1.0 and marker.acquire_amount(p.get_node("TargetLockLeft")) == 1.0,
+		"lock-on reticle drops in and snaps onto the target, then holds (%.2f -> 1)" % acq0)
 	var first_checked := false
 	# Launch point = the loaded warhead's base in the bore (checked at rest).
 	var lw := R.find_child("Warhead", true, false) as MeshInstance3D
