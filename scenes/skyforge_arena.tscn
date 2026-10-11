@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_skirmisher.tscn" id="12"]
 [ext_resource type="Script" path="res://scripts/world/toxic_barrel.gd" id="barrel"]
+[ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
+[ext_resource type="Script" path="res://scripts/world/elevator_lift.gd" id="lift"]
+[ext_resource type="Script" path="res://scripts/world/level_flow.gd" id="flow"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -69,6 +72,66 @@ script = ExtResource("barrel")
 [node name="HubBarrel" type="StaticBody3D" parent="Barrels"]
 transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, -8, 40, 10)
 script = ExtResource("barrel")
+
+[node name="WaveSpawns" type="Node3D" parent="."]
+
+[node name="NorthHall" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 40, -33.4)
+
+[node name="NorthHallWest" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 40, -42)
+
+[node name="NorthHallEast" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 40, -44)
+
+[node name="NorthTurret" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 43, -38)
+
+[node name="NWBastion" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -38, 37, -32)
+
+[node name="NWBastionFar" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 37, -28)
+
+[node name="WestPost" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -36, 40, -5)
+
+[node name="WestPostNorth" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 40, -9)
+
+[node name="SWOctagon" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -31, 37, 36)
+
+[node name="SWOctagonWest" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 37, 30)
+
+[node name="SEOctagon" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 37, 37, 33)
+
+[node name="SEOctagonEast" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 41, 37, 28)
+
+[node name="EastDeck" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 42, 40, -6)
+
+[node name="EastDeckFar" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 48, 40, -10)
+
+[node name="HubNW" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 40, -12)
+
+[node name="HubNE" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 40, -12)
+
+[node name="WaveDirector" type="Node" parent="."]
+script = ExtResource("waves")
+
+[node name="ElevatorLift" type="AnimatableBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+script = ExtResource("lift")
+
+[node name="LevelFlow" type="Node" parent="."]
+script = ExtResource("flow")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

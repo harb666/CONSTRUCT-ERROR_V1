@@ -222,6 +222,13 @@
   cartoon blast, chain to barrels within 5 m) and leave burning green slime
   puddles with green cartoon flames that hurt anyone standing in them
   (`ToxicBarrel`, `ToxicBlast`, `ToxicSlime`).
+- Skyforge waves (owner asked): wave 1 = the 6 placed robots, then 6+2
+  and 7+4 grunts / skirmishers teleporting in, never more than 8 alive at
+  once (`WaveDirector`). Then the lift rises out of the hub shaft; with the
+  whole squad on it, it goes down and the next part of the level loads
+  (`ElevatorLift`, `LevelFlow`, `LevelTransfer`; next part = Battle Arena
+  as a stand-in until the owner's is made). The shaft's collision was
+  opened (it was capped by the map export's convex hulls).
 
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.

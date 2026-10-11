@@ -61,6 +61,7 @@ func _ready() -> void:
 	# The collision meshes are only for shapes: never drawn.
 	for mi: MeshInstance3D in collision.find_children("*", "MeshInstance3D", true, false):
 		mi.visible = false
+	_open_shaft()
 	mobile = APPLY_MOBILE.new()
 	mobile.name = "ApplyMobile"
 	mobile.set("manifest_path", DIR + "/mobile/mobile_manifest.json")
@@ -93,6 +94,70 @@ func _ready() -> void:
 	out_of_bounds.add_child(cs)
 	add_child(out_of_bounds)
 	out_of_bounds.body_entered.connect(_on_fell)
+
+
+## The package exports every mesh collider as a convex hull ("-convcolonly")
+## and its rim / ring as solid discs, so the hub's rings round the elevator
+## shaft (floor, trim, body, underframe, the shaft's own liner, the rim and
+## outer ring) filled the shaft with an invisible lid at floor level: the
+## shaft couldn't be fallen into and the lift couldn't come up it. Those
+## pieces get their exact shapes (collision.json's own triangles; the rims
+## as rings round the shaft opening). Nothing else in the level changes.
+const SHAFT_MESHES: Array[String] = ["Hub_Floor", "Hub_Trim", "Hub_Body", "Hub_Underframe", "Elevator_Liner"]
+const SHAFT_RINGS: Array[String] = ["Elevator_Rim", "Elevator_OuterRing"]
+const SHAFT_RADIUS := 5.5
+var shaft_opened := 0
+
+
+func _open_shaft() -> void:
+	var data := _json(DIR + "/mobile/collision.json")
+	for c in data.get("colliders", []):
+		var nm := String(c.get("name", ""))
+		var body := collision.find_child(nm, true, false) as StaticBody3D
+		if body == null:
+			continue
+		var cs := body.find_children("*", "CollisionShape3D", true, false)
+		if cs.is_empty():
+			continue
+		var node := cs[0] as CollisionShape3D
+		var to_local := node.global_transform.affine_inverse()
+		var faces := PackedVector3Array()
+		if nm in SHAFT_MESHES and c.get("shape") == "mesh":
+			var v: Array = c.get("vertices", [])
+			for f in c.get("faces", []):
+				for i in 3:
+					var p: Array = v[int(f[i])]
+					faces.append(to_local * Vector3(p[0], p[1], p[2]))
+		elif nm in SHAFT_RINGS and c.get("shape") == "cylinder":
+			var ctr: Array = c["center"]
+			var h := float(c["height"]) * 0.5
+			faces = _ring_faces(Vector3(ctr[0], ctr[1], ctr[2]), SHAFT_RADIUS, float(c["radius"]), h, to_local)
+		else:
+			continue
+		var shape := ConcavePolygonShape3D.new()
+		shape.backface_collision = true
+		shape.set_faces(faces)
+		node.shape = shape
+		shaft_opened += 1
+
+
+## A flat ring (top, bottom, inner and outer walls) as triangles.
+func _ring_faces(c: Vector3, r_in: float, r_out: float, h: float, xf: Transform3D) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var n := 32
+	for i in n:
+		var a0 := TAU * i / n
+		var a1 := TAU * (i + 1) / n
+		var d0 := Vector3(cos(a0), 0.0, sin(a0))
+		var d1 := Vector3(cos(a1), 0.0, sin(a1))
+		for y: float in [h, -h]:
+			var up: Vector3 = Vector3.UP * y
+			out.append_array([xf * (c + d0 * r_in + up), xf * (c + d0 * r_out + up), xf * (c + d1 * r_out + up)])
+			out.append_array([xf * (c + d0 * r_in + up), xf * (c + d1 * r_out + up), xf * (c + d1 * r_in + up)])
+		for r: float in [r_in, r_out]:
+			out.append_array([xf * (c + d0 * r + Vector3.UP * h), xf * (c + d0 * r - Vector3.UP * h), xf * (c + d1 * r - Vector3.UP * h)])
+			out.append_array([xf * (c + d0 * r + Vector3.UP * h), xf * (c + d1 * r - Vector3.UP * h), xf * (c + d1 * r + Vector3.UP * h)])
+	return out
 
 
 func _json(path: String) -> Dictionary:
@@ -182,10 +247,14 @@ func _on_fell(body: Node3D) -> void:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
 
 
-## Into the elevator shaft in the hub: no next level yet, so it's a fall
-## (back to spawn). Re-emitted for the level loader to come.
+## Into the elevator shaft in the hub while the lift is down at the bottom:
+## a fall (back to spawn). Once the lift is up or riding down (ElevatorLift)
+## the shaft is the way on, not a fall.
 func _on_level_exit(target: String, body: Node) -> void:
 	level_exit_entered.emit(target, body)
+	var lift := get_tree().get_first_node_in_group(&"elevator_lift") as ElevatorLift
+	if lift and lift.state != ElevatorLift.State.DOWN:
+		return
 	if body is Node3D:
 		_on_fell(body as Node3D)
 

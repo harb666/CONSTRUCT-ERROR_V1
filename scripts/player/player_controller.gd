@@ -207,8 +207,20 @@ func _ready() -> void:
 	_air_dodges_left = max_air_dodges
 
 
+## Riding the hub lift down (ElevatorLift): no walking, jumping, dodging
+## or punching; aiming and auto-fire carry on.
+var controls_locked := false
+
+
 func _physics_process(delta: float) -> void:
 	var cmd := input.get_command() if input else PlayerCommand.new()
+	if controls_locked:
+		cmd.move = Vector2.ZERO
+		cmd.jump_pressed = false
+		cmd.jump_held = false
+		cmd.dodge_pressed = false
+		cmd.melee_pressed = false
+		cmd.sprint_held = false
 	simulate(cmd, delta)
 	command_processed.emit(cmd, delta)
 

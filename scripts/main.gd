@@ -22,6 +22,9 @@ var players := {}  # player_id -> PlayerController
 ## The open front end (title / character select), if any.
 var front_end: FrontEnd
 var _menu_camera: Camera3D
+## The ?level= choice applies when the game first starts (not to the next
+## part of a level loaded later).
+static var _booted := false
 
 
 func _ready() -> void:
@@ -29,8 +32,11 @@ func _ready() -> void:
 	Sfx.preload_all()
 	# ?level=battle / toxic / skyforge (or -- --level=...) picks the level;
 	# the game starts in Skyforge Arena.
+	var booting := not _booted and get_tree().current_scene == self
+	if get_tree().current_scene == self:
+		_booted = true
 	var want: String = LEVELS.get(StressTest._param("level"), "")
-	if want != "" and want != scene_file_path and get_tree().current_scene == self:
+	if booting and want != "" and want != scene_file_path:
 		get_tree().change_scene_to_file.call_deferred(want)
 		return
 	var stress := StressTest.robot_count()
@@ -38,6 +44,16 @@ func _ready() -> void:
 		StressTest.populate(self, stress)
 		print("stress test: %d robots" % stress)
 	debug_hud.set("show_perf", StressTest.perf_enabled())
+	# Arrived from the previous part of the level (the hub lift): straight in
+	# as the same character with the same weapons.
+	var carried := LevelTransfer.take()
+	if not carried.is_empty():
+		var roster := CharacterRoster.load_default()
+		var def := roster.find(carried["character"]) if roster else null
+		var p := spawn_player(1, true, def)
+		LevelTransfer.apply(p, carried)
+		LevelTransfer.fade_in(get_tree())
+		return
 	if front_end_mode == 1 or (front_end_mode == -1 and get_tree().current_scene == self):
 		open_front_end()
 	else:
@@ -122,6 +138,7 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	player.can_die = players_can_die
 
 	if is_local:
+		player.add_to_group(&"local_player")
 		player.add_to_group(Sfx.LISTENER_GROUP)  # sounds get louder as it gets closer
 		var rig: CameraRig = CAMERA_RIG_SCENE.instantiate()
 		rig.target = player

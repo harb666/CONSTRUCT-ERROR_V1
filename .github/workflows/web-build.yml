@@ -126,6 +126,11 @@ jobs:
           test -s "$PCK"
 
       - name: Publish to gh-pages
+        # GitHub refuses files over 100 MB in a branch; the game package can
+        # outgrow that. With Settings -> Pages -> Source: "GitHub Actions"
+        # the site comes from the Pages artifact below instead, so a refused
+        # push here doesn't stop the deploy.
+        continue-on-error: true
         run: |
           set -euo pipefail
           rm -rf /tmp/pages && cp -r build/web /tmp/pages && cd /tmp/pages

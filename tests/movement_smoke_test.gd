@@ -538,6 +538,7 @@ func _run() -> void:
 	await _battle_arena_tests()
 	await _skyforge_tests()
 	await _toxic_barrel_tests()
+	await _level_flow_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4421,6 +4422,96 @@ func _toxic_barrel_tests() -> void:
 	p.damaged.disconnect(on_blast)
 	_check(blasted[0] > 5.0 and blasted[0] < 22.0, "barrel: a player near the edge of the blasts is only hurt a little (%.0f health)" % blasted[0])
 	main.queue_free()
+	await _ticks(5)
+	RobotEnemy.ai_enabled = ai_was
+
+## Skyforge's flow (owner asked): waves of grunts / skirmishers (max 8
+## alive), then the lift rises out of the hub's shaft and takes the squad
+## down to the next part of the level.
+func _level_flow_tests() -> void:
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(30)
+	var dir: WaveDirector = main.get_node("WaveDirector")
+	var lift: ElevatorLift = main.get_node("ElevatorLift")
+	var flow: LevelFlow = main.get_node("LevelFlow")
+	var p: PlayerController = main.players[1]
+	_check(dir.total_waves() == 3 and dir.wave == 1 and dir.state == WaveDirector.State.FIGHTING and dir.active_count() == 6,
+		"flow: wave 1 of 3 is the 6 robots placed on the map")
+	_check(flow.hud != null and flow.hud.banners >= 1 and flow.hud.status.begins_with("WAVE 1 / 3"), "flow: WAVE 1 / 3 banner and status (%s)" % flow.hud.status)
+	var no_floor := []
+	for m in main.get_node("WaveSpawns").get_children():
+		if dir._floor((m as Node3D).global_position) == Vector3.INF:
+			no_floor.append(m.name)
+	_check(no_floor.is_empty(), "flow: every wave spawn point is on a deck %s" % [no_floor])
+	_check(lift.state == ElevatorLift.State.DOWN and lift.deck_height() < 31.0, "flow: the lift waits at the bottom of the shaft")
+	# Falling into the shaft with the lift down is still a fall.
+	p.global_position = Vector3(0, 36, 0)
+	p.velocity = Vector3.ZERO
+	await _ticks(20)
+	_check(p.global_position.distance_to(p.spawn_transform.origin) < 2.0, "flow: falling into the shaft (lift down) puts you back at spawn")
+	# Fast-forward the waves: kill whatever is alive, check the cap.
+	dir.wave_gap = 0.3
+	dir.spawn_gap = 0.05
+	var most := 0
+	var spawned_near := 0
+	var guard := 0
+	while dir.state != WaveDirector.State.DONE and guard < 6000:
+		guard += 1
+		await _ticks(1)
+		most = maxi(most, dir.active_count())
+		if guard % 90 == 0:
+			for c in main.get_node("Targets").get_children():
+				var r := c as RobotEnemy
+				if r and r.alive:
+					if r.name.begins_with("W") and r.global_position.distance_to(p.global_position) < dir.min_player_distance - 0.5:
+						spawned_near += 1
+					r.apply_damage(DamageInfo.make(1.0e4, DamageInfo.Type.ENERGY, r.global_position, Vector3.FORWARD, 0.0))
+	_check(dir.state == WaveDirector.State.DONE and dir.spawned == 19, "flow: waves 2 and 3 teleport in 8 then 11 robots (%d)" % dir.spawned)
+	_check(most <= 8 and most >= 8, "flow: never more than 8 alive at once (most %d)" % most)
+	_check(spawned_near == 0, "flow: wave robots teleport in away from the player")
+	await _ticks(2)
+	_check(lift.state == ElevatorLift.State.RISING, "flow: last wave cleared -> the lift rises")
+	lift.rise_time = 0.5
+	await _ticks(45)
+	_check(lift.state == ElevatorLift.State.READY and absf(lift.deck_height() - 40.0) < 0.01, "flow: the lift's deck stops flush with the hub floor")
+	_check(flow.hud.marker != Vector3.INF and flow.hud.status == "GET TO THE LIFT", "flow: GET TO THE LIFT, marker on it")
+	# Walking on: the deck holds the player up; the countdown starts.
+	p.global_position = lift.global_position + Vector3(1.5, 0.3, 1.0)
+	p.velocity = Vector3.ZERO
+	await _ticks(20)
+	_check(p.is_on_floor() and absf(p.global_position.y - 40.0) < 0.2, "flow: players can stand on the lift")
+	_check(lift.state == ElevatorLift.State.COUNTDOWN, "flow: everyone aboard -> countdown")
+	p.global_position = lift.global_position + Vector3(8, 0.3, 0)
+	await _ticks(10)
+	_check(lift.state == ElevatorLift.State.READY, "flow: stepping off stops the countdown")
+	p.global_position = lift.global_position + Vector3(0.5, 0.3, -1.0)
+	await _ticks(10)
+	lift.countdown_left = 0.1
+	lift.ride_time = 1.5
+	var hp := p.health
+	await _ticks(12)
+	_check(lift.state == ElevatorLift.State.DESCENDING and p.controls_locked, "flow: it goes down with the player aboard (controls held)")
+	await _ticks(60)
+	_check(p.global_position.y < 39.0 and p.global_position.distance_to(p.spawn_transform.origin) > 10.0 and is_equal_approx(p.health, hp),
+		"flow: riding down the shaft isn't a fall (%.1f m)" % p.global_position.y)
+	var wait := 0
+	while not flow.leaving and wait < 200:
+		wait += 1
+		await _ticks(1)
+	_check(flow.leaving and LevelTransfer.pending and LevelTransfer.character_id == p.character.id and LevelTransfer.weapons.has("Right"),
+		"flow: the ride ends -> the next part loads with the same character and weapons")
+	await _ticks(80)
+	var next := root.get_tree().current_scene
+	_check(next != null and next.scene_file_path == flow.next_level, "flow: the next part of the level is loaded (%s)" % (next.scene_file_path if next else "-"))
+	var np: PlayerController = next.players.get(1) if next and next.get(&"players") is Dictionary else null
+	_check(np != null and np.character.id == p.character.id and np.get_node("WeaponHolder").weapon("Right") != null and next.front_end == null,
+		"flow: the player arrives straight in (no title screen), same character, armed")
+	main.queue_free()
+	if next:
+		next.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
 
