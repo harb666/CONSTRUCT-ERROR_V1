@@ -217,6 +217,11 @@
   lighting / fog / sky reflections (`SkyforgePreviewLook`); check changes
   side by side with the preview (`pipeline/make_preview.py`). Grunts turn
   back from drops deeper than 3 m (`ledge_drop`). `?level=battle` / `toxic`.
+- Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
+  `source/`; owner asked): two on Skyforge; shot, they explode (green
+  cartoon blast, chain to barrels within 5 m) and leave burning green slime
+  puddles with green cartoon flames that hurt anyone standing in them
+  (`ToxicBarrel`, `ToxicBlast`, `ToxicSlime`).
 
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.

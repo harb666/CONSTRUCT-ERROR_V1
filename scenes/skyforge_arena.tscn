@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_enemy.tscn" id="7"]
 [ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_skirmisher.tscn" id="12"]
+[ext_resource type="Script" path="res://scripts/world/toxic_barrel.gd" id="barrel"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -58,6 +59,16 @@ patrol_distance = 0.0
 [node name="NorthSkirmisher" parent="Targets" instance=ExtResource("12")]
 transform = Transform3D(1.0, 0, -0.0, 0, 1, 0, 0.0, 0, 1.0, 2.5, 40.05, -33)
 respawn_time = -1.0
+
+[node name="Barrels" type="Node3D" parent="."]
+
+[node name="GateBarrel" type="StaticBody3D" parent="Barrels"]
+transform = Transform3D(0.866025, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866025, 6, 40, 29.5)
+script = ExtResource("barrel")
+
+[node name="HubBarrel" type="StaticBody3D" parent="Barrels"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, -8, 40, 10)
+script = ExtResource("barrel")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

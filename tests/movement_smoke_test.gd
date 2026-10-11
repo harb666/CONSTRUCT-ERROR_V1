@@ -537,6 +537,7 @@ func _run() -> void:
 	await _toxic_arena_tests()
 	await _battle_arena_tests()
 	await _skyforge_tests()
+	await _toxic_barrel_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4349,6 +4350,70 @@ func _skyforge_tests() -> void:
 	main.queue_free()
 	await _ticks(5)
 
+
+## Toxic barrels (owner asked): shot, they explode and leave burning green
+## slime.
+func _toxic_barrel_tests() -> void:
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(30)
+	var barrels: Array = main.get_tree().get_nodes_in_group(&"toxic_barrels")
+	_check(barrels.size() == 2, "barrel: two toxic barrels on Skyforge (%d)" % barrels.size())
+	var b: ToxicBarrel = main.get_node("Barrels/HubBarrel")
+	_check(b.targetable != null and Targetable.all().has(b.targetable) and b._glow_mat != null,
+		"barrel: it can be locked onto, and its slime glows")
+	var items := ToxicBlast.warm_up_items()
+	_check(items.size() == 4, "barrel: its blast and slime shaders are built behind the title screen")
+	for it in items:
+		it.free()
+	# Shot: it blows up, blows apart a grunt next to it, leaves slime.
+	var p: PlayerController = main.players[1]
+	var g: RobotEnemy = main.get_node("Targets/HubGruntWest")
+	g.global_position = b.global_position + Vector3(-1.5, 0.05, 0.5)
+	p.global_position = b.global_position + Vector3(0, 0.1, 9)
+	p.velocity = Vector3.ZERO
+	await _ticks(2)
+	var hp0 := p.health
+	var blasts := ToxicBlast.spawned
+	var slimes := ToxicSlime.spawned
+	var centre := b.global_position + Vector3.UP
+	PlasmaBolt.fire(main.get_tree(), centre + Vector3(0, 0.2, 5), Vector3.FORWARD, p, 60.0, 1.0, PlasmaBolt.GREEN, PlasmaBolt.HOT, &"players")
+	await _ticks(20)
+	_check(b.exploded and ToxicBlast.spawned == blasts + 1 and b.targetable == null and b.collision_layer == 0,
+		"barrel: a shot sets it off (no longer solid or targetable)")
+	_check(not g.alive, "barrel: a grunt right next to it is blown apart")
+	_check(is_equal_approx(p.health, hp0), "barrel: a player 9 m away isn't hurt")
+	await _ticks(60)
+	_check(ToxicSlime.spawned >= slimes + 3 and ToxicSlime.active >= 3, "barrel: it leaves burning green slime (%d puddles)" % (ToxicSlime.spawned - slimes))
+	_check(not is_instance_valid(b), "barrel: the barrel itself is gone")
+	# Standing in the slime burns.
+	p.global_position = centre + Vector3.DOWN * 0.9
+	p.velocity = Vector3.ZERO
+	p.armour = 0.0
+	var hp1 := p.health
+	await _ticks(130)
+	_check(p.health < hp1 - 3.0, "barrel: standing in the burning slime hurts (%.0f -> %.0f)" % [hp1, p.health])
+	# Barrels near a blast go off too.
+	var gate: ToxicBarrel = main.get_node("Barrels/GateBarrel")
+	var extra := ToxicBarrel.new()
+	main.get_node("Barrels").add_child(extra)
+	extra.global_position = gate.global_position + Vector3(2.5, 0, 0)
+	await _ticks(2)
+	p.global_position = gate.global_position + Vector3(0, 0.1, 3)
+	await _ticks(2)
+	p.armour = 0.0
+	hp1 = p.health
+	gate.explode(p)
+	await _ticks(4)
+	_check(gate.exploded and not extra.exploded, "barrel: a barrel close by doesn't go off at once...")
+	await _ticks(12)
+	_check(extra.exploded, "barrel: ...but a moment later (a chain)")
+	_check(p.health < hp1 and p.health > hp1 - 22.0, "barrel: a player at the edge of the blast is only hurt a little (%.0f)" % (hp1 - p.health))
+	main.queue_free()
+	await _ticks(5)
+	RobotEnemy.ai_enabled = ai_was
 
 ## Cartoon VFX (owner asked): puffy 3D fireballs / smoke, cartoon muzzle
 ## flashes and shotgun beams on the player's weapons, hologram teleport-ins.
