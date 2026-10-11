@@ -563,7 +563,21 @@ func get_skeleton() -> Skeleton3D:
 
 # --- Behaviour ---
 
+## Frost Byte: frozen state (FrostFreeze), shatter force, counters (tests).
+var _frost: FrostFreeze
+var _frost_anim_speed := 1.0
+var _shattering := false
+@export var shatter_force := 18.0
+var frozen_times := 0
+var shatters := 0
+
+
 func _physics_process(delta: float) -> void:
+	if alive and is_instance_valid(_frost) and _frost.active:
+		# Frozen solid (Frost Byte): stands still in its pose, does nothing.
+		linear_velocity = Vector3(0.0, minf(linear_velocity.y, 0.0), 0.0)
+		angular_velocity = Vector3.ZERO
+		return
 	if alive:
 		if suppression:
 			suppression.update(delta)
@@ -880,6 +894,12 @@ func take_damage(amount: float, from := Vector3.ZERO) -> void:
 func apply_damage(info: DamageInfo) -> void:
 	if not alive:
 		return
+	if is_instance_valid(_frost) and _frost.active:
+		# Frozen solid: a player's hit shatters it; robots' fire does nothing.
+		if info.source is RobotEnemy or info.source is RobotBoss:
+			return
+		shatter(info)
+		return
 	hits += 1
 	hit.emit(hits)
 	health -= info.damage_amount
@@ -908,6 +928,59 @@ func _suppressed() -> void:
 
 func aim_spread_scale() -> float:
 	return suppression.spread_scale() if suppression else 1.0
+
+
+# --- Frost Byte ---
+
+## Frozen for `seconds` (Frost Byte): an ice sculpture of itself (FrostFreeze).
+func frost_freeze(seconds: float) -> void:
+	if not alive:
+		return
+	var s = get(&"size_scale")
+	_frost = FrostFreeze.apply(self, seconds, false, float(s) if s != null else 1.0)
+	_frost_anim_speed = _anim.speed_scale if _anim.speed_scale > 0.0 else 1.0
+	_anim.speed_scale = 0.0
+	_burst_left = 0
+	linear_velocity = Vector3.ZERO
+	frozen_times += 1
+
+
+func is_frozen() -> bool:
+	return alive and is_instance_valid(_frost) and _frost.active
+
+
+## The ice cracked off (FrostFreeze): back to normal.
+func on_thawed() -> void:
+	if alive:
+		_anim.speed_scale = _frost_anim_speed
+
+
+## Shattered while frozen: every section breaks off at once in its frozen
+## pose, and the icy pieces melt away.
+func shatter(info: DamageInfo) -> void:
+	if not alive:
+		return
+	if is_instance_valid(_frost):
+		_frost.shatter()
+	var dir := info.impact_direction if info else Vector3.FORWARD
+	var at := info.impact_position if info else global_position + Vector3.UP
+	var si := DamageInfo.make(maxf(health, 0.0) + 1.0, DamageInfo.Type.EXPLOSION, at, dir, 0.0, shatter_force, info.source if info else null)
+	si.weapon = &"frost_shatter"
+	si.arm = info.arm if info else &""
+	_shattering = true
+	die(si)
+	_shattering = false
+	shatters += 1
+
+
+func _shatter_now(info: DamageInfo) -> void:
+	var cuts := _breaker.plan(BreakApart.Level.EXTREME, info)
+	if cuts.is_empty():
+		return
+	for piece in _breaker.detach(cuts, info, Vector3.ZERO, cuts):
+		piece.melt_away(randf_range(0.8, 1.5))
+	if _breaker.detached_count() >= section_set.sections.size():
+		_visual.visible = false
 
 
 func die(info: DamageInfo) -> void:
@@ -939,12 +1012,13 @@ func die(info: DamageInfo) -> void:
 	_settled = false
 	# Death reaction: one of the model's clips, or a procedural variation
 	# layered on one.
-	_anim.speed_scale = 1.0
+	_anim.speed_scale = 0.0 if _shattering else 1.0
 	if _foot_ik:
 		_foot_ik.set(&"enabled", false)
-	_play_death(info)
+	if not _shattering:
+		_play_death(info)
 	# How violently it dies depends on the killing hit.
-	last_destruction = _breaker.choose_level(info)
+	last_destruction = BreakApart.Level.EXTREME if _shattering else _breaker.choose_level(info)
 	if weapon_death_sound and last_destruction == BreakApart.Level.NONE and info \
 			and info.damage_type != DamageInfo.Type.EXPLOSION and info.damage_type != DamageInfo.Type.SUPERNOVA \
 			and info.weapon != &"black_hole":
@@ -961,7 +1035,9 @@ func die(info: DamageInfo) -> void:
 		if snd and starts[pick] > 0.0:
 			snd.play(starts[pick])
 		death_sounds += 1
-	if last_destruction == BreakApart.Level.NONE:
+	if _shattering:
+		_shatter_now(info)
+	elif last_destruction == BreakApart.Level.NONE:
 		_failure_sparks()
 	else:
 		_schedule_breakup(info)

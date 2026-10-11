@@ -43,6 +43,12 @@ static func status_of(w: Weapon) -> Array:
 		if left > 0.0:
 			return [1.0 - left / maxf(rl.fire_interval, 0.01), "RELOADING", HudStyle.WARN]
 		return [1.0, "READY", HudStyle.CYAN]
+	if w is FrostByte:
+		var fb := w as FrostByte
+		var fl := fb.reload_left()
+		if fl > 0.0:
+			return [1.0 - fl / maxf(fb.fire_interval, 0.01), "CHARGING", HudStyle.WARN]
+		return [1.0, "READY", HudStyle.CYAN]
 	if w is MachineGun:
 		var mg := w as MachineGun
 		if mg.overheated:

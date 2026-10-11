@@ -177,6 +177,15 @@
   `BossStompPose`, `StompShockwave`, `PlayerKnockdown`,
   `KnockdownPoseModifier`.
 
+- Frost Byte (owner's model, white pad; owner asked): mounted / dual-wielded
+  like the other arm weapons. Every 10 s (only with a locked target within
+  17 m) it fires a blizzard of swirling white / ice-blue spirals, 16 m long,
+  widening to ~5 m (`FrostBlizzard`), that freezes robots it reaches for
+  10 s (`FrostFreeze`): grunts / skirmishers become ice sculptures of their
+  pose, the boss gets a frost layer and icicles (still takes damage). Any
+  player hit on a frozen grunt / skirmisher shatters it into pieces that
+  melt away; robots' fire doesn't. No frost sounds yet (none supplied).
+
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

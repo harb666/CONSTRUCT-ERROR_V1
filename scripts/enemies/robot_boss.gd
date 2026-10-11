@@ -332,6 +332,8 @@ var _detour_yaw := 0.0
 var _flash_pivot: Node3D
 ## Foot stomp: the pose layer, stomps done and players knocked (tests).
 var stomp_pose: BossStompPose
+var _frost: FrostFreeze
+var frozen_times := 0
 var stomps := 0
 var stomp_knocks := 0
 var last_stomp_wave: StompShockwave
@@ -615,6 +617,15 @@ func _physics_process(delta: float) -> void:
 	if not alive:
 		_update_death(delta)
 		return
+	if is_frozen():
+		# Frozen (Frost Byte): stands still, guns quiet, until it thaws.
+		var lv := linear_velocity
+		linear_velocity = Vector3(0.0, lv.y, 0.0)
+		_speed = 0.0
+		set_spin(move_toward(_spin, 0.0, delta / maxf(chaingun_spin_down, 0.01)))
+		_gun_phase = 0
+		_update_targetable()
+		return
 	if stagger:
 		stagger.update(delta)
 		if stagger.is_staggered():
@@ -712,6 +723,38 @@ func _update_stagger(delta: float) -> void:
 		hit_react.kick(0.25, Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
 		core_fx.core_pos = core.global_position
 		core_fx.hit(0.3, Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+
+
+# --- Frost Byte ---
+
+## Frozen for `seconds`: a frosted layer and icicles (FrostFreeze); it stands
+## still and quiet but takes damage as usual.
+func frost_freeze(seconds: float) -> void:
+	if not alive:
+		return
+	if state == State.STOMP:
+		_end_stomp()
+	if state == State.WINDUP:
+		state = State.COMBAT
+		_missile_t = maxf(_missile_t, 2.0)
+	turn_dir = 0
+	_turning = false
+	_frost = FrostFreeze.apply(self, seconds, true, model_scale)
+	anim.speed_scale = 0.0
+	if chest_player:
+		chest_player.speed_scale = 0.0
+	frozen_times += 1
+
+
+func is_frozen() -> bool:
+	return alive and is_instance_valid(_frost) and _frost.active
+
+
+func on_thawed() -> void:
+	if alive:
+		anim.speed_scale = 1.0
+		if chest_player:
+			chest_player.speed_scale = 1.0
 
 
 # --- Stomp ---
@@ -1368,6 +1411,8 @@ func hits_core(info: DamageInfo) -> bool:
 func die(_info: DamageInfo = null) -> void:
 	if not alive:
 		return
+	if is_instance_valid(_frost) and _frost.active:
+		_frost.thaw()
 	alive = false
 	if stomp_pose:
 		stomp_pose.t = -1.0

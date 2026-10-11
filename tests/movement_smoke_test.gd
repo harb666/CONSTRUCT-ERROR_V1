@@ -521,6 +521,7 @@ func _run() -> void:
 	await _barrel_glow_tests(main)
 	await _turned_spawn_tests(main)
 	await _melee_tests(main)
+	await _frost_byte_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -731,6 +732,119 @@ func _check_once(cond: bool, msg: String) -> void:
 	if not cond and not _once_failed.has(msg):
 		_once_failed[msg] = true
 		_check(false, msg)
+
+
+## Frost Byte (owner asked): fires a widening blizzard every 10 s that
+## freezes robots for 10 s - grunts / skirmishers into ice sculptures that a
+## player's hit shatters (the pieces melt), the boss frosted over.
+func _frost_byte_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	sel.clear()
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var fb := load("res://resources/weapons/frost_byte.tres") as WeaponDefinition
+	_check(reg.weapons.has(fb) and fb.icon != null and fb.mount_mode == 1, "frost byte: a registered arm weapon with a wheel icon")
+	var pad := main.get_node_or_null("FrostByteSpawnPad") as WeaponSpawnPad
+	_check(pad != null and pad.weapon == fb and pad.glow_color.r > 0.8 and pad.glow_color.g > 0.9 and pad.glow_color.b > 0.95, "frost byte: its own white pad")
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var spot := Vector3(-34, 0, -34)
+	p.global_position = spot + Vector3(0, 0.05, 9.0)
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	h.equip(fb, "Right")
+	await _ticks(10)
+	var gun := h.weapon("Right") as FrostByte
+	_check(gun != null and gun.can_fire() and WeaponHud.status_of(gun)[1] == "READY", "frost byte: equipped, charged")
+	# Out of reach: holds its charge.
+	_check(not gun.fire_at(p, gun.muzzle_position() + Vector3(0, 0, -40)) and gun.can_fire(), "frost byte: doesn't fire at targets out of its reach")
+	var g := _spawn_robot(main, spot + Vector3(0.3, 0, 0))
+	var sk := _spawn_skirmisher(main, spot + Vector3(-2.2, 0, 1.0))
+	var far := _spawn_robot(main, spot + Vector3(14.0, 0, 0))
+	await _ticks(10)
+	for r: RobotEnemy in [g, sk, far]:
+		r.global_position = r.global_position * Vector3(1, 0, 1)
+		r.linear_velocity = Vector3.ZERO
+	await _ticks(5)
+	var b0 := FrostBlizzard.spawned
+	_check(gun.fire_at(p, g.global_position + Vector3.UP), "frost byte: fires its blizzard at a target in reach")
+	_check(not gun.can_fire() and WeaponHud.status_of(gun)[1] == "CHARGING" and FrostBlizzard.spawned == b0 + 1, "frost byte: then charges for 10 s (HUD: CHARGING)")
+	await _ticks(50)
+	var bl := gun.last_blizzard
+	_check(g.is_frozen() and sk.is_frozen(), "frost byte: the blizzard freezes the grunt and the skirmisher in its cone")
+	_check(not far.is_frozen(), "frost byte: robots outside the cone aren't frozen")
+	_check(bl.radius_at(14.0) > bl.radius_at(2.0) * 3.0, "frost byte: the blizzard widens further out (%.1f m -> %.1f m)" % [bl.radius_at(2.0), bl.radius_at(14.0)])
+	var fz := g.get_node_or_null("FrostFreeze") as FrostFreeze
+	var coated := 0
+	for mi: MeshInstance3D in g.find_children("*", "MeshInstance3D", true, false):
+		if mi.material_overlay is ShaderMaterial and (mi.material_overlay as ShaderMaterial).shader == FrostFreeze.SHADER:
+			coated += 1
+	_check(fz != null and coated >= 1 and fz._crystals.size() >= 6, "frost byte: frozen grunt is an ice sculpture of itself (coat on %d meshes, %d crystals)" % [coated, fz._crystals.size() if fz else 0])
+	# Frozen: still, quiet; robot fire does nothing.
+	var gp := g.global_position
+	var shots := g.shots_fired
+	g.target = p
+	await _ticks(60)
+	_check(g.global_position.distance_to(gp) < 0.05 and g.shots_fired == shots, "frost byte: frozen robots stand still and don't fire")
+	var hp := g.health
+	g.apply_damage(DamageInfo.make(0.5, DamageInfo.Type.ENERGY, g.global_position + Vector3.UP, Vector3.FORWARD, 1.0, 0.0, far))
+	_check(g.is_frozen() and g.health == hp, "frost byte: robots' fire doesn't hurt a frozen robot")
+	# A player's hit shatters it; the pieces melt away.
+	var before := root.find_children("*", "RigidBody3D", true, false).filter(func(x) -> bool: return x is DebrisPiece)
+	g.apply_damage(DamageInfo.make(0.2, DamageInfo.Type.ENERGY, g.global_position + Vector3.UP, Vector3(0, 0, -1), 1.0, 0.0, p))
+	await _ticks(2)
+	_check(not g.alive and g.shatters == 1 and g.last_destruction == BreakApart.Level.EXTREME, "frost byte: a player's hit shatters a frozen grunt into pieces")
+	var pieces: Array = []
+	for n in root.find_children("*", "RigidBody3D", true, false):
+		if n is DebrisPiece and not before.has(n) and n.global_position.distance_to(gp) < 4.0:
+			pieces.append(n)
+	await _ticks(180)
+	var left := pieces.filter(func(x) -> bool: return is_instance_valid(x)).size()
+	_check(pieces.size() >= 4 and left == 0, "frost byte: the icy pieces melt away (%d pieces, %d left after 3 s)" % [pieces.size(), left])
+	# The skirmisher thaws after its 10 s and fights on.
+	var sfz := sk.get_node_or_null("FrostFreeze") as FrostFreeze
+	sfz.time_left = 0.2
+	await _ticks(40)
+	_check(sk.alive and not sk.is_frozen() and sk._anim.speed_scale > 0.0, "frost byte: after 10 s the ice cracks off and it's free")
+	var kept := 0
+	for mi: MeshInstance3D in sk.find_children("*", "MeshInstance3D", true, false):
+		if mi.material_overlay is ShaderMaterial and (mi.material_overlay as ShaderMaterial).shader == FrostFreeze.SHADER:
+			kept += 1
+	_check(kept == 0, "frost byte: no ice left on it")
+	for r in [sk, far]:
+		if is_instance_valid(r):
+			r.queue_free()
+	# The boss: frosted over, icicles, frozen still - and still takes damage.
+	var boss: RobotBoss = null
+	for n in main.find_children("*", "RobotBoss", true, false):
+		boss = n
+	var spawned_boss := false
+	if boss == null:
+		boss = (load("res://scenes/enemies/robot_boss.tscn") as PackedScene).instantiate()
+		main.add_child(boss)
+		boss.global_position = spot + Vector3(-12, 0, -6)
+		spawned_boss = true
+		await _ticks(20)
+	if boss and boss.alive:
+		var bh := boss.health
+		boss.frost_freeze(10.0)
+		await _ticks(20)
+		var bfz := boss.get_node_or_null("FrostFreeze") as FrostFreeze
+		_check(boss.is_frozen() and bfz.heavy and float((bfz._mat).get_shader_parameter("frost")) > 0.9 and bfz._crystals.size() >= 8,
+			"frost byte: the boss is frosted over with icicles")
+		boss.apply_damage(DamageInfo.make(2.0, DamageInfo.Type.ENERGY, boss.global_position + Vector3.UP * 2.0, Vector3.FORWARD, 1.0, 0.0, p))
+		_check(boss.alive and boss.health < bh and boss.is_frozen(), "frost byte: a frozen boss still takes damage (doesn't shatter)")
+		bfz.time_left = 0.1
+		await _ticks(40)
+		_check(not boss.is_frozen() and boss.anim.speed_scale > 0.0, "frost byte: the boss thaws")
+		boss.health = boss.max_health
+	if spawned_boss:
+		boss.queue_free()
+	RobotEnemy.ai_enabled = ai_was
+	h.equip(h.default_weapon, "Right")
+	await _ticks(10)
 
 
 ## Melee punch-shot (owner asked): pistol cannon on the right arm, one foot

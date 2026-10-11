@@ -107,6 +107,46 @@ func _physics_process(delta: float) -> void:
 		despawn()
 
 
+## Ice (a shattered frozen robot): after `delay` the piece melts away -
+## slumps, sinks and turns to water, with a wisp of cold steam.
+func melt_away(delay: float) -> void:
+	get_tree().create_timer(delay, false, true).timeout.connect(_melt)
+
+
+func _melt() -> void:
+	if _despawning or not is_inside_tree():
+		return
+	_despawning = true
+	_active.erase(self)
+	set_physics_process(false)
+	collision_layer = 0
+	collision_mask = 0
+	freeze = true
+	var t := 1.1
+	var tw := create_tween().set_parallel(true)
+	if pose:
+		var s := pose.scale
+		tw.tween_property(pose, "scale", Vector3(s.x * 1.15, s.y * 0.05, s.z * 1.15), t).set_ease(Tween.EASE_IN)
+		tw.tween_property(pose, "position:y", pose.position.y - 0.15, t)
+		for mi: MeshInstance3D in pose.find_children("*", "MeshInstance3D", true, false):
+			var m := mi.material_overlay as ShaderMaterial
+			if m and m.shader and m.get_shader_parameter("melt") != null:
+				tw.tween_property(m, "shader_parameter/melt", 1.0, t)
+				break
+	var host := get_parent()
+	if host:
+		var pf := ToonPuff.new()
+		pf.set_colors(Color(0.88, 0.94, 1.0))
+		host.add_child(pf)
+		pf.size = 0.3
+		pf.life = 0.9
+		pf.rise = 0.6
+		pf.delay = 0.3
+		pf.play(global_position + Vector3.UP * 0.1, false)
+		get_tree().create_timer(1.5).timeout.connect(pf.queue_free)
+	tw.chain().tween_callback(queue_free)
+
+
 func despawn() -> void:
 	if _despawning or not is_inside_tree():
 		return
