@@ -75,6 +75,10 @@ var _flow_t := 0.0
 var _last_cmd: PlayerCommand
 var _presses := {"jp": false, "dp": false, "mp": false}
 var _hooked_player: PlayerController
+## Host: peers whose level has loaded (they asked for the world). Only they
+## get the streams (snapshots, world events): a phone busy loading a level
+## would otherwise have its receive buffer flooded and drop data.
+var _ready_peers := {}
 
 
 func _enter_tree() -> void:
@@ -121,6 +125,7 @@ static func local_player(tree: SceneTree) -> PlayerController:
 ## everyone).
 static func go_to_level(tree: SceneTree, scene_path: String) -> void:
 	if is_online() and instance.multiplayer.is_server():
+		instance._ready_peers.clear()  # everyone's loading
 		instance.rpc(&"_go_level", scene_path)
 	LevelTransfer.go(tree, scene_path, local_player(tree))
 
@@ -134,7 +139,14 @@ static func world_event(node: Node, kind: StringName, args: Array = []) -> void:
 	if scene == null:
 		return
 	instance._count(instance.sent, kind)
-	instance.rpc(&"_world_event", String(scene.get_path_to(node)), kind, args)
+	instance._to_ready(&"_world_event", [String(scene.get_path_to(node)), kind, args])
+
+
+## Host: call `method` on every peer whose level has loaded.
+func _to_ready(method: StringName, args: Array, except := 0) -> void:
+	for pid in _ready_peers:
+		if pid != except and pid in multiplayer.get_peers():
+			rpc_id.callv([pid, method] + args)
 
 
 # --- Hosting / joining ---
@@ -379,6 +391,7 @@ func _on_peer_disconnected(id: int) -> void:
 		_src_of.erase(id)
 	var slot := int((roster.get(id, {}) as Dictionary).get("slot", 0))
 	roster.erase(id)
+	_ready_peers.erase(id)
 	roster_changed.emit()
 	_remove_player(slot)
 	if multiplayer.is_server():
@@ -451,6 +464,7 @@ func _hello(info: Dictionary) -> void:
 	while slot in used:
 		slot += 1
 	roster[id] = {"slot": slot, "character": String(info.get("character", "")), "deployed": false}
+	_ready_peers.erase(id)
 	roster_changed.emit()
 	var scene := get_tree().current_scene
 	rpc_id(id, &"_welcome", {"slot": slot, "level": scene.scene_file_path if scene else ""})
@@ -596,12 +610,19 @@ func _send_player() -> void:
 	d["ar"] = p.armour
 	d["lvl"] = scene.scene_file_path if scene else ""
 	_count(sent, &"player")
-	rpc(&"_player_state", my_slot, d)
+	if multiplayer.is_server():
+		_to_ready(&"_player_state", [my_slot, d])
+	else:
+		rpc_id(1, &"_player_state", my_slot, d)  # the host passes it on
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _player_state(slot: int, d: Dictionary) -> void:
+	if multiplayer.get_remote_sender_id() != 1 and not multiplayer.is_server():
+		return  # (joined devices only take these from the host)
 	_count(received, &"player")
+	if multiplayer.is_server():
+		_to_ready(&"_player_state", [slot, d], multiplayer.get_remote_sender_id())
 	var scene := get_tree().current_scene
 	if scene == null or String(d.get("lvl", "")) != scene.scene_file_path:
 		return
@@ -646,7 +667,7 @@ func _send_robots() -> void:
 		var t = r.get(&"target")
 		out.append([String(scene.get_path_to(r)), r.global_position, _slot_of(t) if t is Node else 0])
 	_count(sent, &"robots")
-	rpc(&"_robots", scene.scene_file_path, out)
+	_to_ready(&"_robots", [scene.scene_file_path, out])
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -667,7 +688,7 @@ func _send_flow() -> void:
 	if flow == null or flow.director == null:
 		return
 	var d := flow.director
-	rpc(&"_flow", get_tree().current_scene.scene_file_path, d.wave, int(d.state), d.remaining())
+	_to_ready(&"_flow", [get_tree().current_scene.scene_file_path, d.wave, int(d.state), d.remaining()])
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -697,7 +718,7 @@ static func robot_spawned(robot: Node3D, parent: Node) -> void:
 		return
 	var scene := robot.get_tree().current_scene
 	instance._count(instance.sent, &"spawn")
-	instance.rpc(&"_robot_spawn", String(scene.get_path_to(parent)), robot.name, robot.scene_file_path, robot.global_transform)
+	instance._to_ready(&"_robot_spawn", [String(scene.get_path_to(parent)), String(robot.name), robot.scene_file_path, robot.global_transform])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -724,6 +745,7 @@ func _want_world() -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
+	_ready_peers[multiplayer.get_remote_sender_id()] = true
 	var robots := []
 	for e in get_tree().get_nodes_in_group(&"enemies"):
 		var r := e as Node3D
