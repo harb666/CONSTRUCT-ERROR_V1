@@ -57,6 +57,13 @@ const ROCKET_FIRING := preload("res://assets/audio/weapons/rocket_launcher_firin
 const ROCKET_EXPLODE_0 := preload("res://assets/audio/weapons/rocket_explode_0.ogg")
 const ROCKET_EXPLODE_1 := preload("res://assets/audio/weapons/rocket_explode_1.ogg")
 const ROCKET_EXPLODE_2 := preload("res://assets/audio/weapons/rocket_explode_2.ogg")
+## The owner's Frost Byte sounds - keep these exact files; never replace or
+## regenerate them without asking. ICE_BLASTER_FIRING: each blizzard shot.
+## ENEMY_FROZEN_*: a frozen robot straining in the ice, played one after
+## another for as long as it stays frozen.
+const ICE_BLASTER_FIRING := preload("res://assets/audio/weapons/ice_blaster_firing.mp3")
+const ENEMY_FROZEN_1 := preload("res://assets/audio/enemies/enemy_frozen_1.mp3")
+const ENEMY_FROZEN_2 := preload("res://assets/audio/enemies/enemy_frozen_2.mp3")
 ## The generated cannon shot (no longer used by the grunts) and the
 ## plasma shotgun's blast (generated: tools/make_weapon_sfx.py).
 const CANNON_SHOT := preload("res://assets/audio/plasma/cannon_shot.ogg")

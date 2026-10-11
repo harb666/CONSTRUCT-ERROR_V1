@@ -334,6 +334,13 @@ var _flash_pivot: Node3D
 var stomp_pose: BossStompPose
 var _frost: FrostFreeze
 var frozen_times := 0
+## Shot while frozen (owner asked): it only takes `frozen_damage_scale` of
+## the damage, and each hit thaws it sooner - `frozen_thaw_per_damage`
+## seconds off the freeze per point of the hit's damage (at most
+## `frozen_thaw_max_per_hit` a hit).
+@export var frozen_damage_scale := 0.5
+@export var frozen_thaw_per_damage := 1.2
+@export var frozen_thaw_max_per_hit := 3.0
 var stomps := 0
 var stomp_knocks := 0
 var last_stomp_wave: StompShockwave
@@ -728,7 +735,8 @@ func _update_stagger(delta: float) -> void:
 # --- Frost Byte ---
 
 ## Frozen for `seconds`: a frosted layer and icicles (FrostFreeze); it stands
-## still and quiet but takes damage as usual.
+## still and quiet. Hits while frozen hurt it a little and thaw it sooner
+## (apply_damage).
 func frost_freeze(seconds: float) -> void:
 	if not alive:
 		return
@@ -1369,7 +1377,11 @@ func apply_damage(info: DamageInfo) -> void:
 	var on_core := exposed and hits_core(info)
 	var armour := armour_damage_scale * (stagger_armour_scale if is_staggered() else 1.0)
 	var amount := info.damage_amount * (core_damage_scale if on_core else armour)
-	if stagger:
+	if is_frozen():
+		# Frozen: only slightly hurt, and the ice gives way sooner.
+		amount *= frozen_damage_scale
+		_frost.chip(minf(info.damage_amount * frozen_thaw_per_damage, frozen_thaw_max_per_hit))
+	if stagger and not is_frozen():
 		stagger.add(info)
 	health -= amount
 	# Cartoon "POW" star where it was hit (bigger on the core), throttled.

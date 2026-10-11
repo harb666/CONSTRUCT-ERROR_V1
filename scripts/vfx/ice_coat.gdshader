@@ -40,7 +40,10 @@ void fragment() {
 	float n = noise3(p * 1.7);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.2);
 	// Faceted look: the normal bent by blocky noise.
-	vec3 facet = vec3(noise3(floor(p * 1.3)) - 0.5, noise3(floor(p * 1.3) + 9.0) - 0.5, noise3(floor(p * 1.3) + 21.0) - 0.5);
+	// (hash3 of the cell = noise3 at a whole-number point, at an eighth of
+	// the cost.)
+	vec3 cell = floor(p * 1.3);
+	vec3 facet = vec3(hash3(cell) - 0.5, hash3(cell + 9.0) - 0.5, hash3(cell + 21.0) - 0.5);
 	NORMAL = normalize(NORMAL + facet * 0.55 * (1.0 - frost));
 	// Cracks: thin bright lines where the noise crosses its middle.
 	float crack = 1.0 - smoothstep(0.0, 0.035, abs(noise3(p * 0.8 + seed) - 0.5));

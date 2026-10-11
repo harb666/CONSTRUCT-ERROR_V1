@@ -72,6 +72,17 @@
   owner's rocket explosion sounds. Each rocket blast plays one at random,
   never the same twice running (`PlayerRocket._explode_sound`).
 
+- `assets/audio/weapons/ice_blaster_firing.mp3` (sha256
+  670952a74ae1d653cfc992ad18b538facca40f61e67330fac60f7bd4a4150bfc) - the
+  Frost Byte's firing sound, supplied by the owner (`Sfx.ICE_BLASTER_FIRING`).
+- `assets/audio/enemies/enemy_frozen_1.mp3` (sha256
+  22fe39bf38c235dd9742d65a4591fae3a6c3af2255ffe308a386bb71593b16ba) and
+  `assets/audio/enemies/enemy_frozen_2.mp3` (sha256
+  15aee088d45669b72719954f02179a54ef1c4d58f900e58767ccc1c3f0875259) - the
+  owner's frozen-enemy sounds: every frozen robot (boss too) plays them one
+  after the other, never the same twice running, until it thaws or
+  shatters (`FrostFreeze._next_sound`).
+
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
   their muzzle flashes stay on. The player's machine gun effects (barrel heat
@@ -181,10 +192,13 @@
   like the other arm weapons. Every 10 s (only with a locked target within
   17 m) it fires a blizzard of swirling white / ice-blue spirals, 16 m long,
   widening to ~5 m (`FrostBlizzard`), that freezes robots it reaches for
-  10 s (`FrostFreeze`): grunts / skirmishers become ice sculptures of their
-  pose, the boss gets a frost layer and icicles (still takes damage). Any
+  20 s (`FrostFreeze`; owner asked, was 10): grunts / skirmishers become ice
+  sculptures of their pose, the boss gets a frost layer and icicles. Any
   player hit on a frozen grunt / skirmisher shatters it into pieces that
-  melt away; robots' fire doesn't. No frost sounds yet (none supplied).
+  melt away; robots' fire doesn't. Shot while frozen, the boss is only
+  slightly hurt (half damage) and thaws sooner (owner asked). Sounds are
+  the owner's (below): ice blaster firing; frozen robots play the two
+  frozen sounds one after the other while frozen.
 
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.

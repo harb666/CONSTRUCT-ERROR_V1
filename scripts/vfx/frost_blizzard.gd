@@ -25,7 +25,7 @@ const FLOOR_PATCHES := 4
 @export var widen := 0.3
 @export var speed := 30.0
 @export var life := 1.35
-@export var freeze_time := 10.0
+@export var freeze_time := 20.0
 
 static var _pool: Array[FrostBlizzard] = []
 static var _mesh: ArrayMesh
@@ -133,6 +133,36 @@ func _ready() -> void:
 	visible = false
 	set_process(false)
 	set_physics_process(false)
+
+
+## One of each material the blizzard uses, for Vfx.warm_up (phones prepare
+## the shaders behind the title screen, not on the first shot).
+static func warm_up_items() -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for sh: Shader in [SPIRAL_SHADER, VORTEX_SHADER, FLOOR_SHADER]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = QuadMesh.new()
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		if sh != FLOOR_SHADER:
+			m.set_shader_parameter("front", 1.0)
+			m.set_shader_parameter("fade", 1.0)
+		mi.material_override = m
+		out.append(mi)
+	var b := FrostBlizzard.new()
+	for p: CPUParticles3D in [b._make_snow(), b._make_shards()]:
+		p.one_shot = false
+		p.amount = 2
+		p.initial_velocity_min = 0.0
+		p.initial_velocity_max = 0.0
+		p.damping_min = 0.0
+		p.damping_max = 0.0
+		p.gravity = Vector3.ZERO
+		p.local_coords = true
+		p.emitting = true
+		out.append(p)
+	b.free()
+	return out
 
 
 ## Spiral bands wound round the cone (local +Z), built once and shared.

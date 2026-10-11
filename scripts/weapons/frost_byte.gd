@@ -2,22 +2,28 @@ class_name FrostByte
 extends Weapon
 ## Frost Byte (owner's model): an arm cannon that fires a powerful cold
 ## blizzard every `fire_interval` seconds (owner asked: 10) - FrostBlizzard,
-## a cone that widens further out, freezing the robots it reaches for 10 s.
+## a cone that widens further out, freezing the robots it reaches for 20 s.
 ## Only fires when the locked target is within the blizzard's reach. A big
 ## white / ice-blue cartoon flash and a cold puff at the muzzle, heavy
-## recoil, and cold mist drifting from the muzzle while it waits.
+## recoil, and cold mist drifting from the muzzle while it waits. Firing
+## sound: the owner's ice blaster (Sfx.ICE_BLASTER_FIRING).
 
 @export var fire_interval := 10.0
 ## Fires only at targets this close (the blizzard's reach, a little over).
 @export var max_range := 17.0
+@export var fire_volume_db := 0.0
+@export var fire_near := 5.0
+@export var fire_far := 60.0
 
 var _cool := 0.0
 var _muzzle: Node3D
 var cel_flash: CelFlash
 var _mist: CPUParticles3D
+var _fire_sound: DynamicSound
 var last_blizzard: FrostBlizzard
 ## Counters (tests).
 var shots_fired := 0
+var fire_sounds := 0
 
 
 func _ready() -> void:
@@ -32,6 +38,8 @@ func _ready() -> void:
 	cel_flash.glow_size = 3.0
 	add_child(cel_flash)
 	cel_flash.setup(Color(0.45, 0.82, 1.0), Color(0.95, 0.99, 1.0))
+	# One voice: a shot every 10 s, far longer than the sound.
+	_fire_sound = Sfx.emitter(self, Sfx.ICE_BLASTER_FIRING, fire_volume_db, fire_near, fire_far)
 
 
 func on_equipped(owner_player: Node) -> void:
@@ -75,6 +83,11 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	last_blizzard = FrostBlizzard.fire(get_tree(), from, dir, shooter)
 	cel_flash.fire(from, dir, 1.3)
 	PlasmaFx.muzzle_flash(get_tree(), from, dir, Color(0.5, 0.85, 1.0), Color(1, 1, 1), true)
+	if _fire_sound:
+		_fire_sound.global_position = from
+		_fire_sound.pitch_scale = randf_range(0.97, 1.03)
+		_fire_sound.play()
+		fire_sounds += 1
 	shots_fired += 1
 	recoiled.emit(recoil_strength)
 	return true

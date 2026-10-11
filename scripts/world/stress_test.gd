@@ -95,6 +95,60 @@ static func start_melee_soak(main: Node, player: PlayerController) -> void:
 					e.queue_free())))
 
 
+## `?frostsoak=1` (test only): the Frost Byte on the right arm, the machine
+## gun on the left. Every 12 s a crowd of 6 grunts and 2 skirmishers is put
+## 9 m in front of the player, the Frost Byte is locked on it (one blizzard
+## freezes the crowd) and the machine gun then shatters them one by one -
+## the pattern before the iPhone freeze / crash with the Frost Byte.
+static func frost_soak() -> bool:
+	return _param("frostsoak") != ""
+
+
+static func start_frost_soak(main: Node, player: PlayerController) -> void:
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var h := player.get_node("WeaponHolder") as WeaponHolder
+	var lo := player.get_node("WeaponLoadout") as WeaponLoadout
+	for id: StringName in [&"frost_byte", &"machine_gun"]:
+		lo.unlock(reg.find(id))
+	h.equip(reg.find(&"frost_byte"), "Right")
+	h.equip(reg.find(&"machine_gun"), "Left")
+	var sel := player.get_node("Input/TargetSelector") as TargetSelector
+	var crowd: Array[RobotEnemy] = []
+	var cycle := func() -> void:
+		if not is_instance_valid(player):
+			return
+		for e in crowd:
+			if is_instance_valid(e):
+				e.queue_free()
+		crowd.clear()
+		var fwd := -player.global_basis.z
+		fwd.y = 0.0
+		fwd = fwd.normalized()
+		var side := fwd.cross(Vector3.UP)
+		for i in 8:
+			var scene: PackedScene = load("res://scenes/enemies/robot_skirmisher.tscn" if i >= 6 else "res://scenes/enemies/robot_enemy.tscn")
+			var e: RobotEnemy = scene.instantiate()
+			e.respawn_time = -1.0
+			e.patrol_distance = 0.0
+			main.add_child(e)
+			e.global_position = player.global_position + fwd * (8.0 + (i / 4) * 1.6) + side * ((i % 4) - 1.5) * 1.3
+			e.reset_physics_interpolation()
+			crowd.append(e)
+		player.get_tree().create_timer(0.4).timeout.connect(func() -> void:
+			if crowd.size() > 1 and is_instance_valid(crowd[1]):
+				sel._set_side("Right", crowd[1].get_node("Targetable")))
+		for k in 8:
+			player.get_tree().create_timer(2.5 + k * 0.7).timeout.connect(func() -> void:
+				if k < crowd.size() and is_instance_valid(crowd[k]) and crowd[k].alive:
+					sel._set_side("Left", crowd[k].get_node("Targetable")))
+	var t := Timer.new()
+	t.wait_time = 12.0
+	t.autostart = true
+	main.add_child(t)
+	t.timeout.connect(cycle)
+	cycle.call()
+
+
 static func perf_enabled() -> bool:
 	return robot_count() > 0 or _param("perf") != ""
 

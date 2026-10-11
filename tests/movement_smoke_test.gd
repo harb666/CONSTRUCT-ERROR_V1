@@ -771,6 +771,14 @@ func _frost_byte_tests(main: Node) -> void:
 	var b0 := FrostBlizzard.spawned
 	_check(gun.fire_at(p, g.global_position + Vector3.UP), "frost byte: fires its blizzard at a target in reach")
 	_check(not gun.can_fire() and WeaponHud.status_of(gun)[1] == "CHARGING" and FrostBlizzard.spawned == b0 + 1, "frost byte: then charges for 10 s (HUD: CHARGING)")
+	_check(gun.fire_sounds == 1 and gun._fire_sound.stream == Sfx.ICE_BLASTER_FIRING, "frost byte: plays the owner's ice blaster firing sound")
+	const FROST_SHAS := {
+		"weapons/ice_blaster_firing.mp3": "670952a74ae1d653cfc992ad18b538facca40f61e67330fac60f7bd4a4150bfc",
+		"enemies/enemy_frozen_1.mp3": "22fe39bf38c235dd9742d65a4591fae3a6c3af2255ffe308a386bb71593b16ba",
+		"enemies/enemy_frozen_2.mp3": "15aee088d45669b72719954f02179a54ef1c4d58f900e58767ccc1c3f0875259"}
+	for f in FROST_SHAS:
+		if FileAccess.file_exists("res://assets/audio/" + f):
+			_check(FileAccess.get_sha256("res://assets/audio/" + f) == FROST_SHAS[f], "audio: %s is the owner's original, unchanged" % f)
 	await _ticks(50)
 	var bl := gun.last_blizzard
 	_check(g.is_frozen() and sk.is_frozen(), "frost byte: the blizzard freezes the grunt and the skirmisher in its cone")
@@ -781,6 +789,12 @@ func _frost_byte_tests(main: Node) -> void:
 	for mi: MeshInstance3D in g.find_children("*", "MeshInstance3D", true, false):
 		if mi.material_overlay is ShaderMaterial and (mi.material_overlay as ShaderMaterial).shader == FrostFreeze.SHADER:
 			coated += 1
+	_check(fz != null and fz.time_left > 18.0, "frost byte: frozen for 20 s (%.1f s left)" % (fz.time_left if fz else 0.0))
+	var frozen_streams := [Sfx.ENEMY_FROZEN_1, Sfx.ENEMY_FROZEN_2]
+	_check(fz != null and fz.sounds_played == 1 and fz._sound.stream in frozen_streams, "frost byte: a frozen robot makes one of the owner's frozen sounds")
+	var s1: AudioStream = fz._sound.stream
+	fz._next_sound()
+	_check(fz.sounds_played == 2 and fz._sound.stream != s1 and fz._sound.stream in frozen_streams, "frost byte: and then the other, for as long as it's frozen")
 	_check(fz != null and coated >= 1 and fz._crystals.size() >= 6, "frost byte: frozen grunt is an ice sculpture of itself (coat on %d meshes, %d crystals)" % [coated, fz._crystals.size() if fz else 0])
 	# Frozen: still, quiet; robot fire does nothing.
 	var gp := g.global_position
@@ -803,11 +817,12 @@ func _frost_byte_tests(main: Node) -> void:
 	await _ticks(180)
 	var left := pieces.filter(func(x) -> bool: return is_instance_valid(x)).size()
 	_check(pieces.size() >= 4 and left == 0, "frost byte: the icy pieces melt away (%d pieces, %d left after 3 s)" % [pieces.size(), left])
-	# The skirmisher thaws after its 10 s and fights on.
+	# The skirmisher thaws after its 20 s and fights on.
 	var sfz := sk.get_node_or_null("FrostFreeze") as FrostFreeze
 	sfz.time_left = 0.2
 	await _ticks(40)
-	_check(sk.alive and not sk.is_frozen() and sk._anim.speed_scale > 0.0, "frost byte: after 10 s the ice cracks off and it's free")
+	_check(sk.alive and not sk.is_frozen() and sk._anim.speed_scale > 0.0, "frost byte: after 20 s the ice cracks off and it's free")
+	_check(not is_instance_valid(sfz) or sfz._sound == null or not is_instance_valid(sfz._sound) or not sfz._sound.playing, "frost byte: its frozen sound stops when it thaws")
 	var kept := 0
 	for mi: MeshInstance3D in sk.find_children("*", "MeshInstance3D", true, false):
 		if mi.material_overlay is ShaderMaterial and (mi.material_overlay as ShaderMaterial).shader == FrostFreeze.SHADER:
@@ -829,13 +844,21 @@ func _frost_byte_tests(main: Node) -> void:
 		await _ticks(20)
 	if boss and boss.alive:
 		var bh := boss.health
-		boss.frost_freeze(10.0)
+		boss.frost_freeze(20.0)
 		await _ticks(20)
 		var bfz := boss.get_node_or_null("FrostFreeze") as FrostFreeze
 		_check(boss.is_frozen() and bfz.heavy and float((bfz._mat).get_shader_parameter("frost")) > 0.9 and bfz._crystals.size() >= 8,
 			"frost byte: the boss is frosted over with icicles")
+		_check(bfz.sounds_played >= 1, "frost byte: the frozen boss makes the frozen sounds too")
+		var tl := bfz.time_left
+		var was_exposed := boss.exposed
+		boss.exposed = false
 		boss.apply_damage(DamageInfo.make(2.0, DamageInfo.Type.ENERGY, boss.global_position + Vector3.UP * 2.0, Vector3.FORWARD, 1.0, 0.0, p))
-		_check(boss.alive and boss.health < bh and boss.is_frozen(), "frost byte: a frozen boss still takes damage (doesn't shatter)")
+		var normal := 2.0 * boss.armour_damage_scale
+		var took := bh - boss.health
+		_check(boss.alive and took > 0.0 and took <= normal * 0.55 and boss.is_frozen(), "frost byte: a frozen boss is only slightly hurt (%.2f, normally %.2f; doesn't shatter)" % [took, normal])
+		_check(bfz.time_left < tl - 2.0, "frost byte: and each hit thaws it sooner (%.1f s -> %.1f s)" % [tl, bfz.time_left])
+		boss.exposed = was_exposed
 		bfz.time_left = 0.1
 		await _ticks(40)
 		_check(not boss.is_frozen() and boss.anim.speed_scale > 0.0, "frost byte: the boss thaws")

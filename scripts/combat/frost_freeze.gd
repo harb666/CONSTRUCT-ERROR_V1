@@ -11,7 +11,9 @@ extends Node3D
 ##    stands frozen and takes damage as usual.
 ## Frozen for `seconds` (refreshed if blasted again), then it thaws: the ice
 ## cracks off in a burst of shards and the robot carries on. The robot holds
-## still meanwhile (its own scripts check `active`).
+## still meanwhile (its own scripts check `active`). While frozen it strains
+## in the ice: the owner's two frozen sounds (Sfx.ENEMY_FROZEN_1 / _2), one
+## after the other, never the same twice running, until it thaws or shatters.
 
 const SHADER := preload("res://scripts/vfx/ice_coat.gdshader")
 const GROW_TIME := 0.28
@@ -33,6 +35,11 @@ var _floor: MeshInstance3D
 var _t := 0.0
 var _thaw_t := -1.0
 var _shards: CPUParticles3D
+var _sound: DynamicSound
+var _last_sound := -1
+var _last_chip_ms := -100000
+## Frozen sounds started (tests).
+var sounds_played := 0
 
 
 ## Freeze `r` for `seconds` (or keep it frozen longer if it already is).
@@ -89,6 +96,7 @@ func _ready() -> void:
 	add_child(_shards)
 	_burst(0.8)
 	_update_look()
+	_start_sound()
 
 
 func _physics_process(delta: float) -> void:
@@ -128,6 +136,7 @@ func thaw() -> void:
 	active = false
 	_thaw_t = 0.0
 	_burst(0.6)
+	Sfx.fade_out(_sound, 0.3)
 	if robot and robot.has_method("on_thawed"):
 		robot.on_thawed()
 
@@ -137,6 +146,7 @@ func thaw() -> void:
 func shatter() -> void:
 	active = false
 	_burst(1.4)
+	Sfx.fade_out(_sound, 0.15)
 	for c in _crystals:
 		if is_instance_valid(c):
 			c.queue_free()
@@ -149,6 +159,41 @@ func shatter() -> void:
 	get_tree().create_timer(2.2).timeout.connect(func() -> void:
 		if is_instance_valid(self):
 			queue_free())
+
+
+## Hit while frozen (the boss): `seconds` less to go, and a few chips of ice
+## fly off (at most every 0.25 s).
+func chip(seconds: float) -> void:
+	if not active:
+		return
+	time_left -= seconds
+	var now := Time.get_ticks_msec()
+	if _shards and now - _last_chip_ms >= 250:
+		_last_chip_ms = now
+		_shards.restart()
+		_shards.emitting = true
+
+
+# --- Sound ---
+
+func _start_sound() -> void:
+	var near := 8.0 if heavy else 3.0
+	var far := 70.0 if heavy else 40.0
+	_sound = Sfx.emitter(self, Sfx.ENEMY_FROZEN_1, 0.0, near, far)
+	_sound.position = Vector3.UP * (2.4 if heavy else 0.9 * size)
+	_sound.finished.connect(_next_sound)
+	_next_sound()
+
+
+func _next_sound() -> void:
+	if not active or _sound == null:
+		return
+	var pick := randi() % 2 if _last_sound < 0 else 1 - _last_sound
+	_last_sound = pick
+	_sound.stream = Sfx.ENEMY_FROZEN_1 if pick == 0 else Sfx.ENEMY_FROZEN_2
+	_sound.fade = 1.0
+	_sound.play()
+	sounds_played += 1
 
 
 func _finish() -> void:
@@ -189,7 +234,6 @@ func _make_crystals() -> void:
 	else:
 		bones = ["Spine2", "Spine1", "Head", "LeftArm", "RightArm", "LeftForeArm", "RightForeArm", "Hips", "LeftUpLeg", "RightUpLeg", "Neck", "Spine"]
 		count = 11
-	var crystal_mat := _crystal_material()
 	for i in count:
 		var b := sk.find_bone("mixamorig_" + bones[i % bones.size()])
 		if b < 0:
@@ -198,11 +242,6 @@ func _make_crystals() -> void:
 		att.bone_name = sk.get_bone_name(b)
 		sk.add_child(att)
 		var mi := MeshInstance3D.new()
-		var m := CylinderMesh.new()
-		m.radial_segments = 5
-		m.rings = 1
-		m.cap_top = false
-		m.material = crystal_mat
 		var holder := Node3D.new()
 		att.add_child(holder)
 		holder.add_child(mi)
@@ -212,9 +251,6 @@ func _make_crystals() -> void:
 		if heavy:
 			# Icicle: hangs straight down, wide at the top.
 			len = randf_range(0.13, 0.26)
-			m.top_radius = len * 0.2
-			m.bottom_radius = 0.0
-			m.height = len
 			holder.position = Vector3(randf_range(-0.05, 0.05), randf_range(0.0, 0.08), randf_range(-0.05, 0.05))
 			# Bone frames vary: undo the bone's turn so it hangs straight
 			# down (the body is frozen still).
@@ -224,22 +260,47 @@ func _make_crystals() -> void:
 		else:
 			# Crystal: a long faceted spike sticking out at a random angle.
 			len = randf_range(0.12, 0.26)
-			m.top_radius = 0.0
-			m.bottom_radius = len * 0.2
-			m.height = len
 			mi.position = Vector3(0, len * 0.45, 0)
 			holder.rotation = Vector3(randf_range(-1.3, 1.3), randf() * TAU, randf_range(-1.3, 1.3))
 			holder.position = Vector3(randf_range(-0.06, 0.06), randf_range(0.0, 0.12), randf_range(-0.06, 0.06))
-		mi.mesh = m
+		# One shared unit crystal / icicle mesh, sized by scale.
+		mi.mesh = crystal_mesh(heavy)
+		mi.scale = Vector3.ONE * len
 		_crystals.append(holder)
 		_crystal_scale.append(holder.scale)
 		holder.scale = Vector3.ONE * 0.001
 
 
-func _crystal_material() -> StandardMaterial3D:
+## The crystals' / icicles' mesh, 1 m long (shared by every frozen robot,
+## nothing built per freeze): a spike pointing up, or an icicle pointing
+## down (wide at the top).
+static func crystal_mesh(is_heavy: bool) -> CylinderMesh:
+	if _crystal_meshes.has(is_heavy):
+		return _crystal_meshes[is_heavy]
+	var m := CylinderMesh.new()
+	m.radial_segments = 5
+	m.rings = 1
+	m.cap_top = false
+	m.top_radius = 0.2 if is_heavy else 0.0
+	m.bottom_radius = 0.0 if is_heavy else 0.2
+	m.height = 1.0
+	m.material = crystal_material(is_heavy)
+	_crystal_meshes[is_heavy] = m
+	return m
+
+
+static var _crystal_meshes := {}
+static var _crystal_mats := {}
+static var _shard_meshes := {}
+
+
+## Clear ice for the crystals and shards (shared, one per kind).
+static func crystal_material(is_heavy: bool) -> StandardMaterial3D:
+	if _crystal_mats.has(is_heavy):
+		return _crystal_mats[is_heavy]
 	var m := StandardMaterial3D.new()
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.albedo_color = Color(0.78, 0.93, 1.0, 0.72) if not heavy else Color(0.88, 0.96, 1.0, 0.85)
+	m.albedo_color = Color(0.78, 0.93, 1.0, 0.72) if not is_heavy else Color(0.88, 0.96, 1.0, 0.85)
 	m.metallic = 0.0
 	m.roughness = 0.05
 	m.rim_enabled = true
@@ -249,6 +310,7 @@ func _crystal_material() -> StandardMaterial3D:
 	m.emission = Color(0.45, 0.75, 1.0)
 	m.emission_energy_multiplier = 0.35
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_crystal_mats[is_heavy] = m
 	return m
 
 
@@ -275,10 +337,14 @@ const FROST_FLOOR := preload("res://scripts/vfx/frost_floor.gdshader")
 
 func _make_shards() -> CPUParticles3D:
 	var p := CPUParticles3D.new()
-	var mesh := PrismMesh.new()
-	mesh.size = Vector3(0.06, 0.16, 0.04) * (2.0 if heavy else maxf(size, 1.0))
-	mesh.material = _crystal_material()
-	p.mesh = mesh
+	var k := 2.0 if heavy else maxf(size, 1.0)
+	var key := Vector2(k, 1.0 if heavy else 0.0)
+	if not _shard_meshes.has(key):
+		var mesh := PrismMesh.new()
+		mesh.size = Vector3(0.06, 0.16, 0.04) * k
+		mesh.material = crystal_material(heavy)
+		_shard_meshes[key] = mesh
+	p.mesh = _shard_meshes[key]
 	p.amount = 26
 	p.lifetime = 0.9
 	p.one_shot = true
@@ -319,3 +385,44 @@ func _burst(strength: float) -> void:
 		pf.drift = Vector3(randf_range(-1, 1), 0.2, randf_range(-1, 1)) * 0.8
 		pf.play(at + Vector3(randf_range(-0.4, 0.4), randf_range(-0.6, 0.3), randf_range(-0.4, 0.4)), false)
 		get_tree().create_timer(pf.life + 0.3).timeout.connect(pf.queue_free)
+
+
+## One of each material the freeze uses (ice coat, crystals as meshes and as
+## particles, floor frost), for Vfx.warm_up: phones prepare their shaders
+## behind the title screen instead of stalling the first time a crowd is
+## frozen.
+static func warm_up_items() -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	var coat := MeshInstance3D.new()
+	coat.mesh = SphereMesh.new()
+	var cm := ShaderMaterial.new()
+	cm.shader = SHADER
+	coat.material_override = cm
+	out.append(coat)
+	# As an overlay too (how it is drawn on the robots).
+	var under := MeshInstance3D.new()
+	under.mesh = BoxMesh.new()
+	under.material_overlay = cm
+	out.append(under)
+	var fl := MeshInstance3D.new()
+	fl.mesh = QuadMesh.new()
+	var fm := ShaderMaterial.new()
+	fm.shader = FROST_FLOOR
+	fl.material_override = fm
+	out.append(fl)
+	for h in [false, true]:
+		var c := MeshInstance3D.new()
+		c.mesh = crystal_mesh(h)
+		out.append(c)
+		var p := CPUParticles3D.new()
+		var pm := PrismMesh.new()
+		pm.material = crystal_material(h)
+		p.mesh = pm
+		p.amount = 2
+		p.lifetime = 0.5
+		p.initial_velocity_min = 0.0
+		p.initial_velocity_max = 0.0
+		p.gravity = Vector3.ZERO
+		p.emitting = true
+		out.append(p)
+	return out

@@ -235,6 +235,9 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	hm.shader = Hologram.SHADER
 	holo.material_override = hm
 	items.append(holo)
+	# Frost Byte: the blizzard and frozen robots' materials.
+	items.append_array(FrostBlizzard.warm_up_items())
+	items.append_array(FrostFreeze.warm_up_items())
 	for i in items.size():
 		root.add_child(items[i])
 		items[i].position = Vector3(i * 0.06, 0, 0)
