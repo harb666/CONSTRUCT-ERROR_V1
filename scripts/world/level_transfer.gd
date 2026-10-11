@@ -48,7 +48,16 @@ static func go(tree: SceneTree, scene_path: String, player: PlayerController = n
 	var tw := rect.create_tween()
 	tw.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tw.tween_property(rect, "color:a", 1.0, FADE_OUT * (1.0 - rect.color.a))
-	tw.tween_callback(func() -> void: tree.change_scene_to_file(scene_path))
+	tw.tween_callback(func() -> void: swap(tree, scene_path))
+
+
+## Load another level scene with the old one fully gone first (a plain
+## scene change keeps both in memory for a moment - too much for iPhone
+## Safari, which then kills the page).
+static func swap(tree: SceneTree, scene_path: String) -> void:
+	tree.unload_current_scene()
+	var t := tree.create_timer(0.1, true, false, true)
+	t.timeout.connect(func() -> void: tree.change_scene_to_file(scene_path))
 
 
 ## A level starting: the pending transfer, if any (and it's no longer

@@ -264,7 +264,7 @@ func leave(reload := true) -> void:
 	_set_puppets(false)
 	roster_changed.emit()
 	if reload and was_client and is_inside_tree():
-		get_tree().change_scene_to_file.call_deferred(ProjectSettings.get_setting("application/run/main_scene"))
+		LevelTransfer.swap.call_deferred(get_tree(), ProjectSettings.get_setting("application/run/main_scene"))
 
 
 func _go_online_host() -> void:
@@ -612,10 +612,17 @@ func _welcome(data: Dictionary) -> void:
 	my_slot = int(data.get("slot", 2))
 	var level := String(data.get("level", ""))
 	print("net: welcome, player %d, level %s" % [my_slot, level])
-	# Start fresh in the host's level (the character select opens again).
+	var scene := get_tree().current_scene
+	if scene and scene.scene_file_path == level:
+		# Already in the host's level (the usual case): no reload - the world
+		# is brought in step with the host's (robots, barrels, the lift).
+		level_ready(scene)
+		return
+	# The host is in another part: load it (the character select opens
+	# again there).
 	rejoin_select = true
 	if level != "":
-		get_tree().change_scene_to_file.call_deferred(level)
+		LevelTransfer.swap(get_tree(), level)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -906,6 +913,7 @@ func _want_world() -> void:
 ## are gone; the lift is where the host's is.
 @rpc("authority", "call_remote", "reliable")
 func _world(state: Dictionary) -> void:
+	_count(received, &"world")
 	var scene := get_tree().current_scene
 	if scene == null or scene.scene_file_path != String(state.get("level", "")):
 		return

@@ -67,9 +67,9 @@ func _run() -> void:
 	quit(1 if failures else 0)
 
 
-func _load(path: String) -> void:
+func _load(path: String, front_end := 0) -> void:
 	main = load(path).instantiate()
-	main.set(&"front_end_mode", 0)
+	main.set(&"front_end_mode", front_end)
 	root.add_child(main)
 	current_scene = main
 
@@ -138,8 +138,11 @@ func _host() -> void:
 
 
 func _client() -> void:
-	_load("res://scenes/skyforge_arena.tscn")
+	# Like on a phone: the title, TAP TO START, then JOIN on character select.
+	_load("res://scenes/skyforge_arena.tscn", 1)
 	await ticks(20)
+	main.front_end.press_start()
+	await ticks(5)
 	var ok := false
 	for attempt in 40:
 		net().join_enet("127.0.0.1", PORT)
@@ -148,12 +151,10 @@ func _client() -> void:
 			break
 		await ticks(30)
 	check(net().online and not Net.is_authority(), "joined the host")
-	# The host's level reloads here with the character select open.
-	ok = await until(func() -> bool: return current_scene != main and current_scene != null and current_scene.get(&"front_end") != null, 300)
-	if current_scene != main and main:
-		main.queue_free()
-	main = current_scene
-	check(ok and main.front_end.screen == FrontEnd.Screen.SELECT, "the host's level, at the character select")
+	# Already in the host's level: no reload, the world is put in step.
+	ok = await until(func() -> bool: return int(net().received.get(&"world", 0)) > 0, 300)
+	check(ok and current_scene == main and main.front_end != null and main.front_end.screen == FrontEnd.Screen.SELECT,
+		"same level as the host: no reload, still at the character select, world in step")
 	await ticks(30)
 	main.front_end.press_character(&"harbinger")
 	main.front_end.press_deploy()
