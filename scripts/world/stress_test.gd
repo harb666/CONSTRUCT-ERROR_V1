@@ -56,6 +56,45 @@ static func start_boss_fight(main: Node, player: PlayerController) -> void:
 			sel.tap_target(boss.get_node("Targetable")))
 
 
+## `?meleesoak=1` (test only): the rocket launcher on the right arm and a
+## grunt put in front of the player and punched every ~1.2 s (melee swaps
+## the arm to the pistol cannon and back each time) - the pattern before the
+## iPhone crash report of 3m26s.
+static func melee_soak() -> bool:
+	return _param("meleesoak") != ""
+
+
+static func start_melee_soak(main: Node, player: PlayerController) -> void:
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var h := player.get_node("WeaponHolder") as WeaponHolder
+	var lo := player.get_node("WeaponLoadout") as WeaponLoadout
+	var rl := reg.find(&"rocket_launcher")
+	lo.unlock(rl)
+	h.equip(rl, "Right")
+	var t := Timer.new()
+	t.wait_time = 1.2
+	t.autostart = true
+	main.add_child(t)
+	t.timeout.connect(func() -> void:
+		if not is_instance_valid(player) or player.melee.active:
+			return
+		var e: RobotEnemy = load("res://scenes/enemies/robot_enemy.tscn").instantiate()
+		e.respawn_time = -1.0
+		e.patrol_distance = 0.0
+		main.add_child(e)
+		var fwd := -player.global_basis.z
+		fwd.y = 0.0
+		e.global_position = player.global_position + fwd.normalized() * 2.6
+		e.reset_physics_interpolation()
+		player.get_tree().create_timer(0.15).timeout.connect(func() -> void:
+			if is_instance_valid(player):
+				player.melee.try_start()
+			# Its remains go after a while (arena robots respawn instead).
+			player.get_tree().create_timer(6.0).timeout.connect(func() -> void:
+				if is_instance_valid(e):
+					e.queue_free())))
+
+
 static func perf_enabled() -> bool:
 	return robot_count() > 0 or _param("perf") != ""
 

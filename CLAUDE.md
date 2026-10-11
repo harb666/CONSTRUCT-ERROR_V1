@@ -177,6 +177,9 @@
   `BossStompPose`, `StompShockwave`, `PlayerKnockdown`,
   `KnockdownPoseModifier`.
 
+- iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
+  hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.

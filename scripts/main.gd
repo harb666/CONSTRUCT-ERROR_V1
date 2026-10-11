@@ -80,6 +80,8 @@ func _on_deployed(character: CharacterDefinition) -> void:
 	var local := spawn_player(1, true, character)
 	if StressTest.boss_fight():
 		StressTest.start_boss_fight(self, local)
+	if StressTest.melee_soak():
+		StressTest.start_melee_soak(self, local)
 	if _menu_camera:
 		_menu_camera.queue_free()
 		_menu_camera = null
