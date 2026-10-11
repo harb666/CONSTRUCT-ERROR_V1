@@ -287,16 +287,14 @@ func _draw() -> void:
 				draw_polyline(PackedVector2Array([tp + Vector2(-6, 0), tp + Vector2(-2, 5), tp + Vector2(6, -5)]), Color(0, 0, 0, a), 3.0, true)
 			if hovered:
 				hover_label = [p, ir, def, ghost]
-	# The hovered weapon's name (and a ghost's hand-off arrow) on top.
+	# A hovered ghost's hand-off arrow on top (no weapon names: owner asked).
 	if not hover_label.is_empty():
 		var p: Vector2 = hover_label[0]
 		var ir: float = hover_label[1]
 		var def: WeaponDefinition = hover_label[2]
 		if hover_label[3]:
 			_hand_off_arrow(p, item_position(hover_target, def), def.accent_color, a)
-		_text(p + Vector2(0, ir + 30), def.display_name, 22, Color(1, 1, 1, a))
-		if hover_label[3]:
-			_text(p + Vector2(0, ir + 54), "HEAVY - GOES ON RIGHT ARM", 16, Color(HEAVY_GOLD, a))
+			_text(p + Vector2(0, ir + 30), "HEAVY - GOES ON RIGHT ARM", 16, Color(HEAVY_GOLD, a))
 	# Centre: what each arm holds (the hovered arm previews its new weapon).
 	draw_circle(c, item_radius * 1.25, Color(0.04, 0.05, 0.08, 0.85 * a))
 	draw_line(c + Vector2(0, -item_radius), c + Vector2(0, item_radius), Color(1, 1, 1, 0.25 * a), 2.0)
