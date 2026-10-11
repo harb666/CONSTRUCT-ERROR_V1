@@ -1,5 +1,5 @@
 extends SceneTree
-## Co-op matchmaking against the REAL free PeerJS server (0.peerjs.com):
+## Co-op matchmaking against the REAL free message service (ntfy.sh):
 ## run as `-- --role=host --code=NNNN` and `-- --role=join --code=NNNN` at
 ## the same time (.github/workflows/signal-live.yml; the dev sandbox can't
 ## reach that server). Checks the host opens the room, the joiner's JOIN
@@ -44,7 +44,7 @@ func _run() -> void:
 		var joins := [0]
 		PeerSignal.log_hook = func(s: String) -> void:
 			n.net_log(s)
-			if s.begins_with("< OFFER join"):
+			if s.begins_with("< join"):
 				joins[0] += 1
 		check(await wait_for(func() -> bool: return joins[0] >= 1, 40.0), "a JOIN reached the host")
 		# Lose the link (an iPhone switching apps), get it back.

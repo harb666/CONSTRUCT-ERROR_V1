@@ -25,7 +25,8 @@ signal roster_changed
 
 const VERSION := 1
 const ROOM_PREFIX := "construct-error-v1-room-"
-const SIGNAL_URL := "wss://0.peerjs.com:443/peerjs"
+## Free public message service the phones find each other through (PeerSignal).
+const SIGNAL_URL := "https://ntfy.sh"
 ## Free public STUN (finds each phone's public address). Phones on mobile
 ## data behind strict carrier NAT may need a relay (TURN), not set up yet.
 const ICE_SERVERS := [{"urls": ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"]}]
@@ -68,6 +69,7 @@ var _conns := {}  # peer id -> WebRTCPeerConnection
 var _src_of := {}  # peer id -> PeerJS id (host side)
 var _id_of := {}  # PeerJS id -> peer id (host side)
 var _host_src := ""
+var _ice_out := {}  # PeerSignal id -> candidates waiting to go out
 var _ice_wait := {}  # peer id -> Array of [media, index, name] before the remote description
 var _have_remote := {}
 var _connect_t := 0.0
@@ -262,6 +264,7 @@ func leave(reload := true) -> void:
 	_src_of.clear()
 	_id_of.clear()
 	_ice_wait.clear()
+	_ice_out.clear()
 	_have_remote.clear()
 	if multiplayer.multiplayer_peer and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 		multiplayer.multiplayer_peer.close()
@@ -293,6 +296,7 @@ func _start_signal(peer_id: String) -> void:
 	_sig_id = peer_id
 	_sig = PeerSignal.new()
 	_sig.token = _sig_token
+	_sig.host = self
 	var url := SIGNAL_URL
 	var custom := StressTest._param("signal")
 	if custom != "":
@@ -359,9 +363,16 @@ func _new_connection(peer_id: int, send_to: String) -> WebRTCPeerConnection:
 		c.set_local_description(type, sdp)
 		if _sig:
 			_sig.send(send_to, {"k": "sdp", "type": type, "sdp": sdp}, "ANSWER" if type == "answer" else "OFFER"))
+	# Network candidates go out in batches (each message is a web request).
 	c.ice_candidate_created.connect(func(media: String, index: int, name: String) -> void:
-		if _sig:
-			_sig.send(send_to, {"k": "ice", "m": media, "i": index, "n": name}, "CANDIDATE"))
+		if not _ice_out.has(send_to):
+			_ice_out[send_to] = []
+			get_tree().create_timer(0.6, true, false, true).timeout.connect(func() -> void:
+				var l: Array = _ice_out.get(send_to, [])
+				_ice_out.erase(send_to)
+				if _sig and not l.is_empty():
+					_sig.send(send_to, {"k": "ices", "l": l}, "CANDIDATE"))
+		(_ice_out[send_to] as Array).append([media, index, name]))
 	_conns[peer_id] = c
 	return c
 
@@ -419,6 +430,9 @@ func _host_signal(src: String, p: Dictionary) -> void:
 			_remote_sdp(int(_id_of.get(src, 0)), p)
 		"ice":
 			_remote_ice(int(_id_of.get(src, 0)), p)
+		"ices":
+			for ice in p.get("l", []):
+				_remote_ice(int(_id_of.get(src, 0)), {"m": ice[0], "i": ice[1], "n": ice[2]})
 
 
 func _client_signal(src: String, p: Dictionary) -> void:
@@ -446,6 +460,9 @@ func _client_signal(src: String, p: Dictionary) -> void:
 			_remote_sdp(1, p)
 		"ice":
 			_remote_ice(1, p)
+		"ices":
+			for ice in p.get("l", []):
+				_remote_ice(1, {"m": ice[0], "i": ice[1], "n": ice[2]})
 
 
 ## Host: forget a joiner's half-made link.
@@ -548,7 +565,6 @@ func _process(delta: float) -> void:
 			_sig.send(_host_src, {"k": "join", "v": VERSION})
 	if hosting and online:
 		_check_joiners()
-		_check_ping(delta)
 	if _connect_t > 0.0 and not online:
 		_connect_t -= delta
 		if _connect_t <= 0.0:

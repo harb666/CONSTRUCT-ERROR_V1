@@ -1,7 +1,7 @@
 name: Co-op signalling (live)
 
-# Checks online co-op matchmaking against the real free PeerJS server the
-# game uses (0.peerjs.com): a host opens a room, a joiner's JOIN reaches it,
+# Checks online co-op matchmaking against the real free message service
+# the game uses (ntfy.sh): a host opens a room, a joiner's JOIN reaches it,
 # the host answers - also after the host loses and regains its link.
 # tests/net_live_signal_test.gd. Doesn't block deploys.
 on:
@@ -49,9 +49,3 @@ jobs:
           echo "::group::join"; grep -v "^ERROR\|^   at\|leaked" join.log; echo "::endgroup::"
           grep -h "^PASS\|^FAIL\|LIVE FAILURES" host.log join.log
           grep -q "^LIVE FAILURES: 0$" host.log && grep -q "^LIVE FAILURES: 0$" join.log
-      - name: Probe the public PeerJS server (message variants)
-        if: always()
-        continue-on-error: true
-        run: |
-          mkdir -p /tmp/probe && cd /tmp/probe && npm init -y >/dev/null && npm install ws@8 >/dev/null 2>&1
-          NODE_PATH=/tmp/probe/node_modules timeout 120 node "$GITHUB_WORKSPACE/tools/netcheck/peerjs_probe.js"

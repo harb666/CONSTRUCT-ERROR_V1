@@ -1,59 +1,71 @@
 class_name PeerSignal
 extends RefCounted
-## Signalling for online co-op over a PeerJS server (the free public one at
-## 0.peerjs.com by default: no account, no server of our own). Phones find
-## each other through it - a few small messages to set up the direct
-## WebRTC link (offer / answer / network candidates) - then the game talks
-## peer to peer. Speaks the PeerJS server's WebSocket protocol: connect with
-## an id, get OPEN (or ID-TAKEN), send {type, dst, payload}, receive
-## {type, src, payload}; a HEARTBEAT every few seconds keeps it open.
+## Signalling for online co-op through ntfy.sh (a free public message
+## service: no account, nothing to run). Phones only use it to find each
+## other - a few small messages to set up the direct WebRTC link (offer /
+## answer / network candidates) - then the game talks phone to phone.
+## Each phone listens on its own topic (its id) over a WebSocket and sends
+## to another's topic with an HTTP POST. (The game used the public PeerJS
+## server before: it stopped passing messages between peers.)
+##
+## Same shape as before for Net: start(), send(), poll(), close(); signals
+## opened / message / failed (`expired` is no longer sent: a joiner just
+## keeps asking until it hears back).
 
 signal opened
 signal message(src: String, payload: Dictionary)
-## The other side isn't there (the server couldn't deliver to it).
 signal expired(dst: String)
 signal failed(reason: String)
 
-const HEARTBEAT := 5.0
+## ntfy sends a keepalive every 45 s; nothing for this long = link dead.
+const SILENCE_LIMIT := 100.0
 
 ## Every message to / from the server, for the network log (Net.log).
 static var log_hook: Callable
 
 var id := ""
-## Kept for reconnecting: the server takes the same id back with the same
-## token (a phone that slept loses its connection; the room keeps its code).
+## (Kept for Net; ntfy topics aren't owned, so reconnecting needs nothing.)
 var token := ""
 var is_open := false
+## Node the HTTP requests (sends) live under.
+var host: Node
+var base := ""
 var _ws := WebSocketPeer.new()
-var _beat := 0.0
 var _was_open := false
 var _closed := false
-var _reconnect := false
+var _silence := 0.0
+var sent := 0
 
 
-## Connect as `peer_id` to `base_url` (e.g. wss://0.peerjs.com:443/peerjs).
-func start(base_url: String, peer_id: String, key := "peerjs") -> Error:
+## Listen as `peer_id` on `base_url` (e.g. https://ntfy.sh).
+func start(base_url: String, peer_id: String, _key := "") -> Error:
 	id = peer_id
-	# Same token = taking our id back after the link dropped: the server
-	# then hands the id over without an OPEN message.
-	_reconnect = token != ""
-	if token == "":
-		token = "%x%x" % [randi(), randi()]
-	var url := "%s?key=%s&id=%s&token=%s&version=1.5.4" % [base_url, key, peer_id.uri_encode(), token]
+	base = base_url.trim_suffix("/")
+	var ws_url := base.replace("https://", "wss://").replace("http://", "ws://") + "/" + peer_id + "/ws"
 	if log_hook.is_valid():
-		log_hook.call("connect as %s" % _short(peer_id))
-	return _ws.connect_to_url(url)
+		log_hook.call("listen as %s" % _short(peer_id))
+	return _ws.connect_to_url(ws_url)
 
 
+## Post to another phone's topic.
 func send(dst: String, payload: Dictionary, type := "OFFER") -> void:
-	if not is_open:
+	if host == null or not host.is_inside_tree() or _closed:
 		return
-	_ws.send_text(JSON.stringify({"type": type, "dst": dst, "payload": payload}))
-	if log_hook.is_valid() and String(payload.get("k", "")) != "ice":
-		log_hook.call("> %s %s to %s" % [type, payload.get("k", ""), _short(dst)])
+	var body := JSON.stringify({"src": id, "type": type, "payload": payload})
+	var r := HTTPRequest.new()
+	r.timeout = 15.0
+	host.add_child(r)
+	var k := String(payload.get("k", ""))
+	r.request_completed.connect(func(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
+		r.queue_free()
+		if (result != HTTPRequest.RESULT_SUCCESS or code >= 300) and log_hook.is_valid():
+			log_hook.call("send %s failed (%d / HTTP %d)" % [k, result, code]))
+	var e := r.request(base + "/" + dst, PackedStringArray(["Content-Type: text/plain"]), HTTPClient.METHOD_POST, body)
+	sent += 1
+	if log_hook.is_valid():
+		log_hook.call("> %s to %s%s" % [k, _short(dst), "" if e == OK else " (error %d)" % e])
 
 
-## Still connected (or connecting) to the server.
 func alive() -> bool:
 	return not _closed
 
@@ -71,21 +83,15 @@ func poll(delta: float) -> void:
 	_ws.poll()
 	var st := _ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
-		if not _was_open and _reconnect:
-			# Our id back (the server sends no OPEN for a reconnect; if the
-			# id had gone meanwhile it registers us fresh and OPEN follows).
-			is_open = true
-			_beat = HEARTBEAT
-			if log_hook.is_valid():
-				log_hook.call("reconnected")
-			opened.emit()
 		_was_open = true
-		_beat -= delta
-		if _beat <= 0.0 and is_open:
-			_beat = HEARTBEAT
-			_ws.send_text(JSON.stringify({"type": "HEARTBEAT"}))
+		_silence += delta
 		while _ws.get_available_packet_count() > 0:
+			_silence = 0.0
 			_handle(_ws.get_packet().get_string_from_utf8())
+		if _silence > SILENCE_LIMIT:
+			if log_hook.is_valid():
+				log_hook.call("no keepalive from the server")
+			_ws.close()
 	elif st == WebSocketPeer.STATE_CLOSED:
 		_closed = true
 		var was := is_open
@@ -103,27 +109,21 @@ func _handle(text: String) -> void:
 	var m = JSON.parse_string(text)
 	if not (m is Dictionary):
 		return
-	if log_hook.is_valid():
-		var p = m.get("payload")
-		var k := String(p.get("k", "")) if p is Dictionary else ""
-		if k != "ice":
-			log_hook.call("< %s %s from %s" % [m.get("type", "?"), k, _short(String(m.get("src", "")))])
-	match String(m.get("type", "")):
-		"OPEN":
-			var again := is_open
-			is_open = true
-			_beat = HEARTBEAT
-			if not again:
+	match String(m.get("event", "")):
+		"open":
+			if not is_open:
+				is_open = true
+				if log_hook.is_valid():
+					log_hook.call("listening")
 				opened.emit()
-		"ID-TAKEN":
-			failed.emit("id taken")
-		"ERROR", "INVALID-KEY":
-			failed.emit(String((m.get("payload", {}) as Dictionary).get("msg", "server error")) if m.get("payload") is Dictionary else "server error")
-		"EXPIRE":
-			expired.emit(String(m.get("src", "")))
-		"LEAVE":
-			expired.emit(String(m.get("src", "")))
-		"OFFER", "ANSWER", "CANDIDATE":
-			var p = m.get("payload")
-			if p is Dictionary:
-				message.emit(String(m.get("src", "")), p)
+		"message":
+			var inner = JSON.parse_string(String(m.get("message", "")))
+			if not (inner is Dictionary):
+				return
+			var src := String(inner.get("src", ""))
+			var p = inner.get("payload")
+			if src == "" or not (p is Dictionary):
+				return
+			if log_hook.is_valid():
+				log_hook.call("< %s from %s" % [String(p.get("k", "")), _short(src)])
+			message.emit(src, p)
