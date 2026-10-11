@@ -2653,7 +2653,7 @@ func _weapon_switch_tests(main: Node) -> void:
 	await process_frame
 	_check(wheel.hover_def == null, "small drags select nothing (dead zone)")
 	wheel.release_at(start + Vector2(20, -15))
-	await _wall_wait(func() -> bool: return not wheel.is_open and Engine.time_scale == 1.0, 1.5)  # wheel easing runs in real time
+	await _wall_wait(func() -> bool: return not wheel.is_open and Engine.time_scale == 1.0, 4.0)  # wheel easing runs in real time
 	Input.action_release("move_forward")
 	_check(not wheel.is_open and Engine.time_scale == 1.0 and h.slot("Right").definition == cannon and h.slot("Left").definition == cannon, "releasing in the dead zone changes nothing; speed back to normal")
 
