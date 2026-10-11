@@ -19,6 +19,10 @@ func _draw() -> void:
 	var n := Net.instance
 	var lf := HudStyle.label_font()
 	var s := "ROOM %s   -   %d / %d" % [n.room, maxi(n.roster.size(), 1), CharacterRoster.MAX_PLAYERS]
+	if n.hosting and n.status.ends_with("RECONNECTING..."):
+		s = "ROOM %s   -   RECONNECTING..." % n.room
+	elif n.hosting and n.host_note != "":
+		s = "ROOM %s   -   %s" % [n.room, n.host_note]
 	var fs := 16
 	var tw := lf.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 	var r := Rect2(Vector2(size.x * 0.5 - tw * 0.5 - 14.0, 80.0), Vector2(tw + 28.0, 24.0))

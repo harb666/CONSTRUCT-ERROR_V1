@@ -520,8 +520,10 @@ func _draw_select(a: float) -> void:
 		_buttons[nb[0]] = br
 		bx -= 124.0
 	var st := Net.instance.status if Net.instance else ""
-	if Net.instance and Net.instance.hosting and online and Net.instance.status != "JOIN LINK COPIED":
+	if Net.instance and Net.instance.hosting and online and Net.instance.status == "ROOM %s" % Net.instance.room:
 		st = "ROOM %s  -  ON THE OTHER PHONE: JOIN, ENTER %s" % [Net.instance.room, Net.instance.room]
+		if Net.instance.host_note != "":
+			st = "ROOM %s  -  %s" % [Net.instance.room, Net.instance.host_note]
 	if st != "":
 		var sc := HudStyle.DANGER if Net.instance.failed else HudStyle.WARN
 		HudStyle.text(self, lf, Vector2(rx, sy + 14) + off, st, HudStyle.fit(lf, st, bx - rx - 10.0, 19), Color(sc, a))

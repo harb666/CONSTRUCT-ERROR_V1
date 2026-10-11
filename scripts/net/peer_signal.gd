@@ -17,6 +17,9 @@ signal failed(reason: String)
 const HEARTBEAT := 5.0
 
 var id := ""
+## Kept for reconnecting: the server takes the same id back with the same
+## token (a phone that slept loses its connection; the room keeps its code).
+var token := ""
 var is_open := false
 var _ws := WebSocketPeer.new()
 var _beat := 0.0
@@ -27,7 +30,8 @@ var _closed := false
 ## Connect as `peer_id` to `base_url` (e.g. wss://0.peerjs.com:443/peerjs).
 func start(base_url: String, peer_id: String, key := "peerjs") -> Error:
 	id = peer_id
-	var token := "%x" % randi()
+	if token == "":
+		token = "%x%x" % [randi(), randi()]
 	var url := "%s?key=%s&id=%s&token=%s&version=1.5.4" % [base_url, key, peer_id.uri_encode(), token]
 	return _ws.connect_to_url(url)
 
@@ -36,6 +40,11 @@ func send(dst: String, payload: Dictionary, type := "OFFER") -> void:
 	if not is_open:
 		return
 	_ws.send_text(JSON.stringify({"type": type, "dst": dst, "payload": payload}))
+
+
+## Still connected (or connecting) to the server.
+func alive() -> bool:
+	return not _closed
 
 
 func close() -> void:

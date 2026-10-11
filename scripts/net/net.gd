@@ -33,7 +33,9 @@ const MAX_PLAYERS := 4
 const PLAYER_RATE := 15.0
 const ROBOT_RATE := 10.0
 const FLOW_RATE := 4.0
-const CONNECT_TIMEOUT := 25.0
+const CONNECT_TIMEOUT := 30.0
+## A joining phone asks the room again this often until the host answers.
+const JOIN_RETRY := 3.0
 const ENET_PORT := 24680
 
 static var instance: Net
@@ -75,6 +77,18 @@ var _flow_t := 0.0
 var _last_cmd: PlayerCommand
 var _presses := {"jp": false, "dp": false, "mp": false}
 var _hooked_player: PlayerController
+## What's happening with joiners, for the host ("PLAYER JOINING...").
+var host_note := ""
+var _sig_id := ""
+var _sig_token := ""
+var _sig_retry := -1.0
+var _join_t := 0.0
+## Host: a message to itself through the server every so often; if it
+## doesn't come back the link is dead (a phone can think it's still
+## connected after Safari froze the page) -> reconnect.
+var _ping_t := 10.0
+var _ping_wait := -1.0
+var _hidden_ms := -1
 ## Host: peers whose level has loaded (they asked for the world). Only they
 ## get the streams (snapshots, world events): a phone busy loading a level
 ## would otherwise have its receive buffer flooded and drop data.
@@ -160,12 +174,20 @@ func host_room(code := "") -> void:
 	_set_status("OPENING ROOM...")
 	_rtc = WebRTCMultiplayerPeer.new()
 	_rtc.create_server()
+	_sig_token = ""
 	_start_signal(ROOM_PREFIX + room)
-	_sig.opened.connect(func() -> void:
-		multiplayer.multiplayer_peer = _rtc
-		_go_online_host()
-		_set_status("ROOM %s" % room))
-	_sig.message.connect(_host_signal)
+
+
+## The host's link to the signalling server dropped (e.g. the phone switched
+## to Messages and Safari froze the page): reconnect with the same room
+## code, so the room is findable again.
+func _signal_lost() -> void:
+	if hosting and online:
+		_sig_retry = 2.0
+		_set_status("ROOM %s - RECONNECTING..." % room)
+		print("net: room %s lost the signalling server, reconnecting" % room)
+	elif joining and not online and _connect_t > 0.0:
+		_sig_retry = 2.0
 
 
 ## Join a room by its code.
@@ -177,13 +199,9 @@ func join_room(code: String) -> void:
 	_host_src = ROOM_PREFIX + code
 	_connect_t = CONNECT_TIMEOUT
 	_set_status("CONNECTING TO %s..." % code)
+	_sig_token = ""
+	_join_t = 0.0
 	_start_signal("%s%s-%06d" % [ROOM_PREFIX, code, randi() % 1000000])
-	_sig.opened.connect(func() -> void:
-		_sig.send(_host_src, {"k": "join", "v": VERSION}))
-	_sig.expired.connect(func(_dst: String) -> void:
-		if not online:
-			_fail("ROOM %s NOT FOUND" % code))
-	_sig.message.connect(_client_signal)
 
 
 ## ENet (desktop builds / tests): host on `port`.
@@ -235,6 +253,8 @@ func leave(reload := true) -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_rtc = null
+	_sig_retry = -1.0
+	host_note = ""
 	online = false
 	hosting = false
 	joining = false
@@ -256,17 +276,44 @@ func _go_online_host() -> void:
 
 
 func _start_signal(peer_id: String) -> void:
+	_sig_id = peer_id
 	_sig = PeerSignal.new()
+	_sig.token = _sig_token
 	var url := SIGNAL_URL
 	var custom := StressTest._param("signal")
 	if custom != "":
 		url = custom
+	var sig := _sig
 	_sig.failed.connect(func(reason: String) -> void:
+		if sig != _sig:
+			return
 		if reason == "id taken" and hosting and not online:
 			host_room()  # that code is in use: another one
+		elif hosting and online:
+			_signal_lost()
+		elif joining and not online and reason != "id taken":
+			_signal_lost()
 		elif not online:
 			_fail("CAN'T REACH THE SERVER" if reason != "id taken" else "TRY AGAIN"))
+	_sig.opened.connect(func() -> void:
+		if sig != _sig:
+			return
+		if hosting:
+			if not online:
+				multiplayer.multiplayer_peer = _rtc
+				_go_online_host()
+			_set_status("ROOM %s" % room)
+			_ping_t = 10.0
+			_ping_wait = -1.0
+		elif joining:
+			_join_t = 0.0  # ask now
+			_set_status("LOOKING FOR ROOM %s..." % room))
+	_sig.expired.connect(func(_dst: String) -> void:
+		if sig == _sig and joining and not online:
+			_set_status("LOOKING FOR ROOM %s - IS THE HOST'S GAME OPEN?" % room))
+	_sig.message.connect(_host_signal if hosting else _client_signal)
 	_sig.start(url, peer_id)
+	_sig_token = _sig.token
 
 
 func _fail(msg: String) -> void:
@@ -325,12 +372,19 @@ func _remote_ice(peer_id: int, p: Dictionary) -> void:
 
 func _host_signal(src: String, p: Dictionary) -> void:
 	match String(p.get("k", "")):
+		"ping":
+			if src == _sig_id:
+				_ping_wait = -1.0
 		"join":
 			if int(p.get("v", 0)) != VERSION:
 				_sig.send(src, {"k": "refused", "why": "VERSION"})
 				return
 			if _id_of.has(src):
-				return
+				var old := int(_id_of[src])
+				if old in multiplayer.get_peers():
+					return
+				# Asked again (their first try got lost): start over.
+				_drop_link(old)
 			var id := _free_peer_id()
 			if id == 0:
 				_sig.send(src, {"k": "refused", "why": "FULL"})
@@ -341,6 +395,8 @@ func _host_signal(src: String, p: Dictionary) -> void:
 			_rtc.add_peer(c, id)
 			_sig.send(src, {"k": "welcome", "id": id}, "ANSWER")
 			c.create_offer()
+			host_note = "A PLAYER IS JOINING..."
+			print("net: player joining (peer %d)" % id)
 		"sdp":
 			_remote_sdp(int(_id_of.get(src, 0)), p)
 		"ice":
@@ -353,8 +409,14 @@ func _client_signal(src: String, p: Dictionary) -> void:
 	match String(p.get("k", "")):
 		"welcome":
 			var id := int(p.get("id", 0))
-			if id < 2:
+			if id < 2 or online:
 				return
+			for c in _conns.values():
+				(c as WebRTCPeerConnection).close()
+			_conns.clear()
+			_have_remote.clear()
+			_ice_wait.clear()
+			_set_status("CONNECTING TO ROOM %s..." % room)
 			_rtc = WebRTCMultiplayerPeer.new()
 			_rtc.create_client(id)
 			var c := _new_connection(1, _host_src)
@@ -366,6 +428,20 @@ func _client_signal(src: String, p: Dictionary) -> void:
 			_remote_sdp(1, p)
 		"ice":
 			_remote_ice(1, p)
+
+
+## Host: forget a joiner's half-made link.
+func _drop_link(id: int) -> void:
+	if _rtc and _rtc.has_peer(id):
+		_rtc.remove_peer(id)
+	if _conns.has(id):
+		(_conns[id] as WebRTCPeerConnection).close()
+		_conns.erase(id)
+	_have_remote.erase(id)
+	_ice_wait.erase(id)
+	if _src_of.has(id):
+		_id_of.erase(_src_of[id])
+		_src_of.erase(id)
 
 
 func _free_peer_id() -> int:
@@ -425,13 +501,43 @@ func _on_server_disconnected() -> void:
 
 # --- Per frame ---
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		_hidden_ms = Time.get_ticks_msec()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_APPLICATION_RESUMED:
+		# Back in the game after another app (e.g. Messages to send the code):
+		# make sure the room can be found again.
+		var away := Time.get_ticks_msec() - _hidden_ms if _hidden_ms >= 0 else 0
+		_hidden_ms = -1
+		if hosting and online and _sig and (not _sig.is_open or away > 8000):
+			_sig_retry = 0.0
+
+
 func _process(delta: float) -> void:
 	if _sig:
 		_sig.poll(delta)
+	if _sig_retry >= 0.0:
+		_sig_retry -= delta
+		if _sig_retry < 0.0 and (hosting or joining):
+			if _sig:
+				_sig.close()
+			_start_signal(_sig_id)
+	if joining and not online and _sig and _sig.is_open and _rtc == null:
+		# Ask the room until the host answers (a first ask can get lost).
+		_join_t -= delta
+		if _join_t <= 0.0:
+			_join_t = JOIN_RETRY
+			_sig.send(_host_src, {"k": "join", "v": VERSION})
+	if hosting and online:
+		_check_joiners()
+		_check_ping(delta)
 	if _connect_t > 0.0 and not online:
 		_connect_t -= delta
 		if _connect_t <= 0.0:
-			_fail("COULDN'T CONNECT - TRY THE SAME WI-FI")
+			if _rtc == null:
+				_fail("ROOM %s NOT FOUND - CHECK THE CODE, HOST'S GAME OPEN ON SCREEN" % room)
+			else:
+				_fail("FOUND THE ROOM BUT COULDN'T CONNECT - TRY THE SAME WI-FI")
 	if not online:
 		return
 	_hook_local_player()
@@ -448,6 +554,36 @@ func _process(delta: float) -> void:
 		if _flow_t <= 0.0:
 			_flow_t = 1.0 / FLOW_RATE
 			_send_flow()
+
+
+func _check_ping(delta: float) -> void:
+	if _sig == null or not _sig.is_open or _sig_retry >= 0.0:
+		return
+	if _ping_wait >= 0.0:
+		_ping_wait -= delta
+		if _ping_wait < 0.0:
+			print("net: room %s didn't hear itself back, reconnecting" % room)
+			_signal_lost()
+		return
+	_ping_t -= delta
+	if _ping_t <= 0.0:
+		_ping_t = 10.0
+		_ping_wait = 6.0
+		_sig.send(_sig_id, {"k": "ping"})
+
+
+## Host: notice joiners whose link failed (so the host knows why nobody
+## came in).
+func _check_joiners() -> void:
+	for id in _conns.keys():
+		var c := _conns[id] as WebRTCPeerConnection
+		var st := c.get_connection_state()
+		if st == WebRTCPeerConnection.STATE_CONNECTED and host_note == "A PLAYER IS JOINING...":
+			host_note = ""
+		elif st == WebRTCPeerConnection.STATE_FAILED:
+			print("net: peer %d couldn't connect" % id)
+			host_note = "A PLAYER COULDN'T CONNECT - TRY THE SAME WI-FI"
+			_drop_link(int(id))
 
 
 # --- The squad ---
