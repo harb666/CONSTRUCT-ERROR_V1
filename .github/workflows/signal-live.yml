@@ -43,8 +43,8 @@ jobs:
           sleep 8
           ~/godot/godot --headless --path . -s tests/net_live_signal_test.gd -- --role=join --code=$CODE > join.log 2>&1 &
           J=$!
-          wait $H; RH=$?
-          wait $J; RJ=$?
+          wait $H || true
+          wait $J || true
           echo "::group::host"; grep -v "^ERROR\|^   at\|leaked" host.log; echo "::endgroup::"
           echo "::group::join"; grep -v "^ERROR\|^   at\|leaked" join.log; echo "::endgroup::"
           grep -h "^PASS\|^FAIL\|LIVE FAILURES" host.log join.log

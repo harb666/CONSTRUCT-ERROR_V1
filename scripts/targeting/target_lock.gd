@@ -103,7 +103,9 @@ func has_clear_shot() -> bool:
 
 
 ## Only level geometry (static bodies) counts as cover: other robots,
-## props and players don't break the line.
+## props and players don't break the line. The locked target itself never
+## does (a toxic barrel is a static body: it hid itself, so a locked barrel
+## was never fired at).
 func _line_clear(to: Vector3) -> bool:
 	if _player == null or not _player.is_inside_tree():
 		return true
@@ -117,6 +119,8 @@ func _line_clear(to: Vector3) -> bool:
 		q.exclude = ex
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
+			return true
+		if has_target() and hit.collider == current.get_parent():
 			return true
 		if hit.collider is StaticBody3D:
 			return false

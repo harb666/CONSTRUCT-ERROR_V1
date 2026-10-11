@@ -4423,6 +4423,26 @@ func _toxic_barrel_tests() -> void:
 	_check(extra.exploded, "barrel: ...but a moment later (a chain)")
 	p.damaged.disconnect(on_blast)
 	_check(blasted[0] > 5.0 and blasted[0] < 22.0, "barrel: a player near the edge of the blasts is only hurt a little (%.0f health)" % blasted[0])
+	# Locked on, the guns fire at it (it isn't its own cover) and it goes off.
+	var lb := ToxicBarrel.new()
+	main.get_node("Barrels").add_child(lb)
+	lb.global_position = Vector3(3, 40, 46)
+	var lp: PlayerController = main.players[1]
+	lp.global_position = Vector3(3, 40.1, 53)
+	lp.velocity = Vector3.ZERO
+	lp.reset_physics_interpolation()
+	await _ticks(10)
+	var lock := lp.get_node("TargetLock") as TargetLock
+	var sel := lp.get_node("Input/TargetSelector") as TargetSelector
+	sel.tap_target(lb.targetable)
+	await _ticks(2)
+	_check(lock.has_target() and lock.current == lb.targetable and lock._line_clear(lb.targetable.get_aim_point()), "barrel: a locked barrel isn't cover for itself")
+	for i in 300:
+		await _ticks(1)
+		if lb.exploded:
+			break
+	_check(lb.exploded, "barrel: locked on, the guns shoot it and it explodes")
+	await _ticks(70)
 	main.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
