@@ -4391,10 +4391,15 @@ func _toxic_barrel_tests() -> void:
 	# Standing in the slime burns.
 	p.global_position = centre + Vector3.DOWN * 0.9
 	p.velocity = Vector3.ZERO
-	p.armour = 0.0
-	var hp1 := p.health
+	# (Counted as damage dealt: armour pickups on the level can soak it.)
+	var burned := [0.0]
+	var on_hit := func(i: DamageInfo) -> void:
+		if i.weapon == &"toxic_slime":
+			burned[0] += i.damage_amount * p.incoming_damage_scale
+	p.damaged.connect(on_hit)
 	await _ticks(130)
-	_check(p.health < hp1 - 3.0, "barrel: standing in the burning slime hurts (%.0f -> %.0f)" % [hp1, p.health])
+	p.damaged.disconnect(on_hit)
+	_check(burned[0] >= 7.9, "barrel: standing in the burning slime hurts (%.0f health in 2 s)" % burned[0])
 	# Barrels near a blast go off too.
 	var gate: ToxicBarrel = main.get_node("Barrels/GateBarrel")
 	var extra := ToxicBarrel.new()
@@ -4403,14 +4408,18 @@ func _toxic_barrel_tests() -> void:
 	await _ticks(2)
 	p.global_position = gate.global_position + Vector3(0, 0.1, 3)
 	await _ticks(2)
-	p.armour = 0.0
-	hp1 = p.health
+	var blasted := [0.0]
+	var on_blast := func(i: DamageInfo) -> void:
+		if i.weapon == &"toxic_barrel":
+			blasted[0] += i.damage_amount * p.incoming_damage_scale
+	p.damaged.connect(on_blast)
 	gate.explode(p)
 	await _ticks(4)
 	_check(gate.exploded and not extra.exploded, "barrel: a barrel close by doesn't go off at once...")
 	await _ticks(12)
 	_check(extra.exploded, "barrel: ...but a moment later (a chain)")
-	_check(p.health < hp1 and p.health > hp1 - 22.0, "barrel: a player at the edge of the blast is only hurt a little (%.0f)" % (hp1 - p.health))
+	p.damaged.disconnect(on_blast)
+	_check(blasted[0] > 5.0 and blasted[0] < 22.0, "barrel: a player near the edge of the blasts is only hurt a little (%.0f health)" % blasted[0])
 	main.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
