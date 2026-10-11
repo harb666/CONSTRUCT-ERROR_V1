@@ -11,7 +11,9 @@ extends Weapon
 @export var fire_interval := 10.0
 ## Fires only at targets this close (the blizzard's reach, a little over).
 @export var max_range := 17.0
-@export var fire_volume_db := 0.0
+## Owner asked for it way louder: +6 dB (twice as loud; the file already
+## peaks at full level, so much more would crackle).
+@export var fire_volume_db := 6.0
 @export var fire_near := 5.0
 @export var fire_far := 60.0
 
@@ -40,6 +42,8 @@ func _ready() -> void:
 	cel_flash.setup(Color(0.45, 0.82, 1.0), Color(0.95, 0.99, 1.0))
 	# One voice: a shot every 10 s, far longer than the sound.
 	_fire_sound = Sfx.emitter(self, Sfx.ICE_BLASTER_FIRING, fire_volume_db, fire_near, fire_far)
+	# A player's own ceiling is +3 dB; let the boost through.
+	_fire_sound.max_db = maxf(fire_volume_db + 1.0, 3.0)
 
 
 func on_equipped(owner_player: Node) -> void:

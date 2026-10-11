@@ -197,8 +197,10 @@
   player hit on a frozen grunt / skirmisher shatters it into pieces that
   melt away; robots' fire doesn't. Shot while frozen, the boss is only
   slightly hurt (half damage) and thaws sooner (owner asked). Sounds are
-  the owner's (below): ice blaster firing; frozen robots play the two
-  frozen sounds one after the other while frozen.
+  the owner's (below): ice blaster firing (+6 dB, owner asked for it way
+  louder); frozen robots play the two frozen sounds one after the other
+  while frozen, quiet unless the player is near (full within 2.5 m, silent
+  at 9 m; boss 5-15 m).
 
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.

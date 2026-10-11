@@ -772,6 +772,7 @@ func _frost_byte_tests(main: Node) -> void:
 	_check(gun.fire_at(p, g.global_position + Vector3.UP), "frost byte: fires its blizzard at a target in reach")
 	_check(not gun.can_fire() and WeaponHud.status_of(gun)[1] == "CHARGING" and FrostBlizzard.spawned == b0 + 1, "frost byte: then charges for 10 s (HUD: CHARGING)")
 	_check(gun.fire_sounds == 1 and gun._fire_sound.stream == Sfx.ICE_BLASTER_FIRING, "frost byte: plays the owner's ice blaster firing sound")
+	_check(gun._fire_sound.base_db >= 6.0 and gun._fire_sound.max_db >= gun._fire_sound.base_db, "frost byte: its firing sound is boosted (+%.0f dB)" % gun._fire_sound.base_db)
 	const FROST_SHAS := {
 		"weapons/ice_blaster_firing.mp3": "670952a74ae1d653cfc992ad18b538facca40f61e67330fac60f7bd4a4150bfc",
 		"enemies/enemy_frozen_1.mp3": "22fe39bf38c235dd9742d65a4591fae3a6c3af2255ffe308a386bb71593b16ba",
@@ -792,6 +793,7 @@ func _frost_byte_tests(main: Node) -> void:
 	_check(fz != null and fz.time_left > 18.0, "frost byte: frozen for 20 s (%.1f s left)" % (fz.time_left if fz else 0.0))
 	var frozen_streams := [Sfx.ENEMY_FROZEN_1, Sfx.ENEMY_FROZEN_2]
 	_check(fz != null and fz.sounds_played == 1 and fz._sound.stream in frozen_streams, "frost byte: a frozen robot makes one of the owner's frozen sounds")
+	_check(fz != null and fz._sound.near <= 3.0 and fz._sound.far <= 10.0 and fz._sound.distance_gain(12.0) == 0.0, "frost byte: frozen sounds are quiet unless the player is near (full within %.1f m, silent at %.0f m)" % [fz._sound.near, fz._sound.far])
 	var s1: AudioStream = fz._sound.stream
 	fz._next_sound()
 	_check(fz.sounds_played == 2 and fz._sound.stream != s1 and fz._sound.stream in frozen_streams, "frost byte: and then the other, for as long as it's frozen")

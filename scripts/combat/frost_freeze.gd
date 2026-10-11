@@ -20,6 +20,12 @@ const GROW_TIME := 0.28
 const THAW_TIME := 0.35
 
 static var frozen_count := 0
+## Frozen sounds (owner asked: quiet unless the player is near): full volume
+## within `near` m of the robot, fading out to silence at `far` m.
+static var frozen_sound_near := 2.5
+static var frozen_sound_far := 9.0
+static var frozen_sound_near_heavy := 5.0
+static var frozen_sound_far_heavy := 15.0
 
 var robot: Node3D
 var heavy := false
@@ -177,8 +183,9 @@ func chip(seconds: float) -> void:
 # --- Sound ---
 
 func _start_sound() -> void:
-	var near := 8.0 if heavy else 3.0
-	var far := 70.0 if heavy else 40.0
+	# Owner asked: quiet unless the player is near the frozen robot.
+	var near := frozen_sound_near_heavy if heavy else frozen_sound_near
+	var far := frozen_sound_far_heavy if heavy else frozen_sound_far
 	_sound = Sfx.emitter(self, Sfx.ENEMY_FROZEN_1, 0.0, near, far)
 	_sound.position = Vector3.UP * (2.4 if heavy else 0.9 * size)
 	_sound.finished.connect(_next_sound)
