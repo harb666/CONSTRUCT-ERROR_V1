@@ -13,7 +13,28 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 
+## ?netlog=1: the network log, small, bottom-left (for screenshots when
+## joining goes wrong).
+static func show_log() -> bool:
+	return StressTest._param("netlog") == "1"
+
+
+static func draw_log(ci: CanvasItem, at: Vector2) -> void:
+	if Net.instance == null:
+		return
+	var lf := HudStyle.label_font()
+	var lines := Net.instance.log_lines
+	var h := 16.0 * lines.size() + 10.0
+	ci.draw_rect(Rect2(at - Vector2(6, h), Vector2(560, h + 4)), Color(0, 0, 0, 0.7))
+	var y := at.y - h + 16.0
+	for l in lines:
+		ci.draw_string(lf, Vector2(at.x, y), l, HORIZONTAL_ALIGNMENT_LEFT, 550, 14, Color(0.7, 1.0, 0.8))
+		y += 16.0
+
+
 func _draw() -> void:
+	if show_log():
+		draw_log(self, Vector2(12, size.y * 0.62))
 	if not Net.is_online():
 		return
 	var n := Net.instance

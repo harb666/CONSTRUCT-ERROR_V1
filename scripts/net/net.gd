@@ -95,8 +95,22 @@ var _hidden_ms := -1
 var _ready_peers := {}
 
 
+## The last lines of the network log (?netlog=1 shows them on the
+## character select / in game; also printed to the console).
+var log_lines: Array[String] = []
+
+
 func _enter_tree() -> void:
 	instance = self
+	PeerSignal.log_hook = net_log
+
+
+func net_log(s: String) -> void:
+	var line := "%5.1f %s" % [Time.get_ticks_msec() / 1000.0, s]
+	print("net: " + s)
+	log_lines.append(line)
+	if log_lines.size() > 14:
+		log_lines.pop_front()
 
 
 func _exit_tree() -> void:
@@ -324,6 +338,10 @@ func _fail(msg: String) -> void:
 
 
 func _set_status(s: String) -> void:
+	if s != status:
+		log_lines.append("%5.1f [%s]" % [Time.get_ticks_msec() / 1000.0, s])
+		if log_lines.size() > 14:
+			log_lines.pop_front()
 	status = s
 	status_changed.emit()
 

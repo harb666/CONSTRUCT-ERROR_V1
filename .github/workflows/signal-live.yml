@@ -1,0 +1,51 @@
+name: Co-op signalling (live)
+
+# Checks online co-op matchmaking against the real free PeerJS server the
+# game uses (0.peerjs.com): a host opens a room, a joiner's JOIN reaches it,
+# the host answers - also after the host loses and regains its link.
+# tests/net_live_signal_test.gd. Doesn't block deploys.
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["scripts/net/**", "tests/net_live_signal_test.gd", ".github/workflows/signal-live.yml"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+  GODOT_RELEASE: stable
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_RELEASE }}-web
+      - name: Download Godot
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          V="${GODOT_VERSION}-${GODOT_RELEASE}"
+          mkdir -p ~/godot && cd ~/godot
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot-builds/releases/download/${V}/Godot_v${V}_linux.x86_64.zip"
+          unzip -q godot.zip && mv "Godot_v${V}_linux.x86_64" godot && rm godot.zip
+      - name: Import project
+        run: ~/godot/godot --headless --path . --import
+      - name: Host + joiner through the public server
+        run: |
+          CODE=$(( (RANDOM % 9000) + 1000 ))
+          ~/godot/godot --headless --path . -s tests/net_live_signal_test.gd -- --role=host --code=$CODE > host.log 2>&1 &
+          H=$!
+          sleep 8
+          ~/godot/godot --headless --path . -s tests/net_live_signal_test.gd -- --role=join --code=$CODE > join.log 2>&1 &
+          J=$!
+          wait $H; RH=$?
+          wait $J; RJ=$?
+          echo "::group::host"; grep -v "^ERROR\|^   at\|leaked" host.log; echo "::endgroup::"
+          echo "::group::join"; grep -v "^ERROR\|^   at\|leaked" join.log; echo "::endgroup::"
+          grep -h "^PASS\|^FAIL\|LIVE FAILURES" host.log join.log
+          grep -q "^LIVE FAILURES: 0$" host.log && grep -q "^LIVE FAILURES: 0$" join.log

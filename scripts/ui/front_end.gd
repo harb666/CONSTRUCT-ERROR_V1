@@ -423,6 +423,8 @@ func _draw() -> void:
 		_draw_title(a)
 	else:
 		_draw_select(a)
+	if NetBadge.show_log():
+		NetBadge.draw_log(self, Vector2(12, size.y - 12))
 
 
 func _margin() -> float:

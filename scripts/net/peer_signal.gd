@@ -16,6 +16,9 @@ signal failed(reason: String)
 
 const HEARTBEAT := 5.0
 
+## Every message to / from the server, for the network log (Net.log).
+static var log_hook: Callable
+
 var id := ""
 ## Kept for reconnecting: the server takes the same id back with the same
 ## token (a phone that slept loses its connection; the room keeps its code).
@@ -25,14 +28,20 @@ var _ws := WebSocketPeer.new()
 var _beat := 0.0
 var _was_open := false
 var _closed := false
+var _reconnect := false
 
 
 ## Connect as `peer_id` to `base_url` (e.g. wss://0.peerjs.com:443/peerjs).
 func start(base_url: String, peer_id: String, key := "peerjs") -> Error:
 	id = peer_id
+	# Same token = taking our id back after the link dropped: the server
+	# then hands the id over without an OPEN message.
+	_reconnect = token != ""
 	if token == "":
 		token = "%x%x" % [randi(), randi()]
 	var url := "%s?key=%s&id=%s&token=%s&version=1.5.4" % [base_url, key, peer_id.uri_encode(), token]
+	if log_hook.is_valid():
+		log_hook.call("connect as %s" % _short(peer_id))
 	return _ws.connect_to_url(url)
 
 
@@ -40,6 +49,8 @@ func send(dst: String, payload: Dictionary, type := "OFFER") -> void:
 	if not is_open:
 		return
 	_ws.send_text(JSON.stringify({"type": type, "dst": dst, "payload": payload}))
+	if log_hook.is_valid() and String(payload.get("k", "")) != "ice":
+		log_hook.call("> %s %s to %s" % [type, payload.get("k", ""), _short(dst)])
 
 
 ## Still connected (or connecting) to the server.
@@ -60,6 +71,14 @@ func poll(delta: float) -> void:
 	_ws.poll()
 	var st := _ws.get_ready_state()
 	if st == WebSocketPeer.STATE_OPEN:
+		if not _was_open and _reconnect:
+			# Our id back (the server sends no OPEN for a reconnect; if the
+			# id had gone meanwhile it registers us fresh and OPEN follows).
+			is_open = true
+			_beat = HEARTBEAT
+			if log_hook.is_valid():
+				log_hook.call("reconnected")
+			opened.emit()
 		_was_open = true
 		_beat -= delta
 		if _beat <= 0.0 and is_open:
@@ -71,18 +90,31 @@ func poll(delta: float) -> void:
 		_closed = true
 		var was := is_open
 		is_open = false
+		if log_hook.is_valid():
+			log_hook.call("socket closed (code %d)" % _ws.get_close_code())
 		failed.emit("signalling closed" if was or _was_open else "couldn't reach the signalling server")
+
+
+static func _short(s: String) -> String:
+	return s.replace("construct-error-v1-room-", "room-")
 
 
 func _handle(text: String) -> void:
 	var m = JSON.parse_string(text)
 	if not (m is Dictionary):
 		return
+	if log_hook.is_valid():
+		var p = m.get("payload")
+		var k := String(p.get("k", "")) if p is Dictionary else ""
+		if k != "ice":
+			log_hook.call("< %s %s from %s" % [m.get("type", "?"), k, _short(String(m.get("src", "")))])
 	match String(m.get("type", "")):
 		"OPEN":
+			var again := is_open
 			is_open = true
 			_beat = HEARTBEAT
-			opened.emit()
+			if not again:
+				opened.emit()
 		"ID-TAKEN":
 			failed.emit("id taken")
 		"ERROR", "INVALID-KEY":
