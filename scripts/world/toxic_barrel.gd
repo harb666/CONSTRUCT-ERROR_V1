@@ -91,13 +91,21 @@ func _process(delta: float) -> void:
 		_glow_mat.emission_energy_multiplier = 0.75 + 0.25 * sin(_t * 2.3) + 0.08 * sin(_t * 7.1)
 
 
-## Any hit sets it off.
+## Any hit sets it off (online: on the host's device; the others' go off
+## when it says - net_event).
 func apply_damage(info: DamageInfo) -> void:
-	explode(info.source if info else null)
+	if Net.is_authority():
+		explode(info.source if info else null)
 
 
 func take_damage(_amount: float, _from := Vector3.ZERO) -> void:
-	explode()
+	if Net.is_authority():
+		explode()
+
+
+func net_event(kind: StringName, _args: Array) -> void:
+	if kind == &"explode":
+		explode()
 
 
 func explode(by: Node = null) -> void:
@@ -105,6 +113,7 @@ func explode(by: Node = null) -> void:
 		return
 	exploded = true
 	exploded_count += 1
+	Net.world_event(self, &"explode")
 	var at := global_position
 	var centre := at + Vector3.UP * 0.9
 	var host: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root

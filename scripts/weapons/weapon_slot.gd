@@ -433,8 +433,8 @@ static func forearm_frame(bone: Transform3D) -> Transform3D:
 ## are mirrored.
 func align() -> void:
 	var sk := skeleton
-	if sk == null or _socket_bone < 0:
-		return
+	if sk == null or _socket_bone < 0 or not sk.is_inside_tree():
+		return  # (also: the level being unloaded)
 	# Read the final (post-modifier) pose straight from the skeleton.
 	var frame := forearm_frame(sk.get_global_transform_interpolated() * sk.get_bone_global_pose(_socket_bone))
 	if socket_node:

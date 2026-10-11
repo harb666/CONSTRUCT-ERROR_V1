@@ -46,6 +46,19 @@ static func make(amount: float, type: Type, position: Vector3, direction: Vector
 	return d
 
 
+## For online co-op (a robot's death sent to the other devices).
+func to_net() -> Array:
+	return [damage_amount, int(damage_type), impact_position, impact_direction, impact_force, explosive_force, String(weapon), String(arm), launch_scale]
+
+
+static func from_net(a: Array) -> DamageInfo:
+	var d := DamageInfo.make(float(a[0]), int(a[1]) as Type, a[2], a[3], float(a[4]), float(a[5]))
+	d.weapon = StringName(a[6])
+	d.arm = StringName(a[7])
+	d.launch_scale = float(a[8])
+	return d
+
+
 ## Total violence of the hit (impact + blast).
 func total_force() -> float:
 	return impact_force + explosive_force

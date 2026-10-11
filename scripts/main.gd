@@ -50,14 +50,37 @@ func _ready() -> void:
 	if not carried.is_empty():
 		var roster := CharacterRoster.load_default()
 		var def := roster.find(carried["character"]) if roster else null
-		var p := spawn_player(1, true, def)
+		var p := spawn_player(_local_id(), true, def)
 		LevelTransfer.apply(p, carried)
 		LevelTransfer.fade_in(get_tree())
+		_net_ready(p)
 		return
-	if front_end_mode == 1 or (front_end_mode == -1 and get_tree().current_scene == self):
+	# Joined someone's room: their level, straight to the character select.
+	var rejoin := Net.instance != null and Net.instance.rejoin_select and get_tree().current_scene == self
+	if rejoin:
+		Net.instance.rejoin_select = false
+	if rejoin or front_end_mode == 1 or (front_end_mode == -1 and get_tree().current_scene == self):
 		open_front_end()
+		if rejoin:
+			front_end.skip_title = true
+		_net_ready(null)
 	else:
-		spawn_player(1, true)
+		_net_ready(spawn_player(_local_id(), true))
+
+
+## This device's player number: 1 offline / hosting, the room's slot when
+## joined.
+func _local_id() -> int:
+	return Net.instance.my_slot if Net.is_online() else 1
+
+
+## Online co-op: tell the session this level is up (and who deployed).
+func _net_ready(local: PlayerController) -> void:
+	if Net.instance == null:
+		return
+	Net.instance.level_ready(self)
+	if local:
+		Net.instance.local_deployed(local)
 
 
 ## Title + character select over the paused arena (a camera slowly circles
@@ -95,7 +118,9 @@ func _on_deployed(character: CharacterDefinition) -> void:
 	get_tree().paused = false
 	debug_hud.visible = true
 	touch_controls.visible = DisplayServer.is_touchscreen_available()
-	var local := spawn_player(1, true, character)
+	var local := spawn_player(_local_id(), true, character)
+	if Net.instance:
+		Net.instance.local_deployed(local)
 	if StressTest.boss_fight():
 		StressTest.start_boss_fight(self, local)
 	if StressTest.melee_soak():
@@ -121,7 +146,9 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	if is_local:
 		input = LocalPlayerInput.new()
 	else:
-		input = PlayerInput.new()  # placeholder until a network input source exists
+		# A teammate (online co-op): their device drives it.
+		input = NetPlayerInput.new()
+		player.is_remote = true
 	input.name = "Input"
 	player.add_child(input)
 	player.input = input
@@ -181,6 +208,10 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 		marker.lock_left = lock_left
 		marker.camera = rig.camera
 		debug_hud.player = player
+		if $UI.get_node_or_null("NetBadge") == null:
+			var badge := NetBadge.new()
+			badge.name = "NetBadge"
+			$UI.add_child(badge)
 		var vitals := VitalsHud.new()
 		vitals.name = "VitalsHud"
 		vitals.player = player

@@ -7,8 +7,11 @@ extends Control
 ##    first touch); the arena keeps loading / drawing behind it, so by the
 ##    time you're in, sounds play straight away.
 ## 2. Character select: the roster (CharacterRoster) with a turning 3D
-##    preview of the picked character, and the co-op squad (up to 4 players:
-##    you plus open slots until online play is added). DEPLOY starts.
+##    preview of the picked character, and the co-op squad (up to 4 players).
+##    Online co-op (Net): HOST opens a room with a 4-digit code; on the other
+##    phone JOIN and type the code on the number pad (or open the game with
+##    ?join=<code>). The squad rows fill with whoever is in. DEPLOY starts
+##    (players can drop in while the host plays).
 ## Drawn in the owner's cyan HUD style (HudStyle). Emits `deployed`, then
 ## fades out and frees itself.
 
@@ -48,6 +51,15 @@ var _preview_vp: SubViewport
 var _preview_pivot: Node3D
 var _preview_def: CharacterDefinition
 var _buttons := {}  # id -> Rect2 (this frame's layout)
+## Room-code number pad (JOIN).
+var pad_open := false
+var pad_code := ""
+## Go straight to the character select (joined someone's room).
+var skip_title := false:
+	set(v):
+		skip_title = v
+		if v and screen == Screen.TITLE:
+			_activate("start")
 
 
 func _ready() -> void:
@@ -109,6 +121,19 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
 		pos = event.position
 		pressed = event.pressed
+	elif event is InputEventKey and event.pressed and not event.echo and pad_open:
+		if event.keycode >= KEY_0 and event.keycode <= KEY_9:
+			_activate("pad:%d" % (event.keycode - KEY_0))
+		elif event.keycode >= KEY_KP_0 and event.keycode <= KEY_KP_9:
+			_activate("pad:%d" % (event.keycode - KEY_KP_0))
+		elif event.keycode == KEY_BACKSPACE:
+			_activate("pad:del")
+		elif event.keycode in [KEY_ENTER, KEY_KP_ENTER]:
+			_activate("pad:ok")
+		elif event.keycode == KEY_ESCAPE:
+			_activate("pad:cancel")
+		get_viewport().set_input_as_handled()
+		return
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
 		_activate("start" if screen == Screen.TITLE else "deploy")
 		get_viewport().set_input_as_handled()
@@ -129,6 +154,8 @@ func _hit(pos: Vector2) -> String:
 	if screen == Screen.TITLE:
 		return "start"  # anywhere
 	for id in _buttons:
+		if pad_open and not String(id).begins_with("pad:"):
+			continue
 		if (_buttons[id] as Rect2).grow(8.0).has_point(pos):
 			return id
 	return ""
@@ -140,7 +167,22 @@ func _activate(id: String) -> void:
 		screen = Screen.SELECT
 		_screen_t = 0.0
 		_make_preview()
+		_tell_net()
 		started.emit()
+		_auto_net()
+	elif id.begins_with("pad:") and pad_open:
+		_pad_key(id.substr(4))
+	elif screen != Screen.SELECT:
+		return
+	elif id == "host" and Net.instance and not Net.is_online():
+		Net.instance.host_room(StressTest._param("host"))
+	elif id == "join" and Net.instance and not Net.is_online():
+		pad_open = true
+		pad_code = ""
+	elif id == "leave" and Net.instance:
+		Net.instance.leave()
+	elif id == "share" and Net.instance and Net.is_online():
+		_share_link(Net.instance.room)
 	elif id == "deploy" and screen == Screen.SELECT and selected:
 		screen = Screen.OUT
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -150,6 +192,50 @@ func _activate(id: String) -> void:
 		if def:
 			selected = def
 			_make_preview()
+			_tell_net()
+
+
+func _tell_net() -> void:
+	if Net.instance and selected:
+		Net.instance.my_character = selected.id
+
+
+## ?join=<code> opens the game straight into joining that room; ?host=<code>
+## hosts one with that code (testing).
+func _auto_net() -> void:
+	if Net.instance == null or Net.is_online():
+		return
+	var j := StressTest._param("join")
+	if j.length() == 4 and j.is_valid_int() and Net.instance.room == "":
+		Net.instance.join_room(j)
+	elif StressTest._param("host") != "" and Net.instance.room == "":
+		Net.instance.host_room(StressTest._param("host"))
+
+
+## The phone's share sheet with a link that opens the game joining this
+## room (or the link copied, where there's no share sheet).
+func _share_link(code: String) -> void:
+	if not OS.has_feature("web"):
+		return
+	var js := "(function(){var u=location.origin+location.pathname+'?join=%s';" % code \
+		+ "if(navigator.share){navigator.share({title:'CONSTRUCT-ERROR',text:'Join my CONSTRUCT-ERROR game - room %s',url:u}).catch(function(){});return 'shared';}" % code \
+		+ "if(navigator.clipboard){navigator.clipboard.writeText(u);return 'copied';}return 'none';})()"
+	var r = JavaScriptBridge.eval(js, true)
+	if r == "copied" and Net.instance:
+		Net.instance.status = "JOIN LINK COPIED"
+
+
+func _pad_key(k: String) -> void:
+	if k == "cancel":
+		pad_open = false
+	elif k == "del":
+		pad_code = pad_code.left(maxi(pad_code.length() - 1, 0))
+	elif k == "ok":
+		if pad_code.length() == 4 and Net.instance:
+			pad_open = false
+			Net.instance.join_room(pad_code)
+	elif k.is_valid_int() and pad_code.length() < 4:
+		pad_code += k
 
 
 ## Test / desktop helpers.
@@ -385,7 +471,8 @@ func _draw_select(a: float) -> void:
 	var head := Rect2(Vector2(m, 16) - off, Vector2(size.x - 2.0 * m, 52))
 	HudStyle.panel(self, head, HudStyle.CYAN, HudStyle.FILL, 14.0, a)
 	HudStyle.text(self, tf, head.position + Vector2(20, 36), "CHARACTER SELECT", HudStyle.fit(tf, "CHARACTER SELECT", head.size.x * 0.5, 28), Color(HudStyle.TEXT, a))
-	var players := 1
+	var online := Net.is_online()
+	var players := maxi(Net.instance.roster.size(), 1) if online else 1
 	HudStyle.text(self, lf, Vector2(head.end.x - 20, head.position.y + 34), "CO-OP SQUAD  %d / %d" % [players, CharacterRoster.MAX_PLAYERS], 22, Color(HudStyle.CYAN, a), 1.0)
 	# 3D preview.
 	var top := head.end.y + 22.0
@@ -419,14 +506,38 @@ func _draw_select(a: float) -> void:
 		_draw_card(def, cr, def == selected, a)
 		_buttons["char:" + String(def.id)] = cr
 		cx += card.x + 16.0
-	# Squad: you + open slots for online co-op.
+	# Squad: you + online co-op (HOST a room / JOIN one by its code).
 	var sy := top + 30 + card.y + 34.0
 	HudStyle.text(self, lf, Vector2(rx, sy - 8), "SQUAD  //  ONLINE CO-OP", 20, Color(HudStyle.CYAN, a))
+	var bx := rx + rw
+	var net_btns: Array = [["leave", "LEAVE"]] if online or (Net.instance and Net.instance.room != "" and not Net.instance.failed) else [["join", "JOIN"], ["host", "HOST"]]
+	if online and Net.instance.hosting and OS.has_feature("web"):
+		net_btns.append(["share", "SHARE"])
+	for nb in net_btns:
+		var br := Rect2(Vector2(bx - 112.0, sy - 36.0) + off, Vector2(112.0, 34.0))
+		HudStyle.panel(self, br, HudStyle.CYAN, HudStyle.FILL, 8.0, a)
+		HudStyle.text(self, lf, br.get_center() + Vector2(0, 7), nb[1], 20, Color(HudStyle.TEXT, a), 0.5)
+		_buttons[nb[0]] = br
+		bx -= 124.0
+	var st := Net.instance.status if Net.instance else ""
+	if Net.instance and Net.instance.hosting and online and Net.instance.status != "JOIN LINK COPIED":
+		st = "ROOM %s  -  ON THE OTHER PHONE: JOIN, ENTER %s" % [Net.instance.room, Net.instance.room]
+	if st != "":
+		var sc := HudStyle.DANGER if Net.instance.failed else HudStyle.WARN
+		HudStyle.text(self, lf, Vector2(rx, sy + 14) + off, st, HudStyle.fit(lf, st, bx - rx - 10.0, 19), Color(sc, a))
+		sy += 26.0
 	var deploy := Rect2(Vector2(size.x - m - 280, bottom - 62) + off, Vector2(280, 62))
 	var row_h := clampf((deploy.position.y - 16.0 - sy) / CharacterRoster.MAX_PLAYERS - 8.0, 30.0, 52.0)
+	var by_slot := {}
+	if online:
+		for pid in Net.instance.roster:
+			var e: Dictionary = Net.instance.roster[pid]
+			by_slot[int(e["slot"])] = e
+	var me := Net.instance.my_slot if online else 1
 	for i in CharacterRoster.MAX_PLAYERS:
 		var rr := Rect2(Vector2(rx, sy + i * (row_h + 8.0)) + off, Vector2(rw, row_h))
-		var you := i == 0
+		var you := i + 1 == me
+		var mate: Dictionary = by_slot.get(i + 1, {}) if not you else {}
 		HudStyle.panel(self, rr, HudStyle.CYAN if you else HudStyle.CYAN_DIM, HudStyle.FILL if you else Color(HudStyle.FILL_DARK, 0.5), 8.0, a)
 		var chip := Rect2(rr.position + Vector2(10, (row_h - 22) * 0.5), Vector2(36, 22))
 		draw_colored_polygon(HudStyle.chamfer(chip, [6.0, 0.0, 6.0, 0.0]), Color(HudStyle.CYAN, (1.0 if you else 0.35) * a))
@@ -438,6 +549,13 @@ func _draw_select(a: float) -> void:
 				draw_texture_rect(selected.portrait, Rect2(Vector2(chip.end.x + 10, rr.position.y + 4), Vector2(ps, ps)), false, Color(1, 1, 1, a))
 			HudStyle.text(self, lf, Vector2(chip.end.x + row_h + 14, ty), "YOU  -  " + nm, 21, Color(HudStyle.TEXT, a))
 			HudStyle.text(self, lf, Vector2(rr.end.x - 16, ty), "READY", 19, Color(HudStyle.HEALTH, a), 1.0)
+		elif not mate.is_empty():
+			var mdef := roster.find(StringName(mate.get("character", "")))
+			if mdef and mdef.portrait:
+				var ps2 := row_h - 8.0
+				draw_texture_rect(mdef.portrait, Rect2(Vector2(chip.end.x + 10, rr.position.y + 4), Vector2(ps2, ps2)), false, Color(1, 1, 1, a))
+			HudStyle.text(self, lf, Vector2(chip.end.x + row_h + 14, ty), mdef.display_name if mdef else "PLAYER", 21, Color(HudStyle.TEXT, a))
+			HudStyle.text(self, lf, Vector2(rr.end.x - 16, ty), "IN GAME" if mate.get("deployed", false) else "JOINED", 19, Color(HudStyle.CYAN, a), 1.0)
 		else:
 			HudStyle.text(self, lf, Vector2(chip.end.x + 14, ty), "OPEN SLOT", 20, Color(HudStyle.TEXT, 0.4 * a))
 	# Deploy.
@@ -446,3 +564,45 @@ func _draw_select(a: float) -> void:
 	HudStyle.brackets(self, deploy, Color(HudStyle.CYAN, a), 16.0, 5.0 + pulse * 3.0)
 	HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 12), "DEPLOY", 32, Color(HudStyle.TEXT, a), 0.5, 3)
 	_buttons["deploy"] = deploy
+	if pad_open:
+		_draw_pad(a)
+
+
+## Number pad for a room code (JOIN).
+func _draw_pad(a: float) -> void:
+	var tf := HudStyle.title_font()
+	var lf := HudStyle.label_font()
+	var nf := HudStyle.num_font()
+	draw_rect(Rect2(Vector2.ZERO, size), Color(HudStyle.BG, 0.75 * a))
+	var key := clampf(size.y * 0.11, 46.0, 70.0)
+	var gap := 10.0
+	var w := key * 3.0 + gap * 2.0 + 48.0
+	var h := 70.0 + key * 0.9 + 16.0 + key * 4.0 + gap * 3.0 + 76.0
+	var r := Rect2(size * 0.5 - Vector2(w, h) * 0.5, Vector2(w, h))
+	HudStyle.panel(self, r, HudStyle.CYAN, HudStyle.FILL_DARK, 16.0, a)
+	HudStyle.brackets(self, r.grow(6.0), Color(HudStyle.CYAN, a), 18.0, 5.0, 3.0)
+	HudStyle.text(self, tf, Vector2(r.get_center().x, r.position.y + 40), "ROOM CODE", 26, Color(HudStyle.TEXT, a), 0.5)
+	# The four digits.
+	var dw := (w - 48.0 - gap * 3.0) / 4.0
+	var dy := r.position.y + 58.0
+	for i in 4:
+		var dr := Rect2(Vector2(r.position.x + 24.0 + i * (dw + gap), dy), Vector2(dw, key * 0.9))
+		HudStyle.panel(self, dr, HudStyle.CYAN if i == pad_code.length() else HudStyle.CYAN_DIM, HudStyle.FILL, 6.0, a)
+		if i < pad_code.length():
+			HudStyle.text(self, nf, dr.get_center() + Vector2(0, 12), pad_code[i], 32, Color(HudStyle.TEXT, a), 0.5)
+	# Keys: 1-9, DEL 0 GO, CANCEL.
+	var ky := dy + key * 0.9 + 16.0
+	var labels := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "del", "0", "ok"]
+	for i in labels.size():
+		var kr := Rect2(Vector2(r.position.x + 24.0 + (i % 3) * (key + gap), ky + (i / 3) * (key + gap)), Vector2(key, key))
+		var lab: String = labels[i]
+		var ok := lab == "ok"
+		var ready := pad_code.length() == 4
+		HudStyle.panel(self, kr, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.45), 0.6 if ok and ready else 0.0), 8.0, a * (0.45 if ok and not ready else 1.0))
+		var text := "DEL" if lab == "del" else ("JOIN" if ok else lab)
+		HudStyle.text(self, nf if lab.is_valid_int() else lf, kr.get_center() + Vector2(0, 10), text, 28 if lab.is_valid_int() else 20, Color(HudStyle.TEXT, a), 0.5)
+		_buttons["pad:" + lab] = kr
+	var cr := Rect2(Vector2(r.position.x + 24.0, r.end.y - 56.0), Vector2(w - 48.0, 40.0))
+	HudStyle.panel(self, cr, HudStyle.CYAN_DIM, HudStyle.FILL, 8.0, a)
+	HudStyle.text(self, lf, cr.get_center() + Vector2(0, 7), "CANCEL", 20, Color(HudStyle.TEXT, a), 0.5)
+	_buttons["pad:cancel"] = cr

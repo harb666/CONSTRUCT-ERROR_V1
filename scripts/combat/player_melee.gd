@@ -232,7 +232,8 @@ func _strike(dir2: Vector2) -> void:
 
 
 func _hit_stop() -> void:
-	if not hit_stop_enabled or hit_stop_time <= 0.0:
+	# (A teammate's punch shown here doesn't stop this device's game.)
+	if not hit_stop_enabled or hit_stop_time <= 0.0 or _player.is_remote:
 		return
 	Engine.time_scale = hit_stop_scale
 	hit_stops += 1

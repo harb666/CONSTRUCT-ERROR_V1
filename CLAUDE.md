@@ -230,6 +230,14 @@
   as a stand-in until the owner's is made). The shaft's collision was
   opened (it was capped by the map export's convex hulls).
 
+- Online co-op (owner asked, free): HOST / JOIN on character select, 4-digit
+  room code (SHARE / ?join=<code> link), WebRTC phone to phone, free public
+  PeerJS signalling + Google STUN (no TURN relay yet: same Wi-Fi is
+  reliable). The host's device runs the world (robots, barrels, waves, lift,
+  level changes); each device runs its own character and its damage
+  (`Net`, `NetPlayerInput`, `RobotEnemy.net_puppet`). Two-game test:
+  `tests/run_net_pair.sh godot` (also in CI).
+
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 
@@ -250,7 +258,8 @@
 
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`
-  (~1 min; must end `FAILURES: 0`).
+  (~1 min; must end `FAILURES: 0`); co-op: `tests/run_net_pair.sh godot`
+  (must end `NET FAILURES: 0` twice).
 - Commit and push to the working branch; `.github/workflows/web-build.yml`
   tests, exports and deploys (~3 min to live).
 - When a build is live, always give the owner the link:

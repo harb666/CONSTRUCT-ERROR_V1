@@ -132,8 +132,17 @@ func gait_speed(amount: float, sprinting: bool) -> float:
 	return lerpf(run_min_speed, run_speed, clampf((amount - blend_end) / maxf(sprint_zone - blend_end, 0.01), 0.0, 1.0))
 
 
+## Online co-op: a teammate's character on this device (driven by their
+## device, NetPlayerInput). Their device decides the damage they take; here
+## hits only show (flinch, flash).
+var is_remote := false
+
+
 ## Called by enemy weapons (DamageInfo.apply).
 func apply_damage(info: DamageInfo) -> void:
+	if is_remote:
+		damaged.emit(info)
+		return
 	damage_taken += info.damage_amount
 	# The player's own black hole never hurts them (it never did).
 	if info.damage_type != DamageInfo.Type.SUPERNOVA and info.source != self:

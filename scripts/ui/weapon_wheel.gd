@@ -205,6 +205,8 @@ func _process(_delta: float) -> void:
 	var prev := _open_amount
 	_open_amount = move_toward(_open_amount, target, dt / 0.09)
 	var ts := lerpf(1.0, slow_time_scale, _open_amount)
+	if Net.is_online():
+		ts = 1.0  # online the world can't slow down for one player
 	if absf(Engine.time_scale - ts) > 0.0001:
 		Engine.time_scale = ts
 	if _open_amount != prev or is_open:

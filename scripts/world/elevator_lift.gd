@@ -209,6 +209,12 @@ func _set_state(s: int) -> void:
 		arrived.emit()
 	_lock_riders(state == State.DESCENDING)
 	state_changed.emit(state)
+	Net.world_event(self, &"lift", [int(state), _t])
+
+
+func net_event(kind: StringName, args: Array) -> void:
+	if kind == &"lift" and args.size() == 2:
+		set_state_from_net(int(args[0]), float(args[1]))
 
 
 ## Mirror the owner's state (online: everyone sees the same lift).
@@ -232,12 +238,13 @@ func _physics_process(delta: float) -> void:
 		State.READY, State.COUNTDOWN:
 			_place(_top.y)
 			_count_aboard()
+			if state == State.COUNTDOWN:
+				countdown_left -= delta
 			if auth:
 				var all := aboard > 0 and aboard >= riders
 				if state == State.READY and all:
 					_set_state(State.COUNTDOWN)
 				elif state == State.COUNTDOWN:
-					countdown_left -= delta
 					if not all:
 						_set_state(State.READY)
 					elif countdown_left <= 0.0:

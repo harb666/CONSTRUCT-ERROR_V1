@@ -539,6 +539,7 @@ func _run() -> void:
 	await _skyforge_tests()
 	await _toxic_barrel_tests()
 	await _level_flow_tests()
+	await _net_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4514,6 +4515,74 @@ func _level_flow_tests() -> void:
 		next.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
+
+## Online co-op pieces that work in one game (the two-game test is
+## tests/run_net_pair.sh): offline the game runs everything itself; a
+## teammate's character takes no damage here; the host's robots on a joined
+## device only show hits; teammates' inputs keep presses and find targets
+## by path; robot deaths travel intact; HOST / JOIN / the room-code pad.
+func _net_tests() -> void:
+	_check(Net.instance != null and not Net.is_online() and Net.is_authority(), "net: offline, this device runs the world")
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(20)
+	var mate: PlayerController = main.spawn_player(2, false, null)
+	await _ticks(5)
+	_check(mate.is_remote and mate.input is NetPlayerInput and not mate.is_in_group(&"local_player") and mate.is_in_group(&"players"),
+		"net: a teammate's character is driven by their device")
+	var hp := mate.health
+	var flinched := [0]
+	mate.damaged.connect(func(_i: DamageInfo) -> void: flinched[0] += 1)
+	mate.apply_damage(DamageInfo.make(3.0, DamageInfo.Type.ENERGY, mate.global_position, Vector3.FORWARD))
+	_check(is_equal_approx(mate.health, hp) and flinched[0] == 1, "net: hits on a teammate show but their device decides the damage")
+	# Inputs: a press survives until used; targets travel as paths.
+	var g: RobotEnemy = main.get_node("Targets/GateGrunt")
+	var tid := (g.get_node("Targetable") as Targetable).target_id
+	_check(NetPlayerInput.target_path(tid, main) == "Targets/GateGrunt", "net: a target is sent as its path")
+	var ni := mate.input as NetPlayerInput
+	ni.push({"m": Vector2(0, -1), "y": 0.5, "jp": true, "tp": "Targets/GateGrunt", "pos": mate.global_position, "vel": Vector3.ZERO}, main)
+	ni.push({"m": Vector2(0, -1), "y": 0.5, "jp": false, "tp": "Targets/GateGrunt", "pos": mate.global_position, "vel": Vector3.ZERO}, main)
+	var c1 := ni.get_command()
+	var c2 := ni.get_command()
+	_check(c1.jump_pressed and not c2.jump_pressed and c1.target_id == tid and c1.move == Vector2(0, -1), "net: a teammate's jump press is used once, their target found here")
+	ni.push({"pos": mate.global_position + Vector3(10, 0, 0), "vel": Vector3.ZERO}, main)
+	await _ticks(2)
+	_check(ni.snaps == 1 and mate.global_position.distance_to(ni._pos) < 0.5, "net: a teammate far from where their device has them is snapped there")
+	# The host's robots on a joined device: hits show, health untouched.
+	g.net_puppet = true
+	var h0 := g.health
+	g.apply_damage(DamageInfo.make(1.0e4, DamageInfo.Type.ENERGY, g.global_position, Vector3.FORWARD))
+	_check(g.alive and is_equal_approx(g.health, h0), "net: the host's robot here isn't hurt by hits here")
+	var info := DamageInfo.make(7.0, DamageInfo.Type.EXPLOSION, Vector3(1, 2, 3), Vector3.LEFT, 4.0, 9.0)
+	info.weapon = &"rocket"
+	var back := DamageInfo.from_net(info.to_net())
+	_check(back.damage_type == DamageInfo.Type.EXPLOSION and back.weapon == &"rocket" and back.impact_position == Vector3(1, 2, 3) and is_equal_approx(back.explosive_force, 9.0),
+		"net: a robot's death travels intact")
+	g.net_event(&"die", [info.to_net()])
+	_check(not g.alive, "net: it dies when the host's does")
+	main.queue_free()
+	await _ticks(5)
+	RobotEnemy.ai_enabled = ai_was
+	# Front end: HOST / JOIN and the code pad.
+	var fe := FrontEnd.new()
+	root.add_child(fe)
+	await _ticks(3)
+	fe.press_start()
+	await _ticks(3)
+	for i in 4:
+		await process_frame
+	_check(fe._buttons.has("host") and fe._buttons.has("join"), "net: HOST and JOIN on the character select")
+	fe._activate("join")
+	for k in ["4", "8", "2", "1", "9"]:
+		fe._activate("pad:" + k)
+	_check(fe.pad_open and fe.pad_code == "4821", "net: the room-code pad takes 4 digits")
+	fe._activate("pad:del")
+	fe._activate("pad:cancel")
+	_check(not fe.pad_open and fe.pad_code == "482", "net: delete and cancel")
+	fe.queue_free()
+	await _ticks(3)
 
 ## Cartoon VFX (owner asked): puffy 3D fireballs / smoke, cartoon muzzle
 ## flashes and shotgun beams on the player's weapons, hologram teleport-ins.

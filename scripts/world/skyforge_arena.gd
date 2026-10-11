@@ -241,6 +241,8 @@ var _camera_far := 800.0
 
 ## Fell off the decks: a player goes back to their spawn, a robot dies.
 func _on_fell(body: Node3D) -> void:
+	if body is PlayerController and (body as PlayerController).is_remote:
+		return
 	if body is PlayerController:
 		(body as PlayerController).respawn()
 	elif (body is RobotEnemy or body is RobotBoss) and body.alive:

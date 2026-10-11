@@ -159,6 +159,13 @@ var _pulled_frame := -100
 
 ## Global switch (tests turn robot AI off for deterministic checks).
 static var ai_enabled := true
+## Online co-op, on a joined device: the host's robot. It walks and aims
+## here, but its target, position (nudged towards the host's), firing,
+## dodging and death come from the host (Net); its health isn't changed
+## here (hits only show).
+var net_puppet := false
+var _net_pos := Vector3.INF
+var _net_target: Node3D
 ## Cartoon cel muzzle flashes (over the usual ones) within this camera
 ## distance (m); counted for tests.
 @export var cel_flash_distance := 35.0
@@ -586,8 +593,41 @@ func _physics_process(delta: float) -> void:
 		if suppression:
 			suppression.update(delta)
 		_behave(delta)
+		if net_puppet:
+			_net_correct(delta)
 	else:
 		_corpse(delta)
+
+
+## The host's position for this robot, and who it's after (Net, a few
+## times a second).
+func net_follow(pos: Vector3, tgt: Node3D) -> void:
+	_net_pos = pos
+	_net_target = tgt
+
+
+## Close in on where the host has it: snap if far off, else ease over.
+func _net_correct(delta: float) -> void:
+	if _net_pos == Vector3.INF or freeze:
+		return
+	var err := _net_pos - global_position
+	if err.length() > 4.0 or absf(err.y) > 1.5:
+		global_position = _net_pos
+		linear_velocity = Vector3.ZERO
+		reset_physics_interpolation()
+	else:
+		global_position += Vector3(err.x, 0.0, err.z) * clampf(2.5 * delta, 0.0, 1.0)
+
+
+## Something the host's robot did (Net).
+func net_event(kind: StringName, args: Array) -> void:
+	match kind:
+		&"fire":
+			if alive and target:
+				_fire_one()
+		&"die":
+			if alive:
+				die(DamageInfo.from_net(args[0]) if not args.is_empty() and args[0] is Array and (args[0] as Array).size() >= 9 else DamageInfo.make(1.0e4, DamageInfo.Type.ENERGY, global_position + Vector3.UP, Vector3.FORWARD))
 
 
 func _behave(delta: float) -> void:
@@ -616,7 +656,9 @@ func _behave(delta: float) -> void:
 ## Periodic (cheap) decisions: target, line of sight, spacing from others.
 func _think() -> void:
 	var best: Node3D = null
-	if ai_enabled and combat_enabled:
+	if net_puppet:
+		best = _net_target if is_instance_valid(_net_target) and _net_target.is_inside_tree() else null
+	elif ai_enabled and combat_enabled:
 		var best_d := INF
 		for p in get_tree().get_nodes_in_group(&"players"):
 			var n := p as Node3D
@@ -784,6 +826,8 @@ func _set_move_anim(speed: float, backwards := false) -> void:
 
 
 func _update_fire(delta: float, dist: float) -> void:
+	if net_puppet:
+		return  # the host says when (net_event "fire")
 	if not _los or dist > fire_range:
 		_burst_left = 0
 		return
@@ -829,6 +873,7 @@ func _on_burst_start() -> void:
 
 ## One plasma bolt from the next cannon (alternating left/right).
 func _fire_one() -> void:
+	Net.world_event(self, &"fire")
 	var i := _next_cannon
 	_next_cannon = 1 - _next_cannon
 	var muzzle := _aim.muzzle_position(i)
@@ -918,6 +963,11 @@ func take_damage(amount: float, from := Vector3.ZERO) -> void:
 
 func apply_damage(info: DamageInfo) -> void:
 	if not alive:
+		return
+	if net_puppet:
+		# The host's robot: the hit shows, the host decides the damage.
+		if hit_fx and not is_frozen():
+			hit_fx.on_hit(info, max_health)
 		return
 	if is_instance_valid(_frost) and _frost.active:
 		# Frozen solid: a player's hit shatters it; robots' fire does nothing.
@@ -1011,6 +1061,7 @@ func _shatter_now(info: DamageInfo) -> void:
 func die(info: DamageInfo) -> void:
 	if not alive:
 		return
+	Net.world_event(self, &"die", [info.to_net() if info else []])
 	# Back to the separate sections (same skeleton, same pose) so it can
 	# break apart.
 	_use_section_meshes()

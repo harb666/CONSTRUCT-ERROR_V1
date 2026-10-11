@@ -40,17 +40,31 @@ func _ready() -> void:
 		lift.ride_finished.connect(_on_ride_finished)
 
 
+## The host's flow events, shown here too (online).
+func net_event(kind: StringName, args: Array) -> void:
+	match kind:
+		&"wave_started":
+			_on_wave_started(int(args[0]), int(args[1]))
+		&"wave_cleared":
+			_on_wave_cleared(int(args[0]), int(args[1]))
+		&"all_cleared":
+			_on_all_cleared()
+
+
 func _on_wave_started(index: int, total: int) -> void:
+	Net.world_event(self, &"wave_started", [index, total])
 	if hud:
 		hud.banner("WAVE %d / %d" % [index, total], "ENEMIES INBOUND" if index > 1 else "CLEAR THE SKYFORGE")
 
 
 func _on_wave_cleared(index: int, total: int) -> void:
+	Net.world_event(self, &"wave_cleared", [index, total])
 	if hud and index < total:
 		hud.banner("WAVE CLEARED", "NEXT WAVE INCOMING")
 
 
 func _on_all_cleared() -> void:
+	Net.world_event(self, &"all_cleared")
 	if hud:
 		hud.banner("AREA SECURED", "LIFT ARRIVING")
 	if lift and Net.is_authority():

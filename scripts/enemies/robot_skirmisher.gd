@@ -731,8 +731,8 @@ func _aim_at_target(player_yaw: float) -> void:
 ## Evade a threat (`from_dir` = the shot's travel, or ZERO) or, `unprompted`,
 ## just stay mobile. Picks a sidestep, jump or dive to a clear side.
 func _evade(from_dir: Vector3, unprompted := false) -> void:
-	if action != Act.NONE or target == null or not alive:
-		return
+	if action != Act.NONE or target == null or not alive or net_puppet:
+		return  # (a puppet dodges when the host's does: net_event "act")
 	var to := target.global_position - global_position
 	to.y = 0.0
 	var dir_to := to.normalized() if to.length_squared() > 0.01 else Vector3.FORWARD
@@ -788,7 +788,26 @@ func _begin(a: Act, length: float) -> void:
 	_move_anim = &""
 
 
+## Online co-op: the host's skirmisher dodged / dived / jumped.
+func net_event(kind: StringName, args: Array) -> void:
+	if kind != &"act":
+		super.net_event(kind, args)
+		return
+	if not alive or args.size() < 2 or not (action == Act.NONE or action == Act.TURN):
+		return
+	if action == Act.TURN:
+		_end_action()
+	match int(args[0]):
+		0:
+			_start_sidestep(args[1])
+		1:
+			_start_dive(args[1])
+		2:
+			_start_jump(args[1])
+
+
 func _start_sidestep(dir: Vector3) -> void:
+	Net.world_event(self, &"act", [0, dir])
 	_begin(Act.SIDESTEP, sidestep_time)
 	_act_dir = dir
 	sidesteps += 1
@@ -810,6 +829,7 @@ func _start_sidestep(dir: Vector3) -> void:
 
 
 func _start_jump(dir: Vector3) -> void:
+	Net.world_event(self, &"act", [2, dir])
 	_backing = false
 	_begin(Act.JUMP, 0.85 / jump_anim_speed)
 	_act_dir = dir
@@ -825,6 +845,7 @@ func _start_jump(dir: Vector3) -> void:
 
 
 func _start_dive(dir: Vector3) -> void:
+	Net.world_event(self, &"act", [1, dir])
 	_begin(Act.DIVE, (dive_clip_range.y - dive_clip_range.x) / dive_anim_speed)
 	_act_dir = dir
 	_act_clip = &"Jumping_Punch"
@@ -1092,6 +1113,7 @@ func _update_fire(delta: float, dist: float) -> void:
 ## One yellow plasma round from the next cannon's muzzle, along the line
 ## the cannon points (straight at the target when it's nearly on it).
 func _fire_one() -> void:
+	Net.world_event(self, &"fire")
 	var i := _next_cannon
 	_next_cannon = 1 - _next_cannon
 	var muzzle := _aim.muzzle_position(i)

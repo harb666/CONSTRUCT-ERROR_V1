@@ -42,6 +42,8 @@ var state := State.WAITING
 ## Current wave, 1-based (0 before the first starts).
 var wave := 0
 var spawned := 0
+## Online, on a joined device: robots left as the host counts them.
+var net_remaining := -1
 var _queue: Array[int] = []
 var _t := 0.0
 var _counts := {}
@@ -68,6 +70,8 @@ func active_count() -> int:
 
 ## Robots of the current wave still to come or alive.
 func remaining() -> int:
+	if not Net.is_authority() and net_remaining >= 0:
+		return net_remaining
 	return active_count() + _queue.size()
 
 
@@ -153,6 +157,7 @@ func _spawn(scene_index: int) -> bool:
 	var visual := r.get(&"_visual") as Node3D
 	Hologram.teleport_in(visual, 0.0, Color(1.0, 0.35, 0.3))
 	spawned += 1
+	Net.robot_spawned(r, t)
 	robot_spawned.emit(r, scene_index)
 	return true
 

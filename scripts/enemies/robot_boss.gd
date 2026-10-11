@@ -620,7 +620,32 @@ static func _in_place(a: Animation) -> void:
 
 # --- behaviour ---
 
+## Online co-op, on a joined device: the host's boss. It goes after the
+## target the host's has and is eased to the host's position; its health
+## and death come from the host (Net).
+var net_puppet := false
+var _net_pos := Vector3.INF
+var _net_target: Node3D
+
+
+func net_follow(pos: Vector3, tgt: Node3D) -> void:
+	_net_pos = pos
+	_net_target = tgt
+
+
+func net_event(kind: StringName, _args: Array) -> void:
+	if kind == &"die" and alive:
+		die()
+
+
 func _physics_process(delta: float) -> void:
+	if net_puppet and alive and _net_pos != Vector3.INF:
+		var err := _net_pos - global_position
+		if err.length() > 6.0:
+			global_position = _net_pos
+			reset_physics_interpolation()
+		else:
+			global_position += Vector3(err.x, 0.0, err.z) * clampf(2.0 * delta, 0.0, 1.0)
 	if not alive:
 		_update_death(delta)
 		return
@@ -658,6 +683,9 @@ func _physics_process(delta: float) -> void:
 
 func _find_target() -> void:
 	target = null
+	if net_puppet:
+		target = _net_target if is_instance_valid(_net_target) and _net_target.is_inside_tree() else null
+		return
 	if not RobotEnemy.ai_enabled and not always_active:
 		return
 	var best := detect_range
@@ -1372,7 +1400,7 @@ var _last_star_ms := -1000
 
 
 func apply_damage(info: DamageInfo) -> void:
-	if not alive:
+	if not alive or net_puppet:
 		return
 	var on_core := exposed and hits_core(info)
 	var armour := armour_damage_scale * (stagger_armour_scale if is_staggered() else 1.0)
@@ -1423,6 +1451,7 @@ func hits_core(info: DamageInfo) -> bool:
 func die(_info: DamageInfo = null) -> void:
 	if not alive:
 		return
+	Net.world_event(self, &"die")
 	if is_instance_valid(_frost) and _frost.active:
 		_frost.thaw()
 	alive = false
