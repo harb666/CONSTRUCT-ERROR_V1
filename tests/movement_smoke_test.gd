@@ -4623,6 +4623,8 @@ func _music_tests() -> void:
 	fe._menu_music()
 	await _ticks(3)
 	_check(Music.current() == Music.MAIN_MENU, "music: the main menu music once loaded / on the menus")
+	_check(Music._player.playback_type == AudioServer.PLAYBACK_TYPE_STREAM,
+		"music: streamed, not a web sample (a whole decoded track crashed iPhone Safari)")
 	fe.press_start()
 	await _ticks(3)
 	_check(Music.current() == Music.MAIN_MENU, "music: it carries on into character select")

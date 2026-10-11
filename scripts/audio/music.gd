@@ -74,5 +74,9 @@ static func _ensure(tree: SceneTree) -> void:
 		return
 	_player = AudioStreamPlayer.new()
 	_player.name = "Music"
+	# Streamed (decoded as it plays), never a web "sample": on the web, a
+	# sample is the whole track decoded up front - ~150 MB for a 7-minute
+	# song, which made iPhone Safari kill the page.
+	_player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	tree.root.add_child.call_deferred(_player)
