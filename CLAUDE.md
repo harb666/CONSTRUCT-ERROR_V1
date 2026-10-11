@@ -241,9 +241,10 @@
   opened (it was capped by the map export's convex hulls).
 
 - Online co-op (owner asked, free): HOST / JOIN on character select, 4-digit
-  room code (SHARE / ?join=<code> link), WebRTC phone to phone, free public
-  PeerJS signalling + Google STUN (no TURN relay yet: same Wi-Fi is
-  reliable). The host's device runs the world (robots, barrels, waves, lift,
+  room code (SHARE / ?join=<code> link), WebRTC phone to phone; phones find
+  each other through ntfy.sh (free public message service, no account;
+  the public PeerJS server stopped relaying) + Google STUN (no TURN relay
+  yet: same Wi-Fi is reliable). `?netlog=1` shows the network log. The host's device runs the world (robots, barrels, waves, lift,
   level changes); each device runs its own character and its damage
   (`Net`, `NetPlayerInput`, `RobotEnemy.net_puppet`). Two-game test:
   `tests/run_net_pair.sh godot` (also in CI).
