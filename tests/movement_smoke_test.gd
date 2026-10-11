@@ -4589,7 +4589,7 @@ func _net_tests() -> void:
 ## Level 1's (quieter) as the players arrive in Skyforge; a level without
 ## its own music stops the menu music.
 func _music_tests() -> void:
-	_check(FileAccess.file_exists("res://assets/audio/music/main_menu_music.ogg") and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop,
+	_check(Music.MAIN_MENU is AudioStreamOggVorbis and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop,
 		"music: the owner's menu and level 1 tracks are in, looping")
 	if Music._player and is_instance_valid(Music._player):
 		Music._player.stop()  # (earlier tests' menus)
