@@ -218,7 +218,24 @@ var death_sounds := 0
 ## Visor glow (emission energy) while it's alive.
 @export var visor_glow := 2.5
 
-enum State { COMBAT, WINDUP, DEAD }
+@export_group("Stomp")
+## Melee (owner asked): a player this close (m, level) gets a foot stomp - a
+## mini shockwave that knocks them way back onto their back.
+@export var stomp_range := 5.5
+## How far the shockwave reaches (m) and how long it takes to get there.
+@export var stomp_radius := 7.5
+@export var stomp_cooldown := 4.0
+## Robot-health units (x5 = player HP).
+@export var stomp_damage := 2.0
+## Knock-back launch: level speed away and upward speed (m/s).
+@export var stomp_knock_speed := 15.0
+@export var stomp_knock_up := 8.0
+## A player this high above the floor (m) as the wave passes jumped it.
+@export var stomp_jump_clear := 0.9
+@export var stomp_sound_db := 6.0
+@export_group("")
+
+enum State { COMBAT, WINDUP, DEAD, STOMP }
 
 var health := 0.0
 var alive := true
@@ -313,6 +330,15 @@ var _last_turn := 0
 var _detour_t := 0.0
 var _detour_yaw := 0.0
 var _flash_pivot: Node3D
+## Foot stomp: the pose layer, stomps done and players knocked (tests).
+var stomp_pose: BossStompPose
+var stomps := 0
+var stomp_knocks := 0
+var last_stomp_wave: StompShockwave
+var _stomp_t := -1.0
+var _stomp_cd := 0.0
+var _stomp_hit := {}
+var _stomp_at := Vector3.ZERO
 
 static var _lib_cache: AnimationLibrary
 static var _chest_lib: AnimationLibrary
@@ -399,6 +425,10 @@ func _build_model() -> void:
 	torso_twist.name = "TorsoTwist"
 	sk.add_child(torso_twist)
 	torso_twist.setup(sk)
+	stomp_pose = BossStompPose.new()
+	stomp_pose.name = "StompPose"
+	sk.add_child(stomp_pose)
+	stomp_pose.setup(sk)
 	hit_react = BossHitReact.new()
 	hit_react.name = "HitReact"
 	sk.add_child(hit_react)
@@ -595,11 +625,14 @@ func _physics_process(delta: float) -> void:
 	core_fx.instability = clampf(1.0 - health / max_health, 0.0, 1.0)
 	_find_target()
 	_update_chest(delta)
+	_stomp_cd = maxf(_stomp_cd - delta, 0.0)
 	match state:
 		State.COMBAT:
 			_combat(delta)
 		State.WINDUP:
 			_windup(delta)
+		State.STOMP:
+			_stomp(delta)
 	_update_gun(delta)
 	_update_twist()
 	_update_targetable()
@@ -645,6 +678,10 @@ func _combat(delta: float) -> void:
 					_detour_yaw = deg_to_rad(50.0 if l else -50.0)
 					_detour_t = 3.0
 			want = 0.0
+		# Too close: stomp.
+		if _stomp_cd <= 0.0 and d <= stomp_range and turn_dir == 0 and absf(target.global_position.y - global_position.y) < 2.5:
+			_start_stomp()
+			return
 		_missile_t -= delta
 		if _missile_t <= 0.0 and not exposed and _chest_open_t < 0.0:
 			_start_windup()
@@ -677,7 +714,88 @@ func _update_stagger(delta: float) -> void:
 		core_fx.hit(0.3, Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
 
 
+# --- Stomp ---
+
+func _start_stomp() -> void:
+	state = State.STOMP
+	_stomp_t = 0.0
+	_speed = 0.0
+	_stomp_hit.clear()
+	stomps += 1
+	if stomp_pose:
+		stomp_pose.t = 0.0
+	DebugHud.note("boss stomp")
+
+
+func _stomp(delta: float) -> void:
+	_move(0.0, delta)
+	var before := _stomp_t
+	_stomp_t += delta
+	if stomp_pose:
+		stomp_pose.t = _stomp_t
+	var hit := stomp_pose.impact_time() if stomp_pose else 0.67
+	if before < hit and _stomp_t >= hit:
+		_stomp_impact()
+	# The shockwave knocks players down as it reaches them.
+	if last_stomp_wave and last_stomp_wave.active and _stomp_t >= hit:
+		var r := last_stomp_wave.wave_radius()
+		for p in get_tree().get_nodes_in_group(&"players"):
+			var pc := p as PlayerController
+			if pc == null or _stomp_hit.has(pc):
+				continue
+			var off := pc.global_position - _stomp_at
+			if Vector2(off.x, off.z).length() > r or Vector2(off.x, off.z).length() > stomp_radius:
+				continue
+			_stomp_hit[pc] = true
+			if pc.global_position.y - _stomp_at.y > stomp_jump_clear:
+				continue  # jumped over the wave
+			_stomp_knock(pc)
+	var total := stomp_pose.total_time() if stomp_pose else 1.2
+	if _stomp_t >= total:
+		_end_stomp()
+
+
+func _stomp_impact() -> void:
+	var foot := global_position
+	if _sk and stomp_pose and stomp_pose._b.get("RightFoot", -1) >= 0:
+		foot = _sk.global_transform * _sk.get_bone_global_pose(stomp_pose._b.RightFoot).origin
+	_stomp_at = Vector3(foot.x, global_position.y, foot.z)
+	last_stomp_wave = StompShockwave.spawn(get_tree(), _stomp_at, stomp_radius)
+	# One of the owner's stomp sounds, louder.
+	var snd: AudioStream = Sfx.MINI_BOSS_STEPS[randi() % Sfx.MINI_BOSS_STEPS.size()]
+	Sfx.play_at(get_parent(), snd, _stomp_at, step_sound_db + stomp_sound_db, step_sound_near, step_sound_far * 1.2)
+	step_sounds += 1
+
+
+func _stomp_knock(pc: PlayerController) -> void:
+	var away := pc.global_position - _stomp_at
+	away.y = 0.0
+	if away.length_squared() < 0.01:
+		away = Vector3(sin(_yaw), 0, cos(_yaw))
+	var info := DamageInfo.make(stomp_damage, DamageInfo.Type.EXPLOSION, pc.global_position + Vector3.UP, away.normalized(), stomp_knock_speed, 0.0, self)
+	pc.apply_damage(info)
+	if pc.knockdown:
+		pc.knockdown.knock(_stomp_at, stomp_knock_speed, stomp_knock_up)
+	stomp_knocks += 1
+
+
+func _end_stomp() -> void:
+	if state == State.STOMP:
+		state = State.COMBAT
+	_stomp_t = -1.0
+	_stomp_cd = stomp_cooldown
+	if stomp_pose:
+		stomp_pose.t = -1.0
+
+
+func is_stomping() -> bool:
+	return state == State.STOMP
+
+
 func _on_staggered(_d: float) -> void:
+	# Interrupt: a stomp is cut off.
+	if state == State.STOMP:
+		_end_stomp()
 	# Interrupt: a missile being wound up is cancelled (and comes later).
 	if state == State.WINDUP:
 		state = State.COMBAT
@@ -1251,6 +1369,9 @@ func die(_info: DamageInfo = null) -> void:
 	if not alive:
 		return
 	alive = false
+	if stomp_pose:
+		stomp_pose.t = -1.0
+	_stomp_t = -1.0
 	state = State.DEAD
 	exposed = false
 	_chest_open_t = -1.0

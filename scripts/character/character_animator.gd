@@ -100,6 +100,7 @@ var _pending_land := false
 var _state_time := 0.0
 var _arm_aim: ArmAimModifier
 var melee_pose: MeleePoseModifier
+var knockdown_pose: KnockdownPoseModifier
 ## Arm holding a weapon ("Left"/"Right"/""): kept raised in every state.
 ## (Dual wield: see `armed`, one flag per arm.)
 var armed_side := ""
@@ -150,6 +151,10 @@ func _ready() -> void:
 	melee_pose = MeleePoseModifier.new()
 	melee_pose.name = "MeleePoseModifier"
 	skeleton.add_child(melee_pose)
+	# Knocked flying / on the back / kip-up (PlayerKnockdown).
+	knockdown_pose = KnockdownPoseModifier.new()
+	knockdown_pose.name = "KnockdownPoseModifier"
+	skeleton.add_child(knockdown_pose)
 
 	if controller:
 		controller.jumped.connect(_on_jumped)
@@ -296,8 +301,10 @@ func _process(delta: float) -> void:
 	if melee_pose and melee_pose.melee == null:
 		melee_pose.melee = controller.melee
 	# Punching: the pose layer does the body; the clips stand still under it.
+	if knockdown_pose and knockdown_pose.knockdown == null:
+		knockdown_pose.knockdown = controller.knockdown
 	var meleeing := controller.melee != null and controller.melee.active
-	if meleeing:
+	if meleeing or (controller.knockdown != null and controller.knockdown.active):
 		speed = 0.0
 	var on_floor := controller.is_on_floor()
 
@@ -361,7 +368,7 @@ func _process(delta: float) -> void:
 func _choose_state(on_floor: bool, speed: float, vy: float) -> String:
 	if is_dead:
 		return "Dead"
-	if controller.melee and controller.melee.active:
+	if (controller.melee and controller.melee.active) or (controller.knockdown and controller.knockdown.active):
 		return "Locomotion"
 	if controller.is_dodging:
 		return "Dodge"

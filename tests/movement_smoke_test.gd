@@ -3044,6 +3044,86 @@ func _skinned_points(mi: MeshInstance3D, stride: int, bones: Array = []) -> Pack
 
 
 ## Robot boss: asset, chaingun, missile + marker, chest core loop, death.
+## Boss melee (owner asked): a player too close gets a foot stomp - a mini
+## shockwave that knocks them way back onto their back; they kip up.
+func _boss_stomp_tests(main: Node, boss: RobotBoss) -> void:
+	if boss == null or not boss.alive:
+		return
+	var p: PlayerController = main.players[1]
+	var kd := p.knockdown
+	var was_active := boss.always_active
+	boss.always_active = true
+	boss._stomp_cd = 0.0
+	boss.state = RobotBoss.State.COMBAT
+	await _ticks(5)
+	var fwd := Vector3(sin(boss._yaw), 0, cos(boss._yaw))
+	p.global_position = boss.global_position + fwd * 4.0 + Vector3.UP * 0.05
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var s0 := boss.stomps
+	var hp0 := p.damage_taken
+	var w0 := StompShockwave.spawned
+	var max_w := 0.0
+	var started := false
+	for i in 120:
+		await _ticks(1)
+		if boss.is_stomping():
+			started = true
+			max_w = maxf(max_w, boss.stomp_pose.last_weight)
+		if kd.active:
+			break
+	_check(started and boss.stomps == s0 + 1, "boss stomp: a player too close gets a foot stomp")
+	_check(max_w > 0.9, "boss stomp: knee up, foot slammed down (pose %.2f)" % max_w)
+	_check(StompShockwave.spawned == w0 + 1, "boss stomp: a mini shockwave races out along the floor")
+	_check(kd.active and kd.phase == PlayerKnockdown.Phase.FLYING and p.damage_taken > hp0, "boss stomp: the player is hit and knocked flying (%.1f)" % (p.damage_taken - hp0))
+	var from := boss.global_position
+	var max_h := 0.0
+	var max_pitch := 0.0
+	var saw_down := false
+	var saw_tuck := false
+	var kp: KnockdownPoseModifier = null
+	for n in p.find_children("*", "SkeletonModifier3D", true, false):
+		if n is KnockdownPoseModifier:
+			kp = n
+	var y0 := p.global_position.y
+	for i in 200:
+		await _ticks(1)
+		max_h = maxf(max_h, p.global_position.y - y0)
+		if kp:
+			max_pitch = minf(max_pitch, kp.cur_pitch)
+		saw_down = saw_down or (kd.phase == PlayerKnockdown.Phase.DOWN and kp != null and kp.cur_lie > 0.9)
+		saw_tuck = saw_tuck or kd.phase == PlayerKnockdown.Phase.GETUP
+		if not kd.active:
+			break
+	var flown := Vector2(p.global_position.x - from.x, p.global_position.z - from.z).length()
+	_check(flown > 9.0 and max_h > 0.8, "boss stomp: knocked way back (%.1f m from it, %.1f m up)" % [flown, max_h])
+	_check(saw_down and max_pitch < -1.3, "boss stomp: lands flat on its back (%.0f deg)" % rad_to_deg(-max_pitch))
+	_check(saw_tuck and not kd.active and kd.getups >= 1, "boss stomp: then quickly kips back up onto its feet")
+	await _ticks(2)
+	Input.action_press("move_forward")
+	await _ticks(12)
+	Input.action_release("move_forward")
+	_check(Vector2(p.velocity.x, p.velocity.z).length() > 2.0, "boss stomp: the player moves freely again")
+	# Jumping the wave: no knockdown.
+	boss._stomp_cd = 0.0
+	p.global_position = boss.global_position + fwd * 4.0 + Vector3.UP * 0.05
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var k0 := kd.knockdowns
+	for i in 120:
+		await _ticks(1)
+		if boss.is_stomping() and boss._stomp_t > boss.stomp_pose.impact_time() - 0.3 and p.is_on_floor():
+			p.velocity.y = 9.0
+		if boss.is_stomping() and boss._stomp_t > boss.stomp_pose.impact_time() + 0.4:
+			break
+	_check(kd.knockdowns == k0, "boss stomp: jumping over the shockwave avoids it")
+	await _ticks(60)
+	boss.always_active = was_active
+	p.global_position = boss.global_position + fwd * 30.0 + Vector3.UP * 0.05
+	p.reset_physics_interpolation()
+	await _ticks(5)
+
+
 func _robot_boss_tests(main: Node) -> void:
 	var boss: RobotBoss = main.get_node_or_null("Targets/RobotBoss")
 	_check(boss != null and boss.alive, "boss: the robot boss stands in Toxic Arena")
@@ -3224,6 +3304,7 @@ func _robot_boss_tests(main: Node) -> void:
 	await _robot_boss_v2_tests(main, boss, body)
 	await _robot_boss_v3_tests(main, boss)
 	await _robot_boss_v4_tests(main, boss)
+	await _boss_stomp_tests(main, boss)
 
 	# Death: collapses and lies flat, feet not planted, weapons attached.
 	var foot := sk.find_bone("mixamorig_LeftFoot")

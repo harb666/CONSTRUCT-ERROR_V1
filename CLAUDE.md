@@ -170,6 +170,13 @@
   little and back by 0.62 s (impact zoom, no shake). The right arm then goes
   back to its previous weapon. `PlayerMelee`, `MeleePoseModifier`.
 
+- Boss foot stomp (owner asked): a player within 5.5 m gets stomped (4 s
+  cooldown): knee up, foot slammed down, a mini toon shockwave (7.5 m) and
+  the owner's stomp sound louder; players it reaches (not jumping it) take
+  10 HP, are knocked way back, land on their backs and quickly kip up.
+  `BossStompPose`, `StompShockwave`, `PlayerKnockdown`,
+  `KnockdownPoseModifier`.
+
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.
