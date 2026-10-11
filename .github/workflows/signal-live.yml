@@ -7,7 +7,7 @@ name: Co-op signalling (live)
 on:
   push:
     branches: ["claude/**"]
-    paths: ["scripts/net/**", "tests/net_live_signal_test.gd", ".github/workflows/signal-live.yml"]
+    paths: ["scripts/net/**", "tests/net_live_signal_test.gd", ".github/workflows/signal-live.yml", "tools/netcheck/**"]
   workflow_dispatch:
 
 env:
@@ -33,6 +33,11 @@ jobs:
           mkdir -p ~/godot && cd ~/godot
           curl -fsSL -o godot.zip "https://github.com/godotengine/godot-builds/releases/download/${V}/Godot_v${V}_linux.x86_64.zip"
           unzip -q godot.zip && mv "Godot_v${V}_linux.x86_64" godot && rm godot.zip
+      - name: Probe the public PeerJS server (message variants)
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/probe && cd /tmp/probe && npm init -y >/dev/null && npm install ws@8 >/dev/null 2>&1
+          NODE_PATH=/tmp/probe/node_modules timeout 120 node "$GITHUB_WORKSPACE/tools/netcheck/peerjs_probe.js"
       - name: Import project
         run: ~/godot/godot --headless --path . --import
       - name: Host + joiner through the public server
