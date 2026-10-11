@@ -11,6 +11,11 @@ extends Control
 ## Everything comes from the player's WeaponLoadout / WeaponRegistry (icons,
 ## names, colours, allowed arms), so new weapons appear without UI changes.
 ## Desktop: hold Tab and move the mouse.
+##
+## Heavy weapons (WeaponDefinition.heavy: right arm only, owner asked) carry
+## a gold HEAVY tag. They also show, ghosted, in the LEFT half: pick one
+## there and an arrow swings across to the right arm, the RIGHT half lights
+## up, and it goes on the right arm (the left arm keeps its weapon).
 
 signal opened
 signal closed
@@ -35,6 +40,9 @@ var touch: TouchControls
 var is_open := false
 var hover_side := ""
 var hover_def: WeaponDefinition
+## The arm the hovered weapon will actually go on (a heavy weapon picked in
+## the left half: the right arm).
+var hover_target := ""
 
 var _start := Vector2.ZERO
 var _cursor := Vector2.ZERO
@@ -80,6 +88,7 @@ func open_at(pos: Vector2) -> void:
 	_cursor = pos
 	hover_side = ""
 	hover_def = null
+	hover_target = ""
 	_layout()
 	opened.emit()
 	queue_redraw()
@@ -98,7 +107,7 @@ func release_at(pos: Vector2) -> void:
 	if not is_open:
 		return
 	drag_to(pos)
-	var side := hover_side
+	var side := hover_target
 	var def := hover_def
 	close()
 	if def and side != "" and loadout.equipped(side) != def:
@@ -112,6 +121,7 @@ func close() -> void:
 	is_open = false
 	hover_side = ""
 	hover_def = null
+	hover_target = ""
 	closed.emit()
 	queue_redraw()
 
@@ -135,7 +145,10 @@ func _layout() -> void:
 	if loadout == null:
 		return
 	for side in SIDES:
-		var list := loadout.available_for(side)
+		# Each arm's weapons; the left half also shows the heavy weapons
+		# (ghosted: picked there, they go on the right arm).
+		var list := loadout.unlocked_weapons().filter(func(w: WeaponDefinition) -> bool:
+			return w.can_go_on(side) or (w.heavy and w.can_go_on(WeaponDefinition.HEAVY_SIDE)))
 		var n := list.size()
 		var centre := PI if side == "Left" else 0.0
 		var span := deg_to_rad(minf(max_half_span, 48.0 * maxf(n - 1, 0)))
@@ -154,6 +167,7 @@ func _update_hover() -> void:
 	if v.length() < dead_zone:
 		hover_side = ""
 		hover_def = null
+		hover_target = ""
 		return
 	if absf(v.x) < side_dead_band:
 		return  # straight up/down: keep whatever was picked
@@ -173,6 +187,12 @@ func _update_hover() -> void:
 		return
 	hover_side = side if best else ""
 	hover_def = best
+	hover_target = best.side_for(side) if best else ""
+
+
+## A heavy weapon shown (ghosted) in an arm's half it can't go on.
+func is_ghost(side: String, def: WeaponDefinition) -> bool:
+	return def != null and def.heavy and not def.can_go_on(side)
 
 
 # --- Slow motion / animation (real time) ---
@@ -219,7 +239,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.06, 0.45 * a))
 	# Arm halves.
 	for side in SIDES:
-		var hot: bool = side == hover_side
+		var hot: bool = side == hover_target if hover_target != "" else side == hover_side
 		var acc := hover_def.accent_color if hot and hover_def else Color(0.55, 0.75, 1.0)
 		var centre := PI if side == "Left" else 0.0
 		var half := deg_to_rad(84.0)
@@ -229,35 +249,58 @@ func _draw() -> void:
 		var label_pos := c + Vector2((-1.0 if side == "Left" else 1.0) * (r + item_radius * 1.3 + 80.0), 0)
 		_text(label_pos, ARM_LABEL[side], 30 if hot else 26, Color(1, 1, 1, (1.0 if hot else 0.75) * a))
 	# Weapons.
+	var hover_label: Array = []
 	for side in SIDES:
 		var equipped := loadout.equipped(side)
 		for it: Array in _items.get(side, []):
 			var def: WeaponDefinition = it[0]
 			var p := c + Vector2.from_angle(it[1]) * r
 			var hovered: bool = side == hover_side and def == hover_def
+			var ghost := is_ghost(side, def)
 			var is_eq: bool = def == equipped
-			var ir := item_radius * (1.22 if hovered else 1.0) * (0.7 + 0.3 * a)
+			var ir := item_radius * (1.22 if hovered else (0.86 if ghost else 1.0)) * (0.7 + 0.3 * a)
 			var acc := def.accent_color
-			draw_circle(p, ir, Color(acc.r * 0.25, acc.g * 0.25, acc.b * 0.25, 0.85 * a) if hovered else Color(0.06, 0.08, 0.12, 0.8 * a))
+			var ga := (0.5 if ghost and not hovered else 1.0) * a
+			draw_circle(p, ir, Color(acc.r * 0.25, acc.g * 0.25, acc.b * 0.25, 0.85 * a) if hovered else Color(0.06, 0.08, 0.12, 0.8 * ga))
 			if hovered:
 				draw_circle(p, ir, Color(acc.r, acc.g, acc.b, 0.35 * a))
-			draw_arc(p, ir, 0, TAU, 40, Color(acc.r, acc.g, acc.b, (1.0 if hovered or is_eq else 0.35) * a), 5.0 if hovered else (3.0 if is_eq else 1.5), true)
+			if ghost and not hovered:
+				# Dashed ring: it lives on the other arm.
+				for k in 12:
+					var a0 := TAU * k / 12.0
+					draw_arc(p, ir, a0, a0 + TAU / 24.0, 4, Color(acc.r, acc.g, acc.b, 0.7 * ga), 2.0, true)
+			else:
+				draw_arc(p, ir, 0, TAU, 40, Color(acc.r, acc.g, acc.b, (1.0 if hovered or is_eq else 0.35) * a), 5.0 if hovered else (3.0 if is_eq else 1.5), true)
+			if def.heavy:
+				_heavy_ring(p, ir, ga)
 			if def.icon:
 				var s := ir * 1.75
-				draw_texture_rect(def.icon, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), false, Color(1, 1, 1, a))
+				draw_texture_rect(def.icon, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), false, Color(1, 1, 1, ga))
+			if def.heavy:
+				_heavy_tag(p + Vector2(0, ir * 0.98), "HEAVY  > R" if ghost else "HEAVY", ga)
 			if is_eq:
 				# "Equipped" tick on the arm's current weapon.
 				var tp := p + Vector2(ir * 0.72, -ir * 0.72)
 				draw_circle(tp, 12.0, Color(acc.r, acc.g, acc.b, a))
 				draw_polyline(PackedVector2Array([tp + Vector2(-6, 0), tp + Vector2(-2, 5), tp + Vector2(6, -5)]), Color(0, 0, 0, a), 3.0, true)
 			if hovered:
-				_text(p + Vector2(0, ir + 26), def.display_name, 22, Color(1, 1, 1, a))
+				hover_label = [p, ir, def, ghost]
+	# The hovered weapon's name (and a ghost's hand-off arrow) on top.
+	if not hover_label.is_empty():
+		var p: Vector2 = hover_label[0]
+		var ir: float = hover_label[1]
+		var def: WeaponDefinition = hover_label[2]
+		if hover_label[3]:
+			_hand_off_arrow(p, item_position(hover_target, def), def.accent_color, a)
+		_text(p + Vector2(0, ir + 30), def.display_name, 22, Color(1, 1, 1, a))
+		if hover_label[3]:
+			_text(p + Vector2(0, ir + 54), "HEAVY - GOES ON RIGHT ARM", 16, Color(HEAVY_GOLD, a))
 	# Centre: what each arm holds (the hovered arm previews its new weapon).
 	draw_circle(c, item_radius * 1.25, Color(0.04, 0.05, 0.08, 0.85 * a))
 	draw_line(c + Vector2(0, -item_radius), c + Vector2(0, item_radius), Color(1, 1, 1, 0.25 * a), 2.0)
 	for side in SIDES:
 		var sx := -1.0 if side == "Left" else 1.0
-		var def: WeaponDefinition = hover_def if side == hover_side and hover_def else loadout.equipped(side)
+		var def: WeaponDefinition = hover_def if side == hover_target and hover_def else loadout.equipped(side)
 		var p := c + Vector2(sx * item_radius * 0.62, 0)
 		if def and def.icon:
 			var s := item_radius * 1.05
@@ -287,6 +330,56 @@ func _draw_button() -> void:
 			var p := c + Vector2((-1.0 if side == "Left" else 1.0) * rad * 0.42, -rad * 0.05)
 			draw_texture_rect(def.icon, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), false)
 	_text(c + Vector2(0, rad * 0.62), "L    R", 14, Color(1, 1, 1, 0.75))
+
+
+const HEAVY_GOLD := Color(1.0, 0.78, 0.25)
+
+
+## Heavy weapons: a thick gold frame with four clamp notches.
+func _heavy_ring(p: Vector2, ir: float, a: float) -> void:
+	draw_arc(p, ir + 5.0, 0, TAU, 40, Color(HEAVY_GOLD, 0.85 * a), 3.0, true)
+	for k in 4:
+		var d := Vector2.from_angle(PI * 0.25 + PI * 0.5 * k)
+		draw_line(p + d * (ir + 1.0), p + d * (ir + 11.0), Color(HEAVY_GOLD, a), 5.0, true)
+
+
+## A small gold HEAVY plate under a heavy weapon.
+func _heavy_tag(centre: Vector2, label: String, a: float) -> void:
+	var fs := 12
+	var w := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 14.0
+	var r := Rect2(centre - Vector2(w * 0.5, 9.0), Vector2(w, 18.0))
+	draw_rect(r, Color(0.12, 0.08, 0.0, 0.9 * a))
+	draw_rect(r, Color(HEAVY_GOLD, a), false, 2.0)
+	_text(centre + Vector2(0, -1), label, fs, Color(HEAVY_GOLD, a))
+
+
+## Picked in the left half, a heavy weapon swings over to the right arm: a
+## curved arrow from the ghost to its place in the right half.
+func _hand_off_arrow(from: Vector2, to: Vector2, col: Color, a: float) -> void:
+	if to == Vector2.INF:
+		return
+	var c := wheel_centre()
+	var mid := (from + to) * 0.5
+	# Bow the arrow away from the centre so it clears the middle disc.
+	var bow := (mid - c)
+	bow = bow.normalized() if bow.length() > 1.0 else Vector2.UP
+	var ctrl := mid + bow * wheel_radius() * 0.3
+	var pts := PackedVector2Array()
+	var t_end := 0.8
+	for i in 25:
+		var t := t_end * i / 24.0
+		pts.append(from.lerp(ctrl, t).lerp(ctrl.lerp(to, t), t))
+	var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 90.0)
+	var bright := col.lerp(Color.WHITE, 0.45)
+	var tip := pts[pts.size() - 1]
+	var dir := (tip - pts[pts.size() - 3]).normalized()
+	var side_v := Vector2(-dir.y, dir.x)
+	var head := PackedVector2Array([tip + dir * 20.0, tip - dir * 6.0 + side_v * 14.0, tip - dir * 6.0 - side_v * 14.0])
+	# Dark outline under a bright line, so it reads over any weapon.
+	draw_polyline(pts, Color(0, 0, 0, 0.6 * a), 10.0, true)
+	draw_colored_polygon(PackedVector2Array([head[0] + dir * 3.0, head[1] - dir * 2.0 + side_v * 3.0, head[2] - dir * 2.0 - side_v * 3.0]), Color(0, 0, 0, 0.6 * a))
+	draw_polyline(pts, Color(bright.r, bright.g, bright.b, a * pulse), 5.0, true)
+	draw_colored_polygon(head, Color(bright.r, bright.g, bright.b, a * pulse))
 
 
 func _text(centre: Vector2, text: String, fs: int, col: Color) -> void:

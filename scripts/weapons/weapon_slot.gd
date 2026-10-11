@@ -55,6 +55,10 @@ var _switch_t := 0.0
 var _pending: WeaponDefinition
 var _owner_player: Node
 var _fx: WeaponSwitchFx
+## Heavy weapons lock in with a weightier switch: a bigger burst as they
+## come out and, once fully out, a clunk - the arm dips back under the
+## weight and a second burst flares at the socket. Counted for tests.
+var heavy_lockins := 0
 
 
 ## +1 for the right arm, -1 for the left (mirrors per-weapon mount offsets).
@@ -209,7 +213,10 @@ func _begin_extend() -> void:
 	_switch_t = 0.0
 	switch_scale = 0.05
 	if _fx:
-		_fx.play(def.accent_color, 1.0)
+		if def.heavy:
+			_fx.play(def.accent_color, 1.5, 0.3)
+		else:
+			_fx.play(def.accent_color, 1.0)
 
 
 func _process(delta: float) -> void:
@@ -229,9 +236,21 @@ func _process(delta: float) -> void:
 				switch_scale = 1.0
 				switch_phase = 0
 				set_process(false)
+				if definition and definition.heavy:
+					_heavy_lock_in()
 				switch_finished.emit(self, definition)
 		_:
 			set_process(false)
+
+
+## A heavy weapon has locked onto the arm: it dips back under the weight
+## (the arm's recoil, no camera kick) with a flare at the socket.
+func _heavy_lock_in() -> void:
+	heavy_lockins += 1
+	if animator:
+		animator.add_recoil(0.5, side)
+	if _fx:
+		_fx.play(definition.accent_color.lerp(Color.WHITE, 0.3), 1.25, 0.2)
 
 
 func unequip() -> void:

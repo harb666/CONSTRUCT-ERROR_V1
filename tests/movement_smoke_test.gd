@@ -745,6 +745,29 @@ func _frost_byte_tests(main: Node) -> void:
 	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
 	var fb := load("res://resources/weapons/frost_byte.tres") as WeaponDefinition
 	_check(reg.weapons.has(fb) and fb.icon != null and fb.mount_mode == 1, "frost byte: a registered arm weapon with a wheel icon")
+	# Heavy weapons (owner asked): BHG + Frost Byte, right arm only, never two.
+	var heavies := reg.weapons.filter(func(w: WeaponDefinition) -> bool: return w.heavy).map(func(w: WeaponDefinition) -> StringName: return w.id)
+	_check(heavies.size() == 2 and heavies.has(&"black_hole_generator") and heavies.has(&"frost_byte"), "heavy: the black hole gun and the Frost Byte are the heavy weapons")
+	var lo := p.get_node("WeaponLoadout") as WeaponLoadout
+	var bhg_def := reg.find(&"black_hole_generator")
+	lo.unlock(fb)
+	lo.unlock(bhg_def)
+	var mg_def := reg.find(&"machine_gun")
+	lo.unlock(mg_def)
+	h.equip(mg_def, "Left")
+	h.equip(bhg_def, "Right")
+	await _ticks(5)
+	_check(not lo.available_for("Left").has(fb) and not lo.available_for("Left").has(bhg_def) and lo.available_for("Right").has(fb), "heavy: not offered for the left arm")
+	lo.equip("Left", fb)
+	await _ticks(40)
+	_check(h.weapon("Right") is FrostByte and h.weapon("Left") is MachineGun, "heavy: a heavy weapon asked for on the left arm goes on the right (replacing the other heavy); the left keeps its light weapon")
+	h.equip(bhg_def, "Left")
+	await _ticks(3)
+	_check(h.weapon("Right") is BlackHoleGenerator and h.weapon("Left") is MachineGun and not (h.weapon("Left").definition.heavy and h.weapon("Right").definition.heavy),
+		"heavy: two heavy weapons are never held at once")
+	var lights := reg.weapons.filter(func(w: WeaponDefinition) -> bool: return not w.heavy)
+	_check(lights.all(func(w: WeaponDefinition) -> bool: return w.can_go_on("Left") and w.can_go_on("Right")), "heavy: the light weapons still dual-wield")
+	h.equip(h.default_weapon, "Left")
 	var pad := main.get_node_or_null("FrostByteSpawnPad") as WeaponSpawnPad
 	_check(pad != null and pad.weapon == fb and pad.glow_color.r > 0.8 and pad.glow_color.g > 0.9 and pad.glow_color.b > 0.95, "frost byte: its own white pad")
 	var ai_was := RobotEnemy.ai_enabled
@@ -2093,10 +2116,12 @@ func _weapon_fit_tests(main: Node) -> void:
 	sel.clear()
 	var base := Vector3(-14, 0, 33)
 	var defs := {"cannon": h.default_weapon, "shotgun": load("res://resources/weapons/shotgun.tres"), "bhg": load("res://resources/weapons/black_hole_generator.tres"),
-		"mg": load("res://resources/weapons/machine_gun.tres"), "rl": load("res://resources/weapons/rocket_launcher.tres")}
+		"mg": load("res://resources/weapons/machine_gun.tres"), "rl": load("res://resources/weapons/rocket_launcher.tres"),
+		"fb": load("res://resources/weapons/frost_byte.tres")}
 	var combos := [["cannon", "cannon"], ["shotgun", "cannon"], ["shotgun", "shotgun"], ["mg", "mg"], ["mg", "cannon"],
-		["cannon", "mg"], ["mg", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"], ["mg", "bhg"],
-		["rl", "rl"], ["rl", "cannon"], ["cannon", "rl"], ["rl", "mg"], ["shotgun", "rl"], ["bhg", "rl"], ["rl", "bhg"]]
+		["cannon", "mg"], ["mg", "shotgun"], ["bhg", "cannon"], ["bhg", "shotgun"], ["bhg", "mg"],
+		["rl", "rl"], ["rl", "cannon"], ["cannon", "rl"], ["rl", "mg"], ["shotgun", "rl"], ["bhg", "rl"],
+		["fb", "cannon"], ["fb", "mg"], ["fb", "rl"]]
 	var ta := _spawn_robot(main, base + Vector3(0, 0, -10))
 	var tb := _spawn_robot(main, base + Vector3(-7, 0, -7))
 	var tc := _spawn_robot(main, base + Vector3(7, 0, -7))
@@ -2654,7 +2679,7 @@ func _weapon_socket_tests(main: Node) -> void:
 	var bhg_err := 0.0
 	var rear_min := INF
 	var centre_max := 0.0
-	for combo in [[bhg, bhg], [h.default_weapon, sg], [sg, h.default_weapon]]:
+	for combo in [[bhg, h.default_weapon], [h.default_weapon, sg], [sg, h.default_weapon]]:
 		h.equip(combo[0], "Right")
 		h.equip(combo[1], "Left")
 		for i in 12:
@@ -2786,7 +2811,9 @@ func _weapon_switch_tests(main: Node) -> void:
 	var spd := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(wheel.is_open and spd > 3.0, "wheel opens while moving; movement continues (%.1f m/s)" % spd)
 	_check(Engine.time_scale < 0.8 and Engine.time_scale >= 0.4, "game slows slightly while the wheel is open (x%.2f)" % Engine.time_scale)
-	_check(wheel._items.Left.size() == 3 and wheel._items.Right.size() == 3, "both arms list all 3 unlocked weapons")
+	_check(wheel._items.Left.size() == 3 and wheel._items.Right.size() == 3, "both arms list all 3 unlocked weapons (the heavy BHG ghosted on the left)")
+	_check(bhg.heavy and not bhg.can_go_on("Left") and lo.available_for("Left").size() == 2 and lo.available_for("Right").size() == 3,
+		"heavy: the BHG is a heavy weapon, right arm only")
 	# Release in the dead zone: nothing changes.
 	wheel.drag_to(start + Vector2(20, -15))
 	await process_frame
@@ -2818,20 +2845,30 @@ func _weapon_switch_tests(main: Node) -> void:
 	_check(shrank, "old weapon retracts into the arm before the new one appears")
 	var dur: float = times.end - times.start
 	_check(times.start >= 0.0 and dur >= 0.25 and dur <= 0.4, "switch takes %.2f s (0.25-0.4)" % dur)
-	# BHG to LEFT.
-	var right_w := h.weapon("Right")
+	# Heavy weapons: the BHG is in the LEFT half too (ghosted, HEAVY); picked
+	# there it goes on the RIGHT arm and the left arm keeps its weapon.
+	left_w = h.weapon("Left")
+	wheel.open_at(start)
+	await process_frame
+	var bhg_left := wheel.item_position("Left", bhg)
+	wheel.drag_to(start + (bhg_left - wheel.wheel_centre()).normalized() * 160.0)
+	await process_frame
+	_check(wheel.hover_def == bhg and wheel.hover_side == "Left" and wheel.hover_target == "Right" and wheel.is_ghost("Left", bhg),
+		"heavy: the BHG shows in the LEFT half as a ghost that points to the RIGHT arm")
+	wheel.close()
 	await _wheel_pick(wheel, "Left", bhg, start)
 	await _ticks(30)
-	_check(h.weapon("Left") is BlackHoleGenerator and h.weapon("Right") == right_w, "equip Black Hole Generator to the LEFT arm; RIGHT keeps its Shotgun")
+	_check(h.weapon("Right") is BlackHoleGenerator and h.weapon("Left") == left_w, "heavy: BHG picked in the LEFT half goes on the RIGHT arm; LEFT keeps its weapon")
+	_check(h.slot("Right").heavy_lockins >= 1, "heavy: it locks onto the arm with a heavy clunk")
 	# Swap only RIGHT, then only LEFT.
 	left_w = h.weapon("Left")
 	await _wheel_pick(wheel, "Right", cannon, start)
 	await _ticks(30)
-	_check(h.weapon("Right") is PlasmaCannon and h.weapon("Left") == left_w, "swap only RIGHT (Shotgun -> Cannon); LEFT unaffected")
-	right_w = h.weapon("Right")
+	_check(h.weapon("Right") is PlasmaCannon and h.weapon("Left") == left_w, "swap only RIGHT (BHG -> Cannon); LEFT unaffected")
+	var right_w := h.weapon("Right")
 	await _wheel_pick(wheel, "Left", sg, start)
 	await _ticks(30)
-	_check(h.weapon("Left") is Shotgun and h.weapon("Right") == right_w, "swap only LEFT (BHG -> Shotgun); RIGHT unaffected")
+	_check(h.weapon("Left") is Shotgun and h.weapon("Right") == right_w, "swap only LEFT (Cannon -> Shotgun); RIGHT unaffected")
 	# Shotgun + Shotgun.
 	await _wheel_pick(wheel, "Right", sg, start)
 	await _ticks(30)
@@ -4405,15 +4442,16 @@ func _harbinger_tests() -> void:
 	_check(halo.ring.get_children().all(func(m: Node) -> bool: return m is MeshInstance3D and (m as MeshInstance3D).material_override is ShaderMaterial and not m.find_children("*", "Light3D").size()),
 		"harbinger: halo is shader-only (no textures, no lights)")
 	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.028), "harbinger: each arm's open end measured separately")
-	# Every weapon mounts on both arms.
+	# Every weapon mounts on both arms (heavy weapons: the right arm only).
 	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
 	var mounted := 0
 	for def in reg.weapons:
 		holder.equip(def, "Right")
-		holder.equip(def, "Left")
+		if not def.heavy:
+			holder.equip(def, "Left")
 		await _ticks(3)
 		var ok := true
-		for side in ["Left", "Right"]:
+		for side in (["Right"] if def.heavy else ["Left", "Right"]):
 			var w := holder.weapon(side)
 			var sl := holder.slot(side)
 			if w == null or not w.is_inside_tree():
@@ -4429,7 +4467,7 @@ func _harbinger_tests() -> void:
 					print("  %s %s rear %.3f vs end %.3f" % [def.id, side, rear, sl.trim_x()])
 		if ok:
 			mounted += 1
-	_check(mounted == reg.weapons.size(), "harbinger: every weapon mounts on both arms at the gauntlet ends (%d/%d)" % [mounted, reg.weapons.size()])
+	_check(mounted == reg.weapons.size(), "harbinger: every weapon mounts on its arms at the gauntlet ends (%d/%d)" % [mounted, reg.weapons.size()])
 	holder.unequip("Left")
 	holder.equip(reg.find(&"default_cannon"), "Right")
 	# Soles flat on the ground while standing.

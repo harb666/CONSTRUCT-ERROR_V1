@@ -60,9 +60,9 @@ func unlocked_weapons() -> Array[WeaponDefinition]:
 	return out
 
 
-## Unlocked weapons that can go on `side`.
+## Unlocked weapons that can go on `side` (heavy weapons: right arm only).
 func available_for(side: String) -> Array[WeaponDefinition]:
-	return unlocked_weapons().filter(func(w: WeaponDefinition) -> bool: return side in w.allowed_sides)
+	return unlocked_weapons().filter(func(w: WeaponDefinition) -> bool: return w.can_go_on(side))
 
 
 ## Unlock a weapon. Returns true the first time.
@@ -81,14 +81,17 @@ func unlock(def: WeaponDefinition) -> bool:
 func collect(def: WeaponDefinition) -> bool:
 	var first := unlock(def)
 	if first:
-		equip(pickup_side if pickup_side in def.allowed_sides else def.allowed_sides[0], def)
+		equip(pickup_side if def.can_go_on(pickup_side) else def.allowed_sides[0], def)
 	return first
 
 
-## Put an unlocked weapon on an arm (with the switch sequence).
+## Put an unlocked weapon on an arm (with the switch sequence). A heavy
+## weapon asked for on the left arm goes on the right arm instead.
 func equip(side: String, def: WeaponDefinition) -> bool:
 	var h := holder()
-	if h == null or not is_unlocked(def) or not (side in def.allowed_sides):
+	if def:
+		side = def.side_for(side)
+	if h == null or not is_unlocked(def) or not def.can_go_on(side):
 		return false
 	h.switch_weapon(def, side)
 	loadout_changed.emit(side, def)

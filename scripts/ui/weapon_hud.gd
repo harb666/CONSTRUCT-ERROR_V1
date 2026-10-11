@@ -57,6 +57,9 @@ static func status_of(w: Weapon) -> Array:
 	return [1.0, "READY", HudStyle.CYAN]
 
 
+const HEAVY_GOLD := Color(1.0, 0.78, 0.25)
+
+
 func _draw() -> void:
 	if holder == null:
 		return
@@ -78,6 +81,12 @@ func _draw() -> void:
 		if def == null:
 			HudStyle.text(self, lf, r.get_center() + Vector2(0, 8), "EMPTY", 18, Color(HudStyle.TEXT, 0.45), 0.5)
 			continue
+		if def.heavy:
+			# Heavy weapon (right arm only): a gold HEAVY plate in the corner.
+			var tag := Rect2(r.end.x - 62.0, r.position.y + 7.0, 52.0, 17.0)
+			draw_rect(tag, Color(0.12, 0.08, 0.0, 0.85))
+			draw_rect(tag, HEAVY_GOLD, false, 1.5)
+			HudStyle.text(self, lf, tag.get_center() + Vector2(0, 5), "HEAVY", 12, HEAVY_GOLD, 0.5)
 		if def.icon:
 			var s := 54.0
 			draw_texture_rect(def.icon, Rect2(r.position + Vector2(10, 20), Vector2(s, s)), false)

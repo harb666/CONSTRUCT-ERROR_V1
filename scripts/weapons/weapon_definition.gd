@@ -18,6 +18,24 @@ extends Resource
 @export var unlocked_at_start := false
 ## Arms it can be equipped to.
 @export var allowed_sides: PackedStringArray = ["Left", "Right"]
+## Heavy weapon (owner asked: the Black Hole Generator and the Frost Byte).
+## Held on the RIGHT arm only, so two heavy weapons are never held at once;
+## only light weapons dual-wield. Asked for on the left arm, it goes on the
+## right one instead (`side_for`). Marked HEAVY in the wheel and the HUD.
+@export var heavy := false
+
+const HEAVY_SIDE := "Right"
+
+
+## Can it go on `side`?
+func can_go_on(side: String) -> bool:
+	return side in allowed_sides and (not heavy or side == HEAVY_SIDE)
+
+
+## The arm it actually goes on when asked for `side`: a heavy weapon always
+## goes on the right arm.
+func side_for(side: String) -> String:
+	return HEAVY_SIDE if heavy else side
 
 @export_group("Mount")
 ## Skeleton bone the weapon attaches to (existing bones only).

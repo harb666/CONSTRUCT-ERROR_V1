@@ -202,6 +202,13 @@
   while frozen, quiet unless the player is near (full within 2.5 m, silent
   at 9 m; boss 5-15 m).
 
+- Heavy weapons (owner asked): the Black Hole Generator and the Frost Byte
+  (`WeaponDefinition.heavy`) - right arm only, so never two at once; only
+  light weapons dual-wield. Asked for on the left arm they go on the right.
+  Wheel: gold HEAVY frame / plate, ghosted in the left half with an arrow
+  across to the right arm; heavier lock-in (bigger burst, arm dips under
+  the weight); HUD HEAVY plate.
+
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

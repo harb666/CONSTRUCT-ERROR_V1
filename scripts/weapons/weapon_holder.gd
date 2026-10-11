@@ -126,7 +126,10 @@ func can_equip(_definition: WeaponDefinition) -> bool:
 
 
 ## Equip into a slot (pickups: the RIGHT slot). The other slot is untouched.
+## Heavy weapons only ever go on the right arm.
 func equip(definition: WeaponDefinition, side := "Right") -> Weapon:
+	if definition:
+		side = definition.side_for(side)
 	if not slots.has(side):
 		return null
 	return (slots[side] as WeaponSlot).equip(definition, get_parent())
@@ -135,6 +138,8 @@ func equip(definition: WeaponDefinition, side := "Right") -> Weapon:
 ## Switch a slot to another weapon with the retract / materialise sequence
 ## (~0.3 s). The other slot is untouched and keeps firing.
 func switch_weapon(definition: WeaponDefinition, side: String) -> void:
+	if definition:
+		side = definition.side_for(side)
 	if slots.has(side):
 		(slots[side] as WeaponSlot).switch_to(definition, get_parent())
 
