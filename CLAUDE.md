@@ -83,6 +83,16 @@
   after the other, never the same twice running, until it thaws or
   shatters (`FrostFreeze._next_sound`).
 
+- `assets/audio/music/source/Main_menu_music.mp3` (sha256
+  a1a935ad9d8b13c0c7021147ded1bf5972a8b3517d655f6fd96598bccd5fff37) and
+  `assets/audio/music/source/Level_1_music.mp3` (sha256
+  59bc99ce1d6e076dbad43441bfb103fc37f2ee3ae544d5775010f9d5b01dba2e) - the
+  owner's music, kept untouched; the game plays 112 kbps OGG copies
+  (`main_menu_music.ogg`, `level_1_music.ogg`; the 320 kbps originals would
+  add ~29 MB to the download). `Music`: menu music on the title (once
+  loaded) and character select; Level 1's as players arrive in Skyforge,
+  at -17 dB (menu -9), carrying on down the lift into the next part.
+
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
   their muzzle flashes stay on. The player's machine gun effects (barrel heat

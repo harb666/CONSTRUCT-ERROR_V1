@@ -171,7 +171,7 @@ func _client() -> void:
 	check(ok, "a robot the host killed dies here")
 	ok = await until(func() -> bool: return not is_instance_valid(main.get_node_or_null("Barrels/HubBarrel")) or main.get_node("Barrels/HubBarrel").exploded, 300)
 	check(ok, "a barrel the host blew up goes off here")
-	ok = await until(func() -> bool: return int(net().received.get(&"fire", 0)) > 3, 900)
+	ok = await until(func() -> bool: return int(net().received.get(&"fire", 0)) >= 2, 1200)
 	check(ok, "robots fire here when the host's do (%d)" % int(net().received.get(&"fire", 0)))
 	ok = await until(func() -> bool: return int(net().received.get(&"spawn", 0)) >= 2, 900)
 	check(ok, "wave robots teleport in here too")

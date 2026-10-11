@@ -540,6 +540,7 @@ func _run() -> void:
 	await _toxic_barrel_tests()
 	await _level_flow_tests()
 	await _net_tests()
+	await _music_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4582,6 +4583,45 @@ func _net_tests() -> void:
 	fe._activate("pad:cancel")
 	_check(not fe.pad_open and fe.pad_code == "482", "net: delete and cancel")
 	fe.queue_free()
+	await _ticks(3)
+
+## Music (owner's tracks): the main menu music on the menus once loaded,
+## Level 1's (quieter) as the players arrive in Skyforge; a level without
+## its own music stops the menu music.
+func _music_tests() -> void:
+	_check(FileAccess.file_exists("res://assets/audio/music/main_menu_music.ogg") and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop,
+		"music: the owner's menu and level 1 tracks are in, looping")
+	if Music._player and is_instance_valid(Music._player):
+		Music._player.stop()  # (earlier tests' menus)
+	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	main.front_end_mode = 1
+	root.add_child(main)
+	await _ticks(3)
+	var fe: FrontEnd = main.front_end
+	_check(Music.current() == null, "music: nothing over the loading gauge")
+	fe.loaded = false
+	fe._menu_music()
+	await _ticks(3)
+	_check(Music.current() == Music.MAIN_MENU, "music: the main menu music once loaded / on the menus")
+	fe.press_start()
+	await _ticks(3)
+	_check(Music.current() == Music.MAIN_MENU, "music: it carries on into character select")
+	fe.press_deploy()
+	await _wall_wait(func() -> bool: return Music.current() == Music.LEVEL_1 and absf(Music._player.volume_db - Music.LEVEL_DB) < 0.5, 5.0)
+	_check(Music.current() == Music.LEVEL_1 and Music._player.volume_db < Music.MENU_DB - 4.0 and Music._player.volume_db > -25.0,
+		"music: Level 1's music as the player lands in Skyforge, quieter than the menu (%.1f dB)" % Music._player.volume_db)
+	main.queue_free()
+	await _ticks(3)
+	var b: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	b.front_end_mode = 1
+	root.add_child(b)
+	await _ticks(3)
+	b.front_end.press_start()
+	await _ticks(2)
+	b.front_end.press_deploy()
+	await _wall_wait(func() -> bool: return Music.current() == null, 3.0)
+	_check(Music.current() == null, "music: a level without its own music stops the menu music")
+	b.queue_free()
 	await _ticks(3)
 
 ## Cartoon VFX (owner asked): puffy 3D fireballs / smoke, cartoon muzzle

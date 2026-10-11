@@ -30,6 +30,9 @@ Owner asked: "someone can join from a phone and test the current map" for free. 
 - **The boss** (next-part stand-in only): on a joined device it follows the host's position and target and dies with it; its attacks there are worked out on that device (not yet sent from the host).
 - **Tests**: the suite's `_net_tests` (one game); `tests/run_net_pair.sh godot` runs a host and a client game over the network on one machine (`tests/net_pair_test.gd`, 24 checks: join, character select in the host's level, deploy, teammates, moves, robot deaths / shots / wave spawns, barrels, the lift, riding down together) - also in CI. Checked in Chromium too: two browsers through a local PeerJS server, WebRTC connects and joins.
 
+## Music
+The owner's tracks (`Music`, `scripts/audio/music.gd`): one looping player on the tree's root, so a track carries on across level loads; cross-fades between tracks. **Main menu music** on the title (from when the loading gauge is done; iPhones start sound at the first tap) and character select, -9 dB. **Level 1 music** fades in as the players arrive in Skyforge (DEPLOY), -17 dB - under the guns and robots, enough to make the map feel alive - and carries on down the lift into the next part. A level with no `level_music` (Battle / Toxic Arena opened directly) stops the menu music on DEPLOY. Originals untouched in `assets/audio/music/source/` (`.gdignore`); the game plays 112 kbps OGG copies (~10 MB instead of ~29 MB).
+
 ## Characters
 - **Grinch** - `scenes/characters/grinch_visual.tscn`.
 - **Harbinger** (owner's model) - same player as the Grinch with her own visual (`scenes/characters/harbinger_visual.tscn`). Asset `assets/characters/harbinger/harbinger.glb`, built by `python3 tools/build_harbinger.py` (+ gltfpack) from the untouched upload `assets/characters/harbinger/source/harbinger_source.glb` (`.gdignore`: not imported, not exported):

@@ -15,6 +15,9 @@ var players := {}  # player_id -> PlayerController
 ## Owner's testing setting: players can't die (hits still land and count).
 ## Set back to true to restore dying / respawning.
 @export var players_can_die := false
+## This level's music (owner's; Music), starting as the players arrive.
+## None: whatever is playing carries on (the next part of a level).
+@export var level_music: AudioStream
 ## Title "TAP TO START" + character select before the match: 1 = always,
 ## 0 = never, -1 = only when this level is the running game (not in tests).
 @export var front_end_mode := -1
@@ -53,6 +56,8 @@ func _ready() -> void:
 		var p := spawn_player(_local_id(), true, def)
 		LevelTransfer.apply(p, carried)
 		LevelTransfer.fade_in(get_tree())
+		if level_music:
+			Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)
 		_net_ready(p)
 		return
 	# Joined someone's room: their level, straight to the character select.
@@ -116,6 +121,11 @@ func open_front_end() -> void:
 
 func _on_deployed(character: CharacterDefinition) -> void:
 	get_tree().paused = false
+	# Menu music out, the level's in.
+	if level_music:
+		Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)
+	else:
+		Music.stop(1.0)
 	debug_hud.visible = true
 	touch_controls.visible = DisplayServer.is_touchscreen_available()
 	var local := spawn_player(_local_id(), true, character)

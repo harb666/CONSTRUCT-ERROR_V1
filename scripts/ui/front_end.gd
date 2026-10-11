@@ -85,6 +85,7 @@ func _process(delta: float) -> void:
 		_smooth = _smooth + 1 if delta < 0.07 else 0
 		if (_load_t > 0.5 and _smooth >= smooth_frames_needed) or _load_t > max_loading_time:
 			loaded = true
+			_menu_music()
 	if orbit_camera and is_instance_valid(orbit_camera):
 		var a := _t * 0.08
 		orbit_camera.global_position = orbit_center + Vector3(sin(a) * 19.0, 8.5, cos(a) * 19.0)
@@ -168,6 +169,7 @@ func _activate(id: String) -> void:
 		_screen_t = 0.0
 		_make_preview()
 		_tell_net()
+		_menu_music()
 		started.emit()
 		_auto_net()
 	elif id.begins_with("pad:") and pad_open:
@@ -193,6 +195,13 @@ func _activate(id: String) -> void:
 			selected = def
 			_make_preview()
 			_tell_net()
+
+
+## The owner's main menu music, once the game has loaded (not over the
+## loading gauge). iPhones only let sound start at the first tap.
+func _menu_music() -> void:
+	if is_inside_tree() and screen != Screen.OUT:
+		Music.play(get_tree(), Music.MAIN_MENU, Music.MENU_DB, 1.2)
 
 
 func _tell_net() -> void:

@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
 [ext_resource type="Script" path="res://scripts/world/elevator_lift.gd" id="lift"]
 [ext_resource type="Script" path="res://scripts/world/level_flow.gd" id="flow"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -23,6 +24,7 @@ outline_color = Color(0, 0, 0, 0.7)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
+level_music = ExtResource("music1")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
