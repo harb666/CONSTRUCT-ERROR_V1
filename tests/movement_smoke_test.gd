@@ -536,6 +536,7 @@ func _run() -> void:
 	await _ticks(5)
 	await _toxic_arena_tests()
 	await _battle_arena_tests()
+	await _skyforge_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4253,9 +4254,9 @@ func _hit_feedback_tests(main: Node) -> void:
 	RobotEnemy.ai_enabled = was_ai
 
 
-## The default level: the original test arena with 30 mixed robots.
+## The battle arena (?level=battle): the original test arena with 15 mixed
+## robots.
 func _battle_arena_tests() -> void:
-	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/battle_arena.tscn", "battle: the battle arena is the game's level")
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(30)
@@ -4278,6 +4279,73 @@ func _battle_arena_tests() -> void:
 	_check(low > -0.1 and high < 0.1, "battle: every enemy stands on the arena floor (y %.2f..%.2f)" % [low, high])
 	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
+	main.queue_free()
+	await _ticks(5)
+
+
+## Skyforge Arena (owner asked): the image-to-level map, the first part of
+## the first level and the game's start level - 4 grunts + 2 skirmishers,
+## no weapon pads, the player on the south tower deck.
+func _skyforge_tests() -> void:
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/skyforge_arena.tscn", "skyforge: Skyforge Arena is the game's start level")
+	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(40)
+	var arena := main.get_node("SkyforgeArena") as SkyforgeArena
+	_check(arena != null and arena.level != null and arena.level.find_children("*", "MeshInstance3D", true, false).size() > 50
+		and arena.background != null and arena.collision.find_children("*", "StaticBody3D", true, false).size() > 100,
+		"skyforge: the level, its background and its collision are in")
+	var we := main.get_node("WorldEnvironment") as WorldEnvironment
+	var sky_mat := we.environment.sky.sky_material as ShaderMaterial if we.environment.sky else null
+	_check(we.environment.background_mode == Environment.BG_SKY and sky_mat != null and sky_mat.get_shader_parameter("panorama") != null,
+		"skyforge: the level's sunset sky panorama, mapped like the map maker's preview")
+	var deck_ok := false
+	for mi: MeshInstance3D in arena.level.find_children("*", "MeshInstance3D", true, false):
+		var m := mi.get_surface_override_material(0) as ShaderMaterial
+		if m and m.resource_name == "deck":
+			deck_ok = m.get_shader_parameter("fog_start") == 380.0 and m.get_shader_parameter("albedo_tex") != null and m.get_shader_parameter("ibl_atlas") != null
+	_check(arena.look.converted > 20 and deck_ok, "skyforge: the level has the map maker preview's look (lighting, sky reflections, fog; %d materials)" % arena.look.converted)
+	_check(arena.effects != null and arena.effects.get_child_count() > 3 and not main.get_tree().get_nodes_in_group(&"level_exit").is_empty(),
+		"skyforge: the level's effects (clouds, falls, ships) and its elevator-shaft exit")
+	_check(main.find_children("*", "WeaponSpawnPad", true, false).is_empty() and main.find_children("*", "RobotBoss", true, false).is_empty(),
+		"skyforge: no weapon pads, no boss")
+	var grunts := 0
+	var skirm := 0
+	var off_deck := 0
+	var respawning := 0
+	var p: PlayerController = main.players[1]
+	var nearest := 999.0
+	var ss: PhysicsDirectSpaceState3D = (main as Node3D).get_world_3d().direct_space_state
+	for c in main.get_node("Targets").get_children():
+		if c is RobotSkirmisher: skirm += 1
+		elif c is RobotEnemy: grunts += 1
+		var r := c as RobotEnemy
+		if r.respawn_time >= 0.0:
+			respawning += 1
+		var q := PhysicsRayQueryParameters3D.create(r.global_position + Vector3.UP, r.global_position + Vector3.DOWN)
+		q.exclude = [r.get_rid()]
+		var hit: Dictionary = ss.intersect_ray(q)
+		if hit.is_empty() or r.global_position.y < 36.5:
+			off_deck += 1
+		nearest = minf(nearest, r.global_position.distance_to(p.global_position))
+	_check(grunts == 4 and skirm == 2, "skyforge: 6 enemies - %d grunts, %d skirmishers" % [grunts, skirm])
+	_check(off_deck == 0, "skyforge: every enemy stands on a deck")
+	_check(respawning == 0, "skyforge: they don't respawn (a level, not an arena)")
+	_check(p.is_on_floor() and p.global_position.distance_to(Vector3(3, 40, 55.09)) < 1.0 and nearest > 20.0,
+		"skyforge: the player starts on the south tower deck, %.0f m from the nearest enemy" % nearest)
+	# Falling off: back to spawn; a robot that falls dies.
+	p.global_position = Vector3(3, 15, 80)
+	p.velocity = Vector3.ZERO
+	await _ticks(10)
+	_check(p.global_position.distance_to(Vector3(3, 40, 55.09)) < 2.0, "skyforge: falling off the decks puts the player back at spawn")
+	# Grunts don't walk off ledges (skirmishers already steer round drops).
+	var g: RobotEnemy = main.get_node("Targets/GateGrunt")
+	_check(not g._drop_ahead(Vector3.FORWARD) and g.ledge_drop > 0.0, "skyforge: grunts see the deck ahead of them")
+	var gp := g.global_position
+	g.global_position = Vector3(7.6, 40.05, 30)
+	await _ticks(2)
+	_check(g._drop_ahead(Vector3.RIGHT), "skyforge: and the drop at a deck's edge")
+	g.global_position = gp
 	main.queue_free()
 	await _ticks(5)
 

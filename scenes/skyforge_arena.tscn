@@ -1,0 +1,106 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/world/skyforge_arena.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/touch_controls.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/robot_enemy.tscn" id="7"]
+[ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/robot_skirmisher.tscn" id="12"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.6, 0.3, 0.45, 1)
+
+[sub_resource type="LabelSettings" id="hud_text"]
+font_size = 18
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.7)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+shadow_enabled = true
+
+[node name="SkyforgeArena" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="Targets" type="Node3D" parent="."]
+
+[node name="GateGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(1.0, 0, -0.0, 0, 1, 0, 0.0, 0, 1.0, 3, 40.05, 28)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="HubGruntWest" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(0.939693, 0, -0.34202, 0, 1, 0, 0.34202, 0, 0.939693, -9, 40.05, 8)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="HubGruntEast" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(0.939693, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.939693, 10, 40.05, 9)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="HubSkirmisher" parent="Targets" instance=ExtResource("12")]
+transform = Transform3D(1.0, 0, -0.0, 0, 1, 0, 0.0, 0, 1.0, 4, 40.05, -10)
+respawn_time = -1.0
+
+[node name="FlankGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 36, 37.05, 31)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="NorthSkirmisher" parent="Targets" instance=ExtResource("12")]
+transform = Transform3D(1.0, 0, -0.0, 0, 1, 0, 0.0, 0, 1.0, 2.5, 40.05, -33)
+respawn_time = -1.0
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0.998537, 0, -0.054079, 0, 1, 0, 0.054079, 0, 0.998537, 3, 40.1, 55.09)
+
+[node name="Spawn2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0.998537, 0, -0.054079, 0, 1, 0, 0.054079, 0, 0.998537, 1, 40.1, 55.5)
+
+[node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0.998537, 0, -0.054079, 0, 1, 0, 0.054079, 0, 0.998537, 5, 40.1, 55.5)
+
+[node name="Spawn4" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0.998537, 0, -0.054079, 0, 1, 0, 0.054079, 0, 0.998537, 3, 40.1, 57.5)
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TargetMarker" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8")
+
+[node name="TouchControls" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="DebugHud" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 16.0
+offset_right = 700.0
+offset_bottom = 70.0
+label_settings = SubResource("hud_text")
+script = ExtResource("4")

@@ -1,0 +1,5 @@
+{
+ "note": "Hazard volumes: box areas in world space (Area3D). The game decides damage / kill / respawn.",
+ "hazards": [],
+ "names": []
+}

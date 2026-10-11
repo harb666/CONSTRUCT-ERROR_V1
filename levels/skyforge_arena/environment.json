@@ -1,0 +1,266 @@
+{
+ "generated_by": "image-to-level Stage 2 (pipeline/environment.py)",
+ "quality": "balanced",
+ "note": "Browser preview approximates this; Godot settings are generated but not tested in Godot here.",
+ "files": {
+  "level": "level.glb",
+  "background": "background.glb",
+  "sky_panorama": "sky/panorama.jpg",
+  "godot_environment": "environment.tres"
+ },
+ "sky": {
+  "type": "panorama",
+  "image": "sky/panorama.jpg",
+  "size": [
+   2048,
+   1024
+  ],
+  "projection": "equirectangular",
+  "preset": "sunset",
+  "external": false,
+  "azimuth_convention": "image column u -> atan2(dir.z, dir.x) (three.js); level azimuth 0=north(-z) 90=east(+x). If the Godot sky looks rotated vs the sun, adjust Environment sky_rotation.y in 90\u00b0 steps.",
+  "horizon_rgb": [
+   0.87,
+   0.67,
+   0.415
+  ],
+  "upper_rgb": [
+   0.608,
+   0.155,
+   0.418
+  ]
+ },
+ "sun": {
+  "azimuth_deg": 5,
+  "elevation_deg": 7,
+  "direction_to_sun": [
+   0.0865,
+   0.1219,
+   -0.9888
+  ],
+  "color": [
+   1.0,
+   0.62,
+   0.8
+  ],
+  "energy": 2.2,
+  "godot_rotation_degrees": [
+   -7,
+   175,
+   0
+  ],
+  "shadows": {
+   "enabled": true,
+   "mode": "PSSM 2 splits",
+   "max_distance": 70,
+   "note": "keep shadows to the playable area on mobile"
+  }
+ },
+ "ambient": {
+  "source": "sky",
+  "sky_color": [
+   0.608,
+   0.155,
+   0.418
+  ],
+  "ground_color": [
+   0.269,
+   0.321,
+   0.154
+  ],
+  "energy": 1.35
+ },
+ "fog": {
+  "enabled": true,
+  "color": [
+   0.62,
+   0.95,
+   0.4
+  ],
+  "start": 380,
+  "end": 1400,
+  "godot_density": 0.00214,
+  "sky_affect": 0.55,
+  "height": 24,
+  "height_density": 0.05
+ },
+ "tonemap": {
+  "mode": "filmic",
+  "exposure": 1.0
+ },
+ "glow": {
+  "enabled": true,
+  "intensity": 1.0,
+  "bloom": 0.1,
+  "hdr_threshold": 0.8
+ },
+ "adjustments": {
+  "brightness": 1.0,
+  "contrast": 1.15,
+  "saturation": 1.2
+ },
+ "camera": {
+  "far": 800,
+  "horizon_distance": 1301
+ },
+ "background": {
+  "layers": [
+   {
+    "id": "Mountains_Far",
+    "node": "BG_Mountains_Far",
+    "type": "mountain_ring",
+    "triangles": 768,
+    "material": "bg_mountains_far",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Mountains_Near",
+    "node": "BG_Mountains_Near",
+    "type": "mountain_ring",
+    "triangles": 768,
+    "material": "bg_mountains_near",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Spires",
+    "node": "BG_Spires",
+    "type": "spires",
+    "triangles": 1134,
+    "material": "bg_spires",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Skyline_North",
+    "node": "BG_Skyline_North",
+    "type": "skyline",
+    "triangles": 1296,
+    "material": "bg_skyline_north",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Megastructure_Ring",
+    "node": "BG_Megastructure_Ring",
+    "type": "ring_structure",
+    "triangles": 1037,
+    "material": "bg_megastructure_ring",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Mothership",
+    "node": "BG_Mothership",
+    "type": "mothership",
+    "triangles": 488,
+    "material": "bg_mothership",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Mothership_Lights",
+    "node": "BG_Mothership_Lights",
+    "type": "mothership",
+    "triangles": 256,
+    "material": "bg_mothership_lights",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   },
+   {
+    "id": "Hover_Satellites",
+    "node": "BG_Hover_Satellites",
+    "type": "hover_satellites",
+    "triangles": 772,
+    "material": "bg_hover_satellites",
+    "collision": false,
+    "cast_shadows": false,
+    "visibility_range_end": 840
+   }
+  ],
+  "materials": [
+   "bg_mountains_far",
+   "bg_mountains_near",
+   "bg_spires",
+   "bg_skyline_north",
+   "bg_megastructure_ring",
+   "bg_mothership",
+   "bg_mothership_lights",
+   "bg_hover_satellites"
+  ],
+  "stats": {
+   "glb_kb": 507,
+   "triangles": 6519,
+   "nodes": 9,
+   "mesh_nodes": 8,
+   "unique_meshes": 8,
+   "materials": 8,
+   "images": 20,
+   "draw_calls_unbatched": 8,
+   "draw_calls_batched_min": 8,
+   "tex_mem_uncompressed_mb": 1.67,
+   "tex_mem_gpu_compressed_mb": 0.42,
+   "texture_slots": {
+    "baseColorTexture": 8,
+    "metallicRoughnessTexture": 8,
+    "normalTexture": 8,
+    "occlusionTexture": 8,
+    "emissiveTexture": 3
+   },
+   "image_sizes": [
+    "128x128 jpeg"
+   ]
+  },
+  "tex_mem_gpu_compressed_mb": 0.56
+ },
+ "style": {
+  "name": "alien_cartoon",
+  "toon": {
+   "steps": 3,
+   "floor": 0.55,
+   "ambient": 0.85,
+   "godot": {
+    "diffuse_mode": "toon",
+    "specular_mode": "disabled",
+    "metallic": 0.0
+   }
+  },
+  "outline": {
+   "color": [
+    0.03,
+    0.01,
+    0.05
+   ],
+   "width": [
+    0.03,
+    0.08
+   ],
+   "rel": 0.008,
+   "max_footprint": 12.0,
+   "min_size": 0.25,
+   "skip_materials": [
+    "glow",
+    "water",
+    "accent"
+   ],
+   "skip_types": [
+    "panel",
+    "terrain",
+    "boundary",
+    "stream"
+   ]
+  }
+ },
+ "sky_asset": {
+  "kb": 129,
+  "tex_mem_gpu_compressed_mb": 2.67
+ }
+}

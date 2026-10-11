@@ -209,6 +209,15 @@
   across to the right arm; heavier lock-in (bigger burst, arm dips under
   the weight); HUD HEAVY plate.
 
+- Skyforge Arena (owner asked) is the start level, the first part of the
+  first level: image-to-level's game-ready package, 4 grunts + 2
+  skirmishers (no respawn), no weapon pads, player on the south tower deck.
+  It must look exactly like the map maker (owner asked): its materials use
+  `preview_lit.gdshaderinc`, a port of the map maker preview's three.js
+  lighting / fog / sky reflections (`SkyforgePreviewLook`); check changes
+  side by side with the preview (`pipeline/make_preview.py`). Grunts turn
+  back from drops deeper than 3 m (`ledge_drop`). `?level=battle` / `toxic`.
+
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

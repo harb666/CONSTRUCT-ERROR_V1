@@ -4,6 +4,7 @@ extends Node3D
 ## and only creating a camera/touch UI for the local one.
 
 const CAMERA_RIG_SCENE := preload("res://scenes/camera_rig.tscn")
+const LEVELS := {"skyforge": "res://scenes/skyforge_arena.tscn", "battle": "res://scenes/battle_arena.tscn", "toxic": "res://scenes/main.tscn"}
 
 @onready var players_root: Node3D = $Players
 @onready var spawn_points: Node3D = $SpawnPoints
@@ -26,10 +27,11 @@ var _menu_camera: Camera3D
 func _ready() -> void:
 	Vfx.configure_for_device()
 	Sfx.preload_all()
-	# ?level=toxic (or -- --level=toxic) plays Toxic Arena instead of the
-	# default battle arena.
-	if StressTest._param("level") == "toxic" and get_node_or_null("ToxicArena") == null and get_tree().current_scene == self:
-		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
+	# ?level=battle / toxic / skyforge (or -- --level=...) picks the level;
+	# the game starts in Skyforge Arena.
+	var want: String = LEVELS.get(StressTest._param("level"), "")
+	if want != "" and want != scene_file_path and get_tree().current_scene == self:
+		get_tree().change_scene_to_file.call_deferred(want)
 		return
 	var stress := StressTest.robot_count()
 	if stress > 0:

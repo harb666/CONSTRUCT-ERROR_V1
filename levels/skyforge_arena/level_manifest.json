@@ -1,0 +1,330 @@
+{
+ "format": "image-to-level package v1",
+ "level": "skyforge_arena",
+ "title": "scene_spec.json - Skyforge Arena",
+ "generated": "2026-10-11 11:31:18",
+ "godot_root": "res://levels/skyforge_arena/",
+ "use_in_game": "mobile/level_mobile.glb (+ mobile/background_mobile.glb, mobile/collision.glb)",
+ "profile": "balanced",
+ "spawns": [
+  {
+   "id": "spawn",
+   "position": [
+    3.0,
+    40,
+    55.09
+   ],
+   "yaw_deg": 3.1
+  },
+  {
+   "id": "enemy_north",
+   "position": [
+    2.5,
+    40,
+    -33.42
+   ],
+   "yaw_deg": 175.7,
+   "team": "enemy"
+  },
+  {
+   "id": "enemy_nw",
+   "position": [
+    -38.0,
+    37,
+    -32.0
+   ],
+   "yaw_deg": -130.1,
+   "team": "enemy"
+  },
+  {
+   "id": "enemy_east",
+   "position": [
+    42.0,
+    40,
+    -6.0
+   ],
+   "yaw_deg": 98.1,
+   "team": "enemy"
+  }
+ ],
+ "hazards": [],
+ "generator": {
+  "tool": "pipeline/spec_to_level.py",
+  "spec_sha": "e9acfb2fcda2cb7f",
+  "theme": "scifi",
+  "detail": "medium",
+  "mode": "open"
+ },
+ "metrics": {
+  "dev": {
+   "glb_kb": 4236,
+   "triangles": 69301,
+   "draw_calls": 879,
+   "tex_mem_gpu_mb_est": 7.15
+  },
+  "mobile": {
+   "profile": "balanced",
+   "glb_kb": 4765,
+   "triangles": 88025,
+   "draw_calls": 134,
+   "visible_draw_calls_est": 57.5,
+   "visible_draw_calls_max_est": 82,
+   "tex_mem_gpu_mb_est": 7.15,
+   "materials": 22,
+   "nodes": 135,
+   "colliders": {
+    "colliders": 508,
+    "hazards": 0,
+    "glb_kb": 544
+   },
+   "background_kb": 507,
+   "visible_triangles_est": 39845,
+   "visible_triangles_max_est": 54372
+  },
+  "effects": {
+   "max_particles": 361,
+   "emitters": 12,
+   "extra_draw_calls": 14,
+   "transparent_area_m2": 5811912
+  },
+  "note": "sizes/counts measured from files; visible draw calls and GPU memory are ESTIMATES (no device benchmark)"
+ },
+ "validation": {
+  "passed": true,
+  "counts": {
+   "error": 0,
+   "warning": 0,
+   "info": 0
+  }
+ },
+ "gameplay_config_status": "PLACEHOLDER values - not Construct Error's real numbers. Replace them with the game's CharacterBody3D / SpringArm3D settings (or copy them into levels/<name>/gameplay.json for one level). Every Stage 7 tool reads this file: navigation check, camera validator, generator, viewer.",
+ "files": [
+  {
+   "path": "IMPORT_GODOT.md",
+   "bytes": 6782,
+   "sha1": "187f094408897886132b30e46a2df1601f07e122",
+   "purpose": "how to import into Construct Error"
+  },
+  {
+   "path": "background.glb",
+   "bytes": 518704,
+   "sha1": "a825ef595f33c741d7d53070c9a321e43a10b4e8",
+   "purpose": "distant scenery (no collision)"
+  },
+  {
+   "path": "effects.json",
+   "bytes": 68728,
+   "sha1": "69de4be340672a1ba8f50cd5eedf2a35f471ca79",
+   "purpose": "runtime effects metadata (Godot recreates them)"
+  },
+  {
+   "path": "environment.json",
+   "bytes": 5172,
+   "sha1": "1004093cbe2d4b167fe7127f1a7bb33dee97de92",
+   "purpose": "engine-neutral lighting / fog / sky metadata"
+  },
+  {
+   "path": "environment.tres",
+   "bytes": 0,
+   "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+   "purpose": "Godot 4 Environment resource (UNTESTED in Godot here)"
+  },
+  {
+   "path": "level.glb",
+   "bytes": 4337576,
+   "sha1": "c66ada5abff5a32b83ebbc8800e612e6c12e6044",
+   "purpose": "dev export: one node per named object"
+  },
+  {
+   "path": "level.json",
+   "bytes": 270023,
+   "sha1": "6543051d623692e1ab3f6e6adc86124951b85229",
+   "purpose": "editable master (source of truth for edits)"
+  },
+  {
+   "path": "scene_spec.json",
+   "bytes": 17716,
+   "sha1": "105a73096fc4ef2e86fdc75c75a8d202f100a590",
+   "purpose": "Claude's interpretation of the reference images (regenerate input)"
+  },
+  {
+   "path": "terrain.json",
+   "bytes": 17240,
+   "sha1": "8a0e54ff05f316feeab0321559beea1fbcfbcd26",
+   "purpose": "Stage 9 terrain metadata: chunks + hashes, LOD ranges, features, layers, water, scatter instances (derived)"
+  },
+  {
+   "path": "sky/panorama.jpg",
+   "bytes": 131791,
+   "sha1": "483eae7babaac7d14b1445f59e84adae4783d59a",
+   "purpose": "2:1 equirect sky -> PanoramaSkyMaterial"
+  },
+  {
+   "path": "checks/report.md",
+   "bytes": 611,
+   "sha1": "ef52c7514ea8732b544fff92026b88e99a8aad9f",
+   "purpose": "validation report"
+  },
+  {
+   "path": "fx/bubble.png",
+   "bytes": 960,
+   "sha1": "bc7809b61bb15c646d2510cca7cb49715dcd6272",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/cloud.png",
+   "bytes": 10332,
+   "sha1": "efcd16815d2eb824db0d1a9d301e58fbce249624",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/mote.png",
+   "bytes": 595,
+   "sha1": "7857c54b27ac1a28a05ac2fed0f8bd2188221e98",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/puff.png",
+   "bytes": 1656,
+   "sha1": "eb0708e591d8cc4adf7dec6637325c9b123e9b3b",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/spark.png",
+   "bytes": 582,
+   "sha1": "ac30804176f7423dc7fe135f44cc0075cd110300",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/README.md",
+   "bytes": 1224,
+   "sha1": "2c79637b35d972da010b0a0edcaa683a29eeae7a",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/apply_effects.gd",
+   "bytes": 15080,
+   "sha1": "a27b19bc3081ce9141494266e098fa5c9b05dabd",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/apply_mobile.gd",
+   "bytes": 2884,
+   "sha1": "f9331514fa2870944a4ae81473a3c1a8755a7e32",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/apply_scatter_multimesh.gd",
+   "bytes": 2050,
+   "sha1": "06bfec8fbe9f0722ea812818dcc932befc9931cf",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/apply_style.gd",
+   "bytes": 1704,
+   "sha1": "1ecfbb932c9f054139cb6417b5d55e8c8069dfb0",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/cloud_layer.gdshader",
+   "bytes": 2601,
+   "sha1": "a8353c47e63c34d4cf318a0f025233f0ff3a7aa1",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/fog_sheet.gdshader",
+   "bytes": 1175,
+   "sha1": "030c046ab784d07c29187168a4d5f08846c49f88",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/liquid_flow.gdshader",
+   "bytes": 1035,
+   "sha1": "618a1ab64c0f602a9bd78ddc6b474f1950eea934",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "fx/godot/liquid_surface.gdshader",
+   "bytes": 1087,
+   "sha1": "35a6f3306233e76dc14cbd3162ec7c3f03deba08",
+   "purpose": "effect sprite / Godot effect kit"
+  },
+  {
+   "path": "gameplay/hazards.json",
+   "bytes": 137,
+   "sha1": "bfae4df620e563794465c15a26fe5268357bc5b6",
+   "purpose": "hazard volumes (kill / damage areas)"
+  },
+  {
+   "path": "gameplay/navigation.json",
+   "bytes": 74168,
+   "sha1": "19a779995d79f79afae7668d8642efc06dff61fe",
+   "purpose": "reachability summary from the gameplay config (not a navmesh)"
+  },
+  {
+   "path": "gameplay/spawns.json",
+   "bytes": 711,
+   "sha1": "20fa76d085d5b1b39928be29083c9c769f737b10",
+   "purpose": "player spawns (position, yaw)"
+  },
+  {
+   "path": "mobile/apply_mobile.gd",
+   "bytes": 2884,
+   "sha1": "f9331514fa2870944a4ae81473a3c1a8755a7e32",
+   "purpose": "Godot starter: visibility ranges, shadows, hazard Area3Ds"
+  },
+  {
+   "path": "mobile/apply_scatter_multimesh.gd",
+   "bytes": 2050,
+   "sha1": "06bfec8fbe9f0722ea812818dcc932befc9931cf",
+   "purpose": "OPTIONAL Godot script: MultiMesh scatter from terrain.json (UNTESTED in Godot here)"
+  },
+  {
+   "path": "mobile/background_mobile.glb",
+   "bytes": 518704,
+   "sha1": "a825ef595f33c741d7d53070c9a321e43a10b4e8",
+   "purpose": "mobile background"
+  },
+  {
+   "path": "mobile/collision.glb",
+   "bytes": 557072,
+   "sha1": "0305bf646e5e8fd5ce66b88b696c34d9256d7ed1",
+   "purpose": "collision meshes (-colonly / -convcolonly import suffixes)"
+  },
+  {
+   "path": "mobile/collision.json",
+   "bytes": 414879,
+   "sha1": "4ad461d16b7badc848876e62eeec8f6ce84b4c09",
+   "purpose": "primitive colliders + hazard areas"
+  },
+  {
+   "path": "mobile/effects_mobile.json",
+   "bytes": 65195,
+   "sha1": "e547c2e971e992606c89981a897a9cb9305cdc74",
+   "purpose": "effects with merged-node targets"
+  },
+  {
+   "path": "mobile/level_mobile.glb",
+   "bytes": 4879388,
+   "sha1": "5c3a254c853ee5998fbfab709fdaf60c3105b92e",
+   "purpose": "mobile export: merged by cell+material (use in game)"
+  },
+  {
+   "path": "mobile/mobile_manifest.json",
+   "bytes": 56584,
+   "sha1": "a65921c5abfcd748dac9b7564181feb66416cd03",
+   "purpose": "per-node visibility/shadows + Godot import settings + metrics"
+  },
+  {
+   "path": "props/props.glb",
+   "bytes": 134844,
+   "sha1": "7849c58d22a2c7fd78c02b36dc65ed83ce11153a",
+   "purpose": "Stage 9 scatter variant meshes (unit transforms) for optional MultiMesh instancing"
+  }
+ ],
+ "notes": [
+  "GLB carries static geometry/materials only; effects, environment and hazards are recreated in Godot from the JSON/tres + scripts.",
+  "Scripts and .tres are UNTESTED in Godot from this environment.",
+  "Performance numbers are estimates, not device benchmarks."
+ ]
+}

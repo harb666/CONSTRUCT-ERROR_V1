@@ -1,0 +1,5889 @@
+{
+ "gameplay_status": "PLACEHOLDER values - not Construct Error's real numbers. Replace them with the game's CharacterBody3D / SpringArm3D settings (or copy them into levels/<name>/gameplay.json for one level). Every Stage 7 tool reads this file: navigation check, camera validator, generator, viewer.",
+ "standable_area_m2": 29641.9,
+ "reachable_area_m2": 4138.5,
+ "spawns": [
+  {
+   "id": "spawn",
+   "position": [
+    3.0,
+    40,
+    55.09
+   ],
+   "standable": true,
+   "clearance_m": 3.25,
+   "headroom_m": 99.0,
+   "component": 1211
+  },
+  {
+   "id": "enemy_north",
+   "position": [
+    2.5,
+    40,
+    -33.42
+   ],
+   "standable": true,
+   "clearance_m": 4.75,
+   "headroom_m": 99.0,
+   "component": 1211
+  },
+  {
+   "id": "enemy_nw",
+   "position": [
+    -38.0,
+    37,
+    -32.0
+   ],
+   "standable": true,
+   "clearance_m": 6.75,
+   "headroom_m": 99.0,
+   "component": 1211
+  },
+  {
+   "id": "enemy_east",
+   "position": [
+    42.0,
+    40,
+    -6.0
+   ],
+   "standable": true,
+   "clearance_m": 4.25,
+   "headroom_m": 99.0,
+   "component": 1211
+  }
+ ],
+ "intended_areas": [
+  {
+   "name": "Hub",
+   "standable_m2": 895.0,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "North_Hall",
+   "standable_m2": 192.5,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "North_Turret",
+   "standable_m2": 41.5,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "NW_Bastion",
+   "standable_m2": 360.2,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "West_Post",
+   "standable_m2": 106.8,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "SW_Octagon",
+   "standable_m2": 292.8,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "South_Gate",
+   "standable_m2": 150.5,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "South_Tower",
+   "standable_m2": 116.0,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "SE_Octagon",
+   "standable_m2": 269.5,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "East_Deck",
+   "standable_m2": 263.8,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  },
+  {
+   "name": "Bridge_Gate_Tower",
+   "standable_m2": 34.5,
+   "reachable_fraction": 1.0,
+   "one_way": false
+  }
+ ],
+ "links": [
+  {
+   "frm_component": 866,
+   "to_component": 868,
+   "kind": "jump",
+   "frm": [
+    54.2,
+    37.15,
+    -56.5
+   ],
+   "to": [
+    55.2,
+    37.26,
+    -56.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.11
+  },
+  {
+   "frm_component": 868,
+   "to_component": 866,
+   "kind": "jump",
+   "frm": [
+    55.2,
+    37.26,
+    -56.5
+   ],
+   "to": [
+    54.2,
+    37.15,
+    -56.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.11
+  },
+  {
+   "frm_component": 936,
+   "to_component": 866,
+   "kind": "drop",
+   "frm": [
+    54.8,
+    39.21,
+    -55.0
+   ],
+   "to": [
+    54.2,
+    37.15,
+    -56.5
+   ],
+   "horizontal": 1.58,
+   "dy": -2.06
+  },
+  {
+   "frm_component": 936,
+   "to_component": 868,
+   "kind": "drop",
+   "frm": [
+    55.2,
+    39.6,
+    -55.0
+   ],
+   "to": [
+    55.2,
+    37.37,
+    -56.0
+   ],
+   "horizontal": 1.0,
+   "dy": -2.23
+  },
+  {
+   "frm_component": 936,
+   "to_component": 991,
+   "kind": "drop",
+   "frm": [
+    54.8,
+    39.03,
+    -54.5
+   ],
+   "to": [
+    54.8,
+    38.6,
+    -53.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.43
+  },
+  {
+   "frm_component": 936,
+   "to_component": 1014,
+   "kind": "jump",
+   "frm": [
+    56.2,
+    39.92,
+    -54.0
+   ],
+   "to": [
+    56.2,
+    39.53,
+    -53.0
+   ],
+   "horizontal": 1.0,
+   "dy": -0.39
+  },
+  {
+   "frm_component": 991,
+   "to_component": 936,
+   "kind": "jump",
+   "frm": [
+    54.8,
+    38.6,
+    -53.5
+   ],
+   "to": [
+    54.8,
+    39.03,
+    -54.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.43
+  },
+  {
+   "frm_component": 991,
+   "to_component": 1014,
+   "kind": "jump",
+   "frm": [
+    54.8,
+    38.6,
+    -53.5
+   ],
+   "to": [
+    56.2,
+    39.53,
+    -53.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.93
+  },
+  {
+   "frm_component": 1009,
+   "to_component": 1032,
+   "kind": "jump",
+   "frm": [
+    52.2,
+    37.16,
+    -53.0
+   ],
+   "to": [
+    52.8,
+    37.27,
+    -52.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.11
+  },
+  {
+   "frm_component": 1014,
+   "to_component": 866,
+   "kind": "jump",
+   "frm": [
+    56.2,
+    39.53,
+    -53.0
+   ],
+   "to": [
+    54.2,
+    37.15,
+    -56.5
+   ],
+   "horizontal": 4.03,
+   "dy": -2.38
+  },
+  {
+   "frm_component": 1014,
+   "to_component": 936,
+   "kind": "jump",
+   "frm": [
+    56.2,
+    39.53,
+    -53.0
+   ],
+   "to": [
+    56.2,
+    39.92,
+    -54.0
+   ],
+   "horizontal": 1.0,
+   "dy": 0.39
+  },
+  {
+   "frm_component": 1014,
+   "to_component": 991,
+   "kind": "drop",
+   "frm": [
+    56.2,
+    39.53,
+    -53.0
+   ],
+   "to": [
+    54.8,
+    38.6,
+    -53.5
+   ],
+   "horizontal": 1.58,
+   "dy": -0.93
+  },
+  {
+   "frm_component": 1031,
+   "to_component": 1780,
+   "kind": "jump",
+   "frm": [
+    56.8,
+    23.93,
+    -43.0
+   ],
+   "to": [
+    56.2,
+    23.92,
+    -42.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 1031,
+   "to_component": 2464,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    24.0,
+    -38.0
+   ],
+   "to": [
+    46.8,
+    23.98,
+    -37.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.01
+  },
+  {
+   "frm_component": 1032,
+   "to_component": 1009,
+   "kind": "jump",
+   "frm": [
+    52.8,
+    37.27,
+    -52.5
+   ],
+   "to": [
+    52.2,
+    37.16,
+    -53.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.11
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 1821,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    39.85,
+    -40.5
+   ],
+   "to": [
+    11.2,
+    41.0,
+    -39.5
+   ],
+   "horizontal": 1.41,
+   "dy": 1.15
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 2022,
+   "kind": "jump",
+   "frm": [
+    -45.8,
+    36.85,
+    -40.5
+   ],
+   "to": [
+    -47.2,
+    36.85,
+    -40.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 3726,
+   "kind": "jump",
+   "frm": [
+    -1.8,
+    39.9,
+    -27.5
+   ],
+   "to": [
+    -3.2,
+    39.85,
+    -27.5
+   ],
+   "horizontal": 1.5,
+   "dy": -0.05
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 4322,
+   "kind": "jump",
+   "frm": [
+    50.8,
+    39.85,
+    -13.5
+   ],
+   "to": [
+    52.2,
+    39.85,
+    -13.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 5129,
+   "kind": "jump",
+   "frm": [
+    -7.2,
+    39.85,
+    -7.0
+   ],
+   "to": [
+    -6.8,
+    39.91,
+    -6.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.06
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 8904,
+   "kind": "jump",
+   "frm": [
+    48.2,
+    36.87,
+    38.5
+   ],
+   "to": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "horizontal": 2.83,
+   "dy": -0.04
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 8954,
+   "kind": "jump",
+   "frm": [
+    48.2,
+    36.87,
+    38.5
+   ],
+   "to": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "horizontal": 3.54,
+   "dy": -0.06
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9032,
+   "kind": "jump",
+   "frm": [
+    42.8,
+    36.83,
+    44.0
+   ],
+   "to": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "horizontal": 3.54,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9069,
+   "kind": "jump",
+   "frm": [
+    42.8,
+    36.83,
+    44.0
+   ],
+   "to": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "horizontal": 2.83,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9112,
+   "kind": "jump",
+   "frm": [
+    -42.2,
+    36.85,
+    42.5
+   ],
+   "to": [
+    -41.8,
+    36.83,
+    43.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.02
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9190,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    36.85,
+    47.0
+   ],
+   "to": [
+    -38.2,
+    36.85,
+    46.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9322,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    36.85,
+    47.0
+   ],
+   "to": [
+    -37.8,
+    36.89,
+    46.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.04
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 9447,
+   "kind": "jump",
+   "frm": [
+    -3.8,
+    39.84,
+    51.5
+   ],
+   "to": [
+    -3.2,
+    39.85,
+    51.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.01
+  },
+  {
+   "frm_component": 1211,
+   "to_component": 10071,
+   "kind": "jump",
+   "frm": [
+    8.8,
+    39.83,
+    63.5
+   ],
+   "to": [
+    9.2,
+    39.83,
+    63.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1220,
+   "to_component": 1361,
+   "kind": "jump",
+   "frm": [
+    56.2,
+    49.38,
+    -48.5
+   ],
+   "to": [
+    54.8,
+    50.44,
+    -47.0
+   ],
+   "horizontal": 2.12,
+   "dy": 1.06
+  },
+  {
+   "frm_component": 1228,
+   "to_component": 1441,
+   "kind": "jump",
+   "frm": [
+    78.8,
+    50.91,
+    -46.5
+   ],
+   "to": [
+    78.8,
+    52.09,
+    -44.5
+   ],
+   "horizontal": 2.0,
+   "dy": 1.19
+  },
+  {
+   "frm_component": 1228,
+   "to_component": 1486,
+   "kind": "jump",
+   "frm": [
+    78.8,
+    50.91,
+    -46.5
+   ],
+   "to": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 1228,
+   "to_component": 1538,
+   "kind": "jump",
+   "frm": [
+    78.8,
+    50.91,
+    -46.5
+   ],
+   "to": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "horizontal": 1.8,
+   "dy": -0.06
+  },
+  {
+   "frm_component": 1348,
+   "to_component": 1602,
+   "kind": "jump",
+   "frm": [
+    -2.2,
+    48.6,
+    -45.0
+   ],
+   "to": [
+    -1.2,
+    49.59,
+    -44.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.99
+  },
+  {
+   "frm_component": 1358,
+   "to_component": 1361,
+   "kind": "jump",
+   "frm": [
+    52.8,
+    49.89,
+    -46.5
+   ],
+   "to": [
+    53.2,
+    50.36,
+    -46.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.47
+  },
+  {
+   "frm_component": 1361,
+   "to_component": 1220,
+   "kind": "drop",
+   "frm": [
+    52.8,
+    52.02,
+    -42.0
+   ],
+   "to": [
+    52.8,
+    49.56,
+    -41.5
+   ],
+   "horizontal": 0.5,
+   "dy": -2.45
+  },
+  {
+   "frm_component": 1361,
+   "to_component": 1358,
+   "kind": "drop",
+   "frm": [
+    53.2,
+    50.36,
+    -46.0
+   ],
+   "to": [
+    52.8,
+    49.89,
+    -46.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.47
+  },
+  {
+   "frm_component": 1441,
+   "to_component": 1228,
+   "kind": "drop",
+   "frm": [
+    74.2,
+    54.34,
+    -46.0
+   ],
+   "to": [
+    74.2,
+    51.39,
+    -46.0
+   ],
+   "horizontal": 0.0,
+   "dy": -2.94
+  },
+  {
+   "frm_component": 1441,
+   "to_component": 1486,
+   "kind": "drop",
+   "frm": [
+    78.2,
+    52.38,
+    -45.0
+   ],
+   "to": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.45
+  },
+  {
+   "frm_component": 1441,
+   "to_component": 1538,
+   "kind": "drop",
+   "frm": [
+    78.8,
+    52.09,
+    -44.5
+   ],
+   "to": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.25
+  },
+  {
+   "frm_component": 1441,
+   "to_component": 2406,
+   "kind": "drop",
+   "frm": [
+    77.2,
+    51.87,
+    -39.0
+   ],
+   "to": [
+    77.8,
+    50.8,
+    -38.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.07
+  },
+  {
+   "frm_component": 1486,
+   "to_component": 1228,
+   "kind": "jump",
+   "frm": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "to": [
+    78.8,
+    50.91,
+    -46.5
+   ],
+   "horizontal": 1.12,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 1486,
+   "to_component": 1441,
+   "kind": "jump",
+   "frm": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "to": [
+    78.8,
+    52.09,
+    -44.5
+   ],
+   "horizontal": 1.12,
+   "dy": 1.16
+  },
+  {
+   "frm_component": 1486,
+   "to_component": 1538,
+   "kind": "jump",
+   "frm": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "to": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.09
+  },
+  {
+   "frm_component": 1538,
+   "to_component": 1228,
+   "kind": "jump",
+   "frm": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "to": [
+    78.8,
+    50.91,
+    -46.5
+   ],
+   "horizontal": 1.8,
+   "dy": 0.06
+  },
+  {
+   "frm_component": 1538,
+   "to_component": 1441,
+   "kind": "jump",
+   "frm": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "to": [
+    78.8,
+    51.98,
+    -44.0
+   ],
+   "horizontal": 1.41,
+   "dy": 1.14
+  },
+  {
+   "frm_component": 1538,
+   "to_component": 1486,
+   "kind": "jump",
+   "frm": [
+    79.8,
+    50.84,
+    -45.0
+   ],
+   "to": [
+    79.2,
+    50.94,
+    -45.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.09
+  },
+  {
+   "frm_component": 1602,
+   "to_component": 1348,
+   "kind": "drop",
+   "frm": [
+    -1.2,
+    49.59,
+    -44.0
+   ],
+   "to": [
+    -2.2,
+    48.6,
+    -45.0
+   ],
+   "horizontal": 1.41,
+   "dy": -0.99
+  },
+  {
+   "frm_component": 1602,
+   "to_component": 1704,
+   "kind": "jump",
+   "frm": [
+    0.2,
+    49.59,
+    -44.0
+   ],
+   "to": [
+    1.2,
+    50.42,
+    -43.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.83
+  },
+  {
+   "frm_component": 1704,
+   "to_component": 1348,
+   "kind": "jump",
+   "frm": [
+    1.2,
+    50.42,
+    -42.5
+   ],
+   "to": [
+    1.2,
+    48.6,
+    -40.5
+   ],
+   "horizontal": 2.0,
+   "dy": -1.82
+  },
+  {
+   "frm_component": 1704,
+   "to_component": 1602,
+   "kind": "drop",
+   "frm": [
+    1.2,
+    50.42,
+    -43.0
+   ],
+   "to": [
+    0.2,
+    49.59,
+    -44.0
+   ],
+   "horizontal": 1.41,
+   "dy": -0.83
+  },
+  {
+   "frm_component": 1780,
+   "to_component": 1031,
+   "kind": "jump",
+   "frm": [
+    56.2,
+    23.92,
+    -42.5
+   ],
+   "to": [
+    56.8,
+    23.93,
+    -43.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 1821,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    11.2,
+    41.0,
+    -39.5
+   ],
+   "to": [
+    10.2,
+    39.85,
+    -40.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.15
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2294,
+   "kind": "jump",
+   "frm": [
+    50.8,
+    37.74,
+    -39.0
+   ],
+   "to": [
+    49.8,
+    38.82,
+    -38.5
+   ],
+   "horizontal": 1.12,
+   "dy": 1.08
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2548,
+   "kind": "jump",
+   "frm": [
+    48.2,
+    37.85,
+    -36.0
+   ],
+   "to": [
+    47.8,
+    38.8,
+    -37.0
+   ],
+   "horizontal": 1.12,
+   "dy": 0.95
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2631,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "to": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.15
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2780,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "to": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "horizontal": 1.58,
+   "dy": -0.15
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2856,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "to": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "horizontal": 2.24,
+   "dy": -0.15
+  },
+  {
+   "frm_component": 1890,
+   "to_component": 2905,
+   "kind": "jump",
+   "frm": [
+    47.8,
+    37.63,
+    -35.0
+   ],
+   "to": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "horizontal": 1.5,
+   "dy": -0.12
+  },
+  {
+   "frm_component": 2022,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -47.2,
+    36.85,
+    -40.5
+   ],
+   "to": [
+    -45.8,
+    36.85,
+    -40.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2294,
+   "to_component": 1890,
+   "kind": "drop",
+   "frm": [
+    49.8,
+    38.82,
+    -38.5
+   ],
+   "to": [
+    50.8,
+    37.74,
+    -39.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.08
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 1890,
+   "kind": "drop",
+   "frm": [
+    46.2,
+    40.17,
+    -38.0
+   ],
+   "to": [
+    45.8,
+    37.86,
+    -38.5
+   ],
+   "horizontal": 0.71,
+   "dy": -2.31
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 2548,
+   "kind": "drop",
+   "frm": [
+    47.2,
+    39.38,
+    -37.5
+   ],
+   "to": [
+    47.8,
+    38.8,
+    -37.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.58
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 2631,
+   "kind": "drop",
+   "frm": [
+    46.2,
+    39.87,
+    -37.5
+   ],
+   "to": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "horizontal": 1.8,
+   "dy": -2.37
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 2780,
+   "kind": "drop",
+   "frm": [
+    46.2,
+    39.53,
+    -37.0
+   ],
+   "to": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "horizontal": 1.41,
+   "dy": -2.02
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 2856,
+   "kind": "drop",
+   "frm": [
+    46.2,
+    39.21,
+    -36.5
+   ],
+   "to": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.7
+  },
+  {
+   "frm_component": 2378,
+   "to_component": 2905,
+   "kind": "drop",
+   "frm": [
+    46.2,
+    39.21,
+    -36.5
+   ],
+   "to": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "horizontal": 1.5,
+   "dy": -1.7
+  },
+  {
+   "frm_component": 2406,
+   "to_component": 1441,
+   "kind": "jump",
+   "frm": [
+    77.8,
+    50.8,
+    -38.0
+   ],
+   "to": [
+    77.2,
+    51.87,
+    -39.0
+   ],
+   "horizontal": 1.12,
+   "dy": 1.07
+  },
+  {
+   "frm_component": 2418,
+   "to_component": 2127,
+   "kind": "drop",
+   "frm": [
+    -46.8,
+    62.84,
+    -37.0
+   ],
+   "to": [
+    -47.2,
+    60.2,
+    -38.0
+   ],
+   "horizontal": 1.12,
+   "dy": -2.64
+  },
+  {
+   "frm_component": 2418,
+   "to_component": 2583,
+   "kind": "jump",
+   "frm": [
+    -45.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 2418,
+   "to_component": 2805,
+   "kind": "jump",
+   "frm": [
+    -45.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -45.8,
+    62.84,
+    -35.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2464,
+   "to_component": 1031,
+   "kind": "jump",
+   "frm": [
+    46.8,
+    23.98,
+    -37.5
+   ],
+   "to": [
+    46.2,
+    24.0,
+    -38.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.01
+  },
+  {
+   "frm_component": 2548,
+   "to_component": 1890,
+   "kind": "drop",
+   "frm": [
+    47.8,
+    38.8,
+    -37.0
+   ],
+   "to": [
+    48.2,
+    37.85,
+    -36.0
+   ],
+   "horizontal": 1.12,
+   "dy": -0.95
+  },
+  {
+   "frm_component": 2548,
+   "to_component": 2378,
+   "kind": "jump",
+   "frm": [
+    47.8,
+    38.8,
+    -37.0
+   ],
+   "to": [
+    47.2,
+    39.38,
+    -37.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.58
+  },
+  {
+   "frm_component": 2583,
+   "to_component": 2127,
+   "kind": "drop",
+   "frm": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -44.2,
+    60.2,
+    -37.5
+   ],
+   "horizontal": 1.12,
+   "dy": -2.64
+  },
+  {
+   "frm_component": 2583,
+   "to_component": 2418,
+   "kind": "jump",
+   "frm": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -45.8,
+    62.84,
+    -36.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2583,
+   "to_component": 2805,
+   "kind": "jump",
+   "frm": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -45.2,
+    62.84,
+    -35.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2583,
+   "to_component": 2807,
+   "kind": "jump",
+   "frm": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "to": [
+    -44.8,
+    62.84,
+    -35.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2590,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -31.2,
+    38.2,
+    -36.5
+   ],
+   "to": [
+    -30.2,
+    36.85,
+    -37.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 2631,
+   "to_component": 1890,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "to": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.15
+  },
+  {
+   "frm_component": 2631,
+   "to_component": 2780,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "to": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2631,
+   "to_component": 2856,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "to": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2631,
+   "to_component": 2905,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "to": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "horizontal": 2.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2774,
+   "to_component": 1821,
+   "kind": "drop",
+   "frm": [
+    21.2,
+    44.2,
+    -36.0
+   ],
+   "to": [
+    20.2,
+    42.88,
+    -37.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.32
+  },
+  {
+   "frm_component": 2780,
+   "to_component": 1890,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "to": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.15
+  },
+  {
+   "frm_component": 2780,
+   "to_component": 2631,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "to": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2780,
+   "to_component": 2856,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "to": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2780,
+   "to_component": 2905,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "to": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2805,
+   "to_component": 2127,
+   "kind": "drop",
+   "frm": [
+    -46.2,
+    62.84,
+    -34.5
+   ],
+   "to": [
+    -47.2,
+    60.2,
+    -34.0
+   ],
+   "horizontal": 1.12,
+   "dy": -2.64
+  },
+  {
+   "frm_component": 2805,
+   "to_component": 2418,
+   "kind": "jump",
+   "frm": [
+    -45.8,
+    62.84,
+    -35.5
+   ],
+   "to": [
+    -45.8,
+    62.84,
+    -36.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2805,
+   "to_component": 2583,
+   "kind": "jump",
+   "frm": [
+    -45.2,
+    62.84,
+    -35.0
+   ],
+   "to": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2805,
+   "to_component": 2807,
+   "kind": "jump",
+   "frm": [
+    -45.2,
+    62.84,
+    -35.0
+   ],
+   "to": [
+    -44.8,
+    62.84,
+    -35.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2807,
+   "to_component": 2127,
+   "kind": "drop",
+   "frm": [
+    -44.8,
+    62.84,
+    -35.5
+   ],
+   "to": [
+    -44.2,
+    60.2,
+    -34.5
+   ],
+   "horizontal": 1.12,
+   "dy": -2.64
+  },
+  {
+   "frm_component": 2807,
+   "to_component": 2583,
+   "kind": "jump",
+   "frm": [
+    -44.8,
+    62.84,
+    -35.5
+   ],
+   "to": [
+    -44.8,
+    62.84,
+    -36.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2807,
+   "to_component": 2805,
+   "kind": "jump",
+   "frm": [
+    -44.8,
+    62.84,
+    -35.5
+   ],
+   "to": [
+    -45.2,
+    62.84,
+    -35.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2856,
+   "to_component": 1890,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "to": [
+    44.8,
+    37.65,
+    -37.5
+   ],
+   "horizontal": 2.24,
+   "dy": 0.15
+  },
+  {
+   "frm_component": 2856,
+   "to_component": 2631,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "to": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2856,
+   "to_component": 2780,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "to": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2856,
+   "to_component": 2905,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "to": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2905,
+   "to_component": 1890,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "to": [
+    47.8,
+    37.63,
+    -35.0
+   ],
+   "horizontal": 1.5,
+   "dy": 0.12
+  },
+  {
+   "frm_component": 2905,
+   "to_component": 2631,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "to": [
+    44.8,
+    37.5,
+    -36.5
+   ],
+   "horizontal": 2.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2905,
+   "to_component": 2780,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "to": [
+    45.2,
+    37.5,
+    -36.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 2905,
+   "to_component": 2856,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    37.5,
+    -35.0
+   ],
+   "to": [
+    45.8,
+    37.5,
+    -35.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3217,
+   "to_component": 3318,
+   "kind": "jump",
+   "frm": [
+    9.2,
+    57.2,
+    -32.0
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3217,
+   "to_component": 3350,
+   "kind": "jump",
+   "frm": [
+    8.2,
+    57.2,
+    -31.5
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -31.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3217,
+   "to_component": 3477,
+   "kind": "jump",
+   "frm": [
+    8.2,
+    57.2,
+    -31.5
+   ],
+   "to": [
+    7.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 2.24,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3266,
+   "to_component": 3302,
+   "kind": "jump",
+   "frm": [
+    -4.2,
+    57.2,
+    -32.0
+   ],
+   "to": [
+    -6.2,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 2.06,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3266,
+   "to_component": 3556,
+   "kind": "jump",
+   "frm": [
+    -2.8,
+    57.2,
+    -30.0
+   ],
+   "to": [
+    -2.8,
+    57.2,
+    -28.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3302,
+   "to_component": 3266,
+   "kind": "jump",
+   "frm": [
+    -6.2,
+    57.2,
+    -31.5
+   ],
+   "to": [
+    -4.2,
+    57.2,
+    -32.0
+   ],
+   "horizontal": 2.06,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3302,
+   "to_component": 3463,
+   "kind": "jump",
+   "frm": [
+    -6.2,
+    57.2,
+    -31.5
+   ],
+   "to": [
+    -6.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 2.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3318,
+   "to_component": 3217,
+   "kind": "jump",
+   "frm": [
+    10.8,
+    57.2,
+    -31.5
+   ],
+   "to": [
+    9.2,
+    57.2,
+    -32.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3318,
+   "to_component": 3484,
+   "kind": "jump",
+   "frm": [
+    11.8,
+    57.2,
+    -30.5
+   ],
+   "to": [
+    11.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3318,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    11.8,
+    57.2,
+    -30.5
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 2.69,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3350,
+   "to_component": 3217,
+   "kind": "jump",
+   "frm": [
+    7.8,
+    57.2,
+    -31.0
+   ],
+   "to": [
+    8.2,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3350,
+   "to_component": 3477,
+   "kind": "jump",
+   "frm": [
+    7.8,
+    57.2,
+    -30.5
+   ],
+   "to": [
+    7.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3217,
+   "kind": "drop",
+   "frm": [
+    10.2,
+    59.12,
+    -30.5
+   ],
+   "to": [
+    9.2,
+    57.2,
+    -32.0
+   ],
+   "horizontal": 1.8,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3318,
+   "kind": "drop",
+   "frm": [
+    10.2,
+    59.12,
+    -30.5
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3350,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -30.5
+   ],
+   "horizontal": 2.55,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3436,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3477,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -29.0
+   ],
+   "horizontal": 2.69,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3484,
+   "kind": "drop",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    11.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3674,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    9.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 2.06,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3396,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 2.06,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3217,
+   "kind": "drop",
+   "frm": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    8.2,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 1.58,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3318,
+   "kind": "jump",
+   "frm": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    11.2,
+    57.2,
+    -31.0
+   ],
+   "horizontal": 2.69,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3350,
+   "kind": "drop",
+   "frm": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -30.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3396,
+   "kind": "jump",
+   "frm": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    10.2,
+    59.12,
+    -30.0
+   ],
+   "horizontal": 1.5,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3477,
+   "kind": "drop",
+   "frm": [
+    8.8,
+    59.12,
+    -29.5
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -29.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3484,
+   "kind": "jump",
+   "frm": [
+    8.8,
+    59.12,
+    -30.0
+   ],
+   "to": [
+    11.2,
+    57.2,
+    -29.5
+   ],
+   "horizontal": 2.55,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3674,
+   "kind": "drop",
+   "frm": [
+    8.8,
+    59.12,
+    -29.5
+   ],
+   "to": [
+    9.2,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.58,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3436,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    8.8,
+    59.12,
+    -29.5
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 2.5,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 3463,
+   "to_component": 3302,
+   "kind": "jump",
+   "frm": [
+    -6.2,
+    57.2,
+    -29.5
+   ],
+   "to": [
+    -6.2,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 2.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3463,
+   "to_component": 3556,
+   "kind": "jump",
+   "frm": [
+    -4.2,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    -2.8,
+    57.2,
+    -28.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3477,
+   "to_component": 3217,
+   "kind": "jump",
+   "frm": [
+    7.2,
+    57.2,
+    -29.5
+   ],
+   "to": [
+    8.2,
+    57.2,
+    -31.5
+   ],
+   "horizontal": 2.24,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3477,
+   "to_component": 3350,
+   "kind": "jump",
+   "frm": [
+    7.2,
+    57.2,
+    -29.5
+   ],
+   "to": [
+    7.8,
+    57.2,
+    -30.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3477,
+   "to_component": 3674,
+   "kind": "jump",
+   "frm": [
+    8.2,
+    57.2,
+    -28.5
+   ],
+   "to": [
+    9.2,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3477,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    8.2,
+    57.2,
+    -28.5
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 2.55,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3484,
+   "to_component": 3318,
+   "kind": "jump",
+   "frm": [
+    11.2,
+    57.2,
+    -29.5
+   ],
+   "to": [
+    11.8,
+    57.2,
+    -30.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3484,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    11.2,
+    57.2,
+    -29.0
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3556,
+   "to_component": 3266,
+   "kind": "jump",
+   "frm": [
+    -2.8,
+    57.2,
+    -28.5
+   ],
+   "to": [
+    -2.8,
+    57.2,
+    -30.0
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3556,
+   "to_component": 3463,
+   "kind": "jump",
+   "frm": [
+    -2.8,
+    57.2,
+    -28.5
+   ],
+   "to": [
+    -4.2,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3645,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -32.2,
+    38.2,
+    -28.0
+   ],
+   "to": [
+    -33.2,
+    36.85,
+    -29.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 3674,
+   "to_component": 3477,
+   "kind": "jump",
+   "frm": [
+    9.2,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    8.2,
+    57.2,
+    -28.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3674,
+   "to_component": 3676,
+   "kind": "jump",
+   "frm": [
+    9.8,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3676,
+   "to_component": 3318,
+   "kind": "jump",
+   "frm": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    11.8,
+    57.2,
+    -30.5
+   ],
+   "horizontal": 2.69,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3676,
+   "to_component": 3477,
+   "kind": "jump",
+   "frm": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    8.2,
+    57.2,
+    -28.5
+   ],
+   "horizontal": 2.55,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3676,
+   "to_component": 3484,
+   "kind": "jump",
+   "frm": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    11.2,
+    57.2,
+    -29.0
+   ],
+   "horizontal": 1.12,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3676,
+   "to_component": 3674,
+   "kind": "jump",
+   "frm": [
+    10.8,
+    57.2,
+    -28.0
+   ],
+   "to": [
+    9.8,
+    57.2,
+    -28.0
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 3726,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -3.2,
+    39.85,
+    -27.5
+   ],
+   "to": [
+    -1.8,
+    39.9,
+    -27.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.05
+  },
+  {
+   "frm_component": 4066,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -9.2,
+    45.7,
+    -19.0
+   ],
+   "to": [
+    -9.8,
+    39.85,
+    -19.5
+   ],
+   "horizontal": 0.71,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 4205,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    12.8,
+    45.7,
+    -15.5
+   ],
+   "to": [
+    12.2,
+    39.87,
+    -16.0
+   ],
+   "horizontal": 0.71,
+   "dy": -5.83
+  },
+  {
+   "frm_component": 4322,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    52.2,
+    39.85,
+    -13.5
+   ],
+   "to": [
+    50.8,
+    39.85,
+    -13.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 4465,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -3.2,
+    42.4,
+    -11.5
+   ],
+   "to": [
+    -4.2,
+    39.82,
+    -12.5
+   ],
+   "horizontal": 1.41,
+   "dy": -2.58
+  },
+  {
+   "frm_component": 4542,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    36.2,
+    41.2,
+    -10.5
+   ],
+   "to": [
+    35.2,
+    39.85,
+    -11.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 4600,
+   "to_component": 4380,
+   "kind": "drop",
+   "frm": [
+    47.8,
+    70.32,
+    -10.0
+   ],
+   "to": [
+    46.8,
+    67.2,
+    -11.0
+   ],
+   "horizontal": 1.41,
+   "dy": -3.12
+  },
+  {
+   "frm_component": 4771,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -32.2,
+    41.2,
+    -9.0
+   ],
+   "to": [
+    -33.2,
+    39.85,
+    -10.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 4820,
+   "to_component": 4771,
+   "kind": "jump",
+   "frm": [
+    -34.8,
+    46.6,
+    -8.0
+   ],
+   "to": [
+    -32.2,
+    41.2,
+    -8.0
+   ],
+   "horizontal": 2.5,
+   "dy": -5.4
+  },
+  {
+   "frm_component": 4820,
+   "to_component": 5570,
+   "kind": "jump",
+   "frm": [
+    -41.2,
+    46.6,
+    -2.5
+   ],
+   "to": [
+    -39.8,
+    47.59,
+    -2.5
+   ],
+   "horizontal": 1.5,
+   "dy": 0.99
+  },
+  {
+   "frm_component": 5129,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -6.8,
+    39.91,
+    -6.5
+   ],
+   "to": [
+    -7.2,
+    39.85,
+    -7.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.06
+  },
+  {
+   "frm_component": 5135,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    9.2,
+    42.4,
+    -5.5
+   ],
+   "to": [
+    8.8,
+    39.83,
+    -4.5
+   ],
+   "horizontal": 1.12,
+   "dy": -2.57
+  },
+  {
+   "frm_component": 5135,
+   "to_component": 5314,
+   "kind": "drop",
+   "frm": [
+    9.8,
+    42.4,
+    -6.0
+   ],
+   "to": [
+    10.2,
+    41.2,
+    -5.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.2
+  },
+  {
+   "frm_component": 5314,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    10.2,
+    41.2,
+    -5.0
+   ],
+   "to": [
+    11.2,
+    39.84,
+    -4.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.36
+  },
+  {
+   "frm_component": 5374,
+   "to_component": 4820,
+   "kind": "drop",
+   "frm": [
+    -39.8,
+    48.27,
+    -4.0
+   ],
+   "to": [
+    -41.2,
+    46.6,
+    -4.0
+   ],
+   "horizontal": 1.5,
+   "dy": -1.67
+  },
+  {
+   "frm_component": 5374,
+   "to_component": 5570,
+   "kind": "drop",
+   "frm": [
+    -39.8,
+    48.27,
+    -4.0
+   ],
+   "to": [
+    -39.8,
+    47.59,
+    -2.5
+   ],
+   "horizontal": 1.5,
+   "dy": -0.68
+  },
+  {
+   "frm_component": 5570,
+   "to_component": 4820,
+   "kind": "drop",
+   "frm": [
+    -39.8,
+    47.59,
+    -2.5
+   ],
+   "to": [
+    -41.2,
+    46.6,
+    -2.5
+   ],
+   "horizontal": 1.5,
+   "dy": -0.99
+  },
+  {
+   "frm_component": 5570,
+   "to_component": 5374,
+   "kind": "jump",
+   "frm": [
+    -39.8,
+    47.59,
+    -2.5
+   ],
+   "to": [
+    -39.8,
+    48.27,
+    -4.0
+   ],
+   "horizontal": 1.5,
+   "dy": 0.68
+  },
+  {
+   "frm_component": 5651,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    47.2,
+    41.2,
+    -2.0
+   ],
+   "to": [
+    46.2,
+    39.82,
+    -3.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.38
+  },
+  {
+   "frm_component": 5896,
+   "to_component": 7114,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    22.06,
+    14.5
+   ],
+   "to": [
+    -70.2,
+    22.06,
+    15.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 5896,
+   "to_component": 7139,
+   "kind": "jump",
+   "frm": [
+    -71.2,
+    22.05,
+    16.0
+   ],
+   "to": [
+    -70.8,
+    22.06,
+    15.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.01
+  },
+  {
+   "frm_component": 6035,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -10.8,
+    42.4,
+    2.0
+   ],
+   "to": [
+    -11.8,
+    39.85,
+    2.5
+   ],
+   "horizontal": 1.12,
+   "dy": -2.55
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 6258,
+   "kind": "jump",
+   "frm": [
+    -60.8,
+    47.17,
+    3.5
+   ],
+   "to": [
+    -59.2,
+    47.25,
+    4.5
+   ],
+   "horizontal": 1.8,
+   "dy": 0.07
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -67.2,
+    47.17,
+    11.0
+   ],
+   "to": [
+    -69.8,
+    43.31,
+    11.5
+   ],
+   "horizontal": 2.55,
+   "dy": -3.86
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 6913,
+   "kind": "jump",
+   "frm": [
+    -67.2,
+    47.17,
+    11.0
+   ],
+   "to": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "horizontal": 3.64,
+   "dy": -4.46
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -67.2,
+    47.17,
+    11.0
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 2.92,
+   "dy": -3.49
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 6996,
+   "kind": "jump",
+   "frm": [
+    -67.2,
+    47.17,
+    11.0
+   ],
+   "to": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "horizontal": 4.03,
+   "dy": -3.99
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 7010,
+   "kind": "jump",
+   "frm": [
+    -60.8,
+    47.17,
+    13.5
+   ],
+   "to": [
+    -59.2,
+    47.15,
+    13.0
+   ],
+   "horizontal": 1.58,
+   "dy": -0.02
+  },
+  {
+   "frm_component": 6158,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -67.2,
+    47.17,
+    11.0
+   ],
+   "to": [
+    -69.8,
+    44.07,
+    13.5
+   ],
+   "horizontal": 3.54,
+   "dy": -3.1
+  },
+  {
+   "frm_component": 6258,
+   "to_component": 6158,
+   "kind": "jump",
+   "frm": [
+    -59.2,
+    47.25,
+    4.5
+   ],
+   "to": [
+    -60.8,
+    47.17,
+    3.5
+   ],
+   "horizontal": 1.8,
+   "dy": -0.07
+  },
+  {
+   "frm_component": 6258,
+   "to_component": 6312,
+   "kind": "jump",
+   "frm": [
+    -59.2,
+    47.25,
+    4.5
+   ],
+   "to": [
+    -59.2,
+    48.22,
+    6.0
+   ],
+   "horizontal": 1.5,
+   "dy": 0.98
+  },
+  {
+   "frm_component": 6285,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    18.2,
+    45.7,
+    5.0
+   ],
+   "to": [
+    17.2,
+    39.85,
+    5.0
+   ],
+   "horizontal": 1.0,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 6312,
+   "to_component": 6158,
+   "kind": "drop",
+   "frm": [
+    -64.8,
+    51.0,
+    8.5
+   ],
+   "to": [
+    -64.8,
+    47.79,
+    8.5
+   ],
+   "horizontal": 0.0,
+   "dy": -3.21
+  },
+  {
+   "frm_component": 6312,
+   "to_component": 6258,
+   "kind": "drop",
+   "frm": [
+    -60.2,
+    48.66,
+    5.0
+   ],
+   "to": [
+    -59.2,
+    47.25,
+    4.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.41
+  },
+  {
+   "frm_component": 6312,
+   "to_component": 7010,
+   "kind": "drop",
+   "frm": [
+    -59.8,
+    48.8,
+    12.0
+   ],
+   "to": [
+    -59.2,
+    47.15,
+    13.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.65
+  },
+  {
+   "frm_component": 6371,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -18.2,
+    45.7,
+    5.5
+   ],
+   "to": [
+    -18.8,
+    39.85,
+    4.5
+   ],
+   "horizontal": 1.12,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 6371,
+   "to_component": 6418,
+   "kind": "jump",
+   "frm": [
+    -18.2,
+    45.7,
+    5.5
+   ],
+   "to": [
+    -19.2,
+    46.04,
+    6.5
+   ],
+   "horizontal": 1.41,
+   "dy": 0.34
+  },
+  {
+   "frm_component": 6371,
+   "to_component": 6457,
+   "kind": "jump",
+   "frm": [
+    -18.2,
+    45.7,
+    5.5
+   ],
+   "to": [
+    -18.2,
+    46.0,
+    6.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.3
+  },
+  {
+   "frm_component": 6418,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -18.8,
+    45.7,
+    8.0
+   ],
+   "to": [
+    -18.2,
+    39.85,
+    8.5
+   ],
+   "horizontal": 0.71,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 6418,
+   "to_component": 6371,
+   "kind": "jump",
+   "frm": [
+    -19.2,
+    46.04,
+    6.5
+   ],
+   "to": [
+    -18.2,
+    45.7,
+    5.5
+   ],
+   "horizontal": 1.41,
+   "dy": -0.34
+  },
+  {
+   "frm_component": 6418,
+   "to_component": 6457,
+   "kind": "jump",
+   "frm": [
+    -18.8,
+    46.24,
+    7.0
+   ],
+   "to": [
+    -18.2,
+    46.0,
+    6.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.24
+  },
+  {
+   "frm_component": 6457,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -17.8,
+    45.7,
+    6.5
+   ],
+   "to": [
+    -16.8,
+    39.85,
+    6.5
+   ],
+   "horizontal": 1.0,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 6457,
+   "to_component": 6371,
+   "kind": "jump",
+   "frm": [
+    -18.2,
+    46.0,
+    6.5
+   ],
+   "to": [
+    -18.2,
+    45.7,
+    5.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.3
+  },
+  {
+   "frm_component": 6457,
+   "to_component": 6418,
+   "kind": "jump",
+   "frm": [
+    -18.2,
+    46.0,
+    6.5
+   ],
+   "to": [
+    -18.8,
+    46.24,
+    7.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.24
+  },
+  {
+   "frm_component": 6645,
+   "to_component": 6689,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    40.32,
+    10.0
+   ],
+   "to": [
+    -70.2,
+    40.22,
+    9.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.1
+  },
+  {
+   "frm_component": 6645,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -74.8,
+    40.66,
+    14.0
+   ],
+   "to": [
+    -73.8,
+    41.59,
+    14.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.93
+  },
+  {
+   "frm_component": 6689,
+   "to_component": 6645,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    40.22,
+    9.5
+   ],
+   "to": [
+    -69.8,
+    40.32,
+    10.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.1
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -69.8,
+    43.31,
+    11.5
+   ],
+   "to": [
+    -69.2,
+    40.66,
+    11.5
+   ],
+   "horizontal": 0.5,
+   "dy": -2.64
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 6689,
+   "kind": "drop",
+   "frm": [
+    -70.2,
+    42.75,
+    11.0
+   ],
+   "to": [
+    -70.2,
+    40.22,
+    9.5
+   ],
+   "horizontal": 1.5,
+   "dy": -2.53
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 6913,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    42.93,
+    11.5
+   ],
+   "to": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.23
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.31,
+    11.5
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.37
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 6996,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    42.93,
+    11.5
+   ],
+   "to": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.25
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.31,
+    11.5
+   ],
+   "to": [
+    -69.8,
+    44.07,
+    13.5
+   ],
+   "horizontal": 2.0,
+   "dy": 0.76
+  },
+  {
+   "frm_component": 6836,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    42.75,
+    11.0
+   ],
+   "to": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "horizontal": 4.24,
+   "dy": -1.0
+  },
+  {
+   "frm_component": 6854,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    1.8,
+    42.4,
+    11.5
+   ],
+   "to": [
+    2.8,
+    39.83,
+    12.5
+   ],
+   "horizontal": 1.41,
+   "dy": -2.57
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -71.8,
+    42.19,
+    12.5
+   ],
+   "to": [
+    -73.2,
+    40.73,
+    11.5
+   ],
+   "horizontal": 1.8,
+   "dy": -1.46
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 6689,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "to": [
+    -70.8,
+    40.27,
+    9.5
+   ],
+   "horizontal": 2.5,
+   "dy": -2.44
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "to": [
+    -70.2,
+    42.93,
+    11.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.23
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.97
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 6996,
+   "kind": "jump",
+   "frm": [
+    -71.2,
+    42.58,
+    12.5
+   ],
+   "to": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.6
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -71.2,
+    42.58,
+    12.5
+   ],
+   "to": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "horizontal": 1.41,
+   "dy": 1.14
+  },
+  {
+   "frm_component": 6913,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -71.8,
+    42.19,
+    12.5
+   ],
+   "to": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "horizontal": 2.12,
+   "dy": -0.43
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -69.2,
+    40.66,
+    11.5
+   ],
+   "horizontal": 1.12,
+   "dy": -3.02
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 6689,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -70.2,
+    40.22,
+    9.5
+   ],
+   "horizontal": 3.04,
+   "dy": -3.46
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -69.8,
+    43.31,
+    11.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.37
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 6913,
+   "kind": "drop",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -70.8,
+    42.71,
+    12.0
+   ],
+   "horizontal": 1.12,
+   "dy": -0.97
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 6996,
+   "kind": "drop",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "horizontal": 1.12,
+   "dy": -0.5
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -69.8,
+    44.07,
+    13.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.39
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "horizontal": 3.81,
+   "dy": -1.93
+  },
+  {
+   "frm_component": 6957,
+   "to_component": 7165,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "to": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "horizontal": 4.3,
+   "dy": -0.43
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 6645,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -73.2,
+    40.73,
+    11.5
+   ],
+   "horizontal": 2.92,
+   "dy": -2.45
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 6689,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -70.8,
+    40.27,
+    9.5
+   ],
+   "horizontal": 3.5,
+   "dy": -2.91
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -70.2,
+    42.93,
+    11.5
+   ],
+   "horizontal": 1.58,
+   "dy": -0.25
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 6913,
+   "kind": "drop",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -71.2,
+    42.58,
+    12.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.6
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.5
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.53
+  },
+  {
+   "frm_component": 6996,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "to": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "horizontal": 2.69,
+   "dy": -1.43
+  },
+  {
+   "frm_component": 7010,
+   "to_component": 6158,
+   "kind": "jump",
+   "frm": [
+    -59.2,
+    47.15,
+    13.0
+   ],
+   "to": [
+    -60.8,
+    47.17,
+    13.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.02
+  },
+  {
+   "frm_component": 7010,
+   "to_component": 6312,
+   "kind": "jump",
+   "frm": [
+    -59.2,
+    47.15,
+    13.0
+   ],
+   "to": [
+    -58.8,
+    48.32,
+    11.5
+   ],
+   "horizontal": 1.58,
+   "dy": 1.17
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -69.8,
+    44.07,
+    13.5
+   ],
+   "to": [
+    -69.2,
+    40.86,
+    13.5
+   ],
+   "horizontal": 0.5,
+   "dy": -3.2
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6689,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "to": [
+    -70.2,
+    40.22,
+    9.5
+   ],
+   "horizontal": 4.0,
+   "dy": -3.49
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "to": [
+    -70.2,
+    42.93,
+    11.5
+   ],
+   "horizontal": 2.0,
+   "dy": -0.78
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6913,
+   "kind": "drop",
+   "frm": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "to": [
+    -71.2,
+    42.58,
+    12.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.14
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -69.8,
+    44.07,
+    13.5
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.39
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 6996,
+   "kind": "drop",
+   "frm": [
+    -70.2,
+    43.72,
+    13.5
+   ],
+   "to": [
+    -70.8,
+    43.18,
+    13.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.53
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 7058,
+   "kind": "jump",
+   "frm": [
+    -71.8,
+    43.4,
+    15.5
+   ],
+   "to": [
+    -73.8,
+    41.96,
+    15.5
+   ],
+   "horizontal": 2.0,
+   "dy": -1.44
+  },
+  {
+   "frm_component": 7032,
+   "to_component": 7165,
+   "kind": "jump",
+   "frm": [
+    -71.8,
+    43.4,
+    15.5
+   ],
+   "to": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.15
+  },
+  {
+   "frm_component": 7058,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -73.8,
+    41.59,
+    14.5
+   ],
+   "to": [
+    -74.2,
+    40.81,
+    13.5
+   ],
+   "horizontal": 1.12,
+   "dy": -0.78
+  },
+  {
+   "frm_component": 7058,
+   "to_component": 6836,
+   "kind": "jump",
+   "frm": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "to": [
+    -70.2,
+    42.75,
+    11.0
+   ],
+   "horizontal": 4.24,
+   "dy": 1.0
+  },
+  {
+   "frm_component": 7058,
+   "to_component": 6913,
+   "kind": "jump",
+   "frm": [
+    -73.2,
+    41.75,
+    14.0
+   ],
+   "to": [
+    -71.8,
+    42.19,
+    12.5
+   ],
+   "horizontal": 2.12,
+   "dy": 0.43
+  },
+  {
+   "frm_component": 7058,
+   "to_component": 7165,
+   "kind": "jump",
+   "frm": [
+    -73.2,
+    42.09,
+    15.0
+   ],
+   "to": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "horizontal": 1.41,
+   "dy": 1.17
+  },
+  {
+   "frm_component": 7114,
+   "to_component": 5896,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    22.06,
+    15.0
+   ],
+   "to": [
+    -69.8,
+    22.06,
+    14.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 7114,
+   "to_component": 7139,
+   "kind": "jump",
+   "frm": [
+    -70.2,
+    22.06,
+    15.0
+   ],
+   "to": [
+    -70.8,
+    22.06,
+    15.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 7139,
+   "to_component": 5896,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    22.06,
+    15.5
+   ],
+   "to": [
+    -71.2,
+    22.05,
+    16.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.01
+  },
+  {
+   "frm_component": 7139,
+   "to_component": 7114,
+   "kind": "jump",
+   "frm": [
+    -70.8,
+    22.06,
+    15.5
+   ],
+   "to": [
+    -70.2,
+    22.06,
+    15.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 7165,
+   "to_component": 6645,
+   "kind": "drop",
+   "frm": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "to": [
+    -71.8,
+    40.82,
+    16.5
+   ],
+   "horizontal": 0.71,
+   "dy": -2.44
+  },
+  {
+   "frm_component": 7165,
+   "to_component": 6957,
+   "kind": "jump",
+   "frm": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "to": [
+    -69.8,
+    43.68,
+    12.5
+   ],
+   "horizontal": 4.3,
+   "dy": 0.43
+  },
+  {
+   "frm_component": 7165,
+   "to_component": 7032,
+   "kind": "jump",
+   "frm": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "to": [
+    -71.8,
+    43.4,
+    15.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.15
+  },
+  {
+   "frm_component": 7165,
+   "to_component": 7058,
+   "kind": "drop",
+   "frm": [
+    -72.2,
+    43.25,
+    16.0
+   ],
+   "to": [
+    -73.2,
+    42.09,
+    15.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.17
+  },
+  {
+   "frm_component": 7207,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    10.2,
+    45.7,
+    17.5
+   ],
+   "to": [
+    10.8,
+    39.87,
+    17.0
+   ],
+   "horizontal": 0.71,
+   "dy": -5.83
+  },
+  {
+   "frm_component": 7278,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -5.8,
+    45.7,
+    18.0
+   ],
+   "to": [
+    -5.8,
+    39.85,
+    17.0
+   ],
+   "horizontal": 1.0,
+   "dy": -5.85
+  },
+  {
+   "frm_component": 7665,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    36.8,
+    38.2,
+    24.0
+   ],
+   "to": [
+    35.8,
+    36.82,
+    23.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.38
+  },
+  {
+   "frm_component": 7777,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    43.2,
+    38.2,
+    26.0
+   ],
+   "to": [
+    42.2,
+    36.87,
+    25.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.33
+  },
+  {
+   "frm_component": 7792,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -31.2,
+    38.2,
+    26.5
+   ],
+   "to": [
+    -32.2,
+    36.88,
+    25.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.32
+  },
+  {
+   "frm_component": 7945,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -38.2,
+    38.2,
+    29.0
+   ],
+   "to": [
+    -39.2,
+    36.85,
+    28.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 8621,
+   "to_component": 8514,
+   "kind": "drop",
+   "frm": [
+    42.2,
+    60.6,
+    38.0
+   ],
+   "to": [
+    41.8,
+    58.2,
+    37.0
+   ],
+   "horizontal": 1.12,
+   "dy": -2.4
+  },
+  {
+   "frm_component": 8621,
+   "to_component": 8706,
+   "kind": "jump",
+   "frm": [
+    42.2,
+    60.6,
+    38.0
+   ],
+   "to": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8621,
+   "to_component": 8794,
+   "kind": "jump",
+   "frm": [
+    42.2,
+    60.6,
+    38.0
+   ],
+   "to": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8621,
+   "to_component": 8797,
+   "kind": "jump",
+   "frm": [
+    42.8,
+    60.6,
+    38.5
+   ],
+   "to": [
+    42.8,
+    60.6,
+    39.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8706,
+   "to_component": 8514,
+   "kind": "drop",
+   "frm": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "to": [
+    40.8,
+    58.2,
+    38.0
+   ],
+   "horizontal": 1.12,
+   "dy": -2.4
+  },
+  {
+   "frm_component": 8706,
+   "to_component": 8621,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "to": [
+    42.2,
+    60.6,
+    38.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8706,
+   "to_component": 8794,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "to": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8706,
+   "to_component": 8797,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "to": [
+    42.2,
+    60.6,
+    40.0
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8787,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    30.2,
+    38.2,
+    39.5
+   ],
+   "to": [
+    29.2,
+    36.83,
+    38.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.37
+  },
+  {
+   "frm_component": 8794,
+   "to_component": 8514,
+   "kind": "drop",
+   "frm": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "to": [
+    40.8,
+    58.2,
+    40.0
+   ],
+   "horizontal": 1.12,
+   "dy": -2.4
+  },
+  {
+   "frm_component": 8794,
+   "to_component": 8621,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "to": [
+    42.2,
+    60.6,
+    38.0
+   ],
+   "horizontal": 1.58,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 8794,
+   "to_component": 8706,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "to": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 8794,
+   "to_component": 8797,
+   "kind": "jump",
+   "frm": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "to": [
+    42.2,
+    60.6,
+    40.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8797,
+   "to_component": 8514,
+   "kind": "drop",
+   "frm": [
+    42.2,
+    60.6,
+    40.0
+   ],
+   "to": [
+    41.2,
+    58.2,
+    40.5
+   ],
+   "horizontal": 1.12,
+   "dy": -2.4
+  },
+  {
+   "frm_component": 8797,
+   "to_component": 8621,
+   "kind": "jump",
+   "frm": [
+    42.8,
+    60.6,
+    39.5
+   ],
+   "to": [
+    42.8,
+    60.6,
+    38.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8797,
+   "to_component": 8706,
+   "kind": "jump",
+   "frm": [
+    42.2,
+    60.6,
+    40.0
+   ],
+   "to": [
+    41.8,
+    60.6,
+    38.5
+   ],
+   "horizontal": 1.58,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 8797,
+   "to_component": 8794,
+   "kind": "jump",
+   "frm": [
+    42.2,
+    60.6,
+    40.0
+   ],
+   "to": [
+    41.8,
+    60.6,
+    39.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8904,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "to": [
+    48.2,
+    36.87,
+    38.5
+   ],
+   "horizontal": 2.83,
+   "dy": 0.04
+  },
+  {
+   "frm_component": 8904,
+   "to_component": 8954,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "to": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.02
+  },
+  {
+   "frm_component": 8904,
+   "to_component": 9032,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "to": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8904,
+   "to_component": 9069,
+   "kind": "jump",
+   "frm": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "to": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "horizontal": 2.12,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 8954,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "to": [
+    48.2,
+    36.87,
+    38.5
+   ],
+   "horizontal": 3.54,
+   "dy": 0.06
+  },
+  {
+   "frm_component": 8954,
+   "to_component": 8904,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "to": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.02
+  },
+  {
+   "frm_component": 8954,
+   "to_component": 9032,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "to": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.02
+  },
+  {
+   "frm_component": 8954,
+   "to_component": 9069,
+   "kind": "jump",
+   "frm": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "to": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.05
+  },
+  {
+   "frm_component": 8968,
+   "to_component": 8671,
+   "kind": "drop",
+   "frm": [
+    -38.2,
+    56.12,
+    41.5
+   ],
+   "to": [
+    -38.8,
+    54.2,
+    40.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 8968,
+   "to_component": 8973,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    56.12,
+    42.5
+   ],
+   "to": [
+    -36.8,
+    56.12,
+    42.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8968,
+   "to_component": 9159,
+   "kind": "jump",
+   "frm": [
+    -37.8,
+    56.12,
+    43.0
+   ],
+   "to": [
+    -37.2,
+    56.12,
+    43.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 8973,
+   "to_component": 8671,
+   "kind": "drop",
+   "frm": [
+    -35.8,
+    56.12,
+    41.5
+   ],
+   "to": [
+    -35.2,
+    54.2,
+    40.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 8973,
+   "to_component": 8968,
+   "kind": "jump",
+   "frm": [
+    -36.8,
+    56.12,
+    42.0
+   ],
+   "to": [
+    -37.2,
+    56.12,
+    42.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 8973,
+   "to_component": 9159,
+   "kind": "jump",
+   "frm": [
+    -36.8,
+    56.12,
+    42.0
+   ],
+   "to": [
+    -37.2,
+    56.12,
+    43.5
+   ],
+   "horizontal": 1.58,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 9032,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "to": [
+    42.8,
+    36.83,
+    44.0
+   ],
+   "horizontal": 3.54,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 9032,
+   "to_component": 8904,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "to": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 9032,
+   "to_component": 8954,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "to": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.02
+  },
+  {
+   "frm_component": 9032,
+   "to_component": 9069,
+   "kind": "jump",
+   "frm": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "to": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 9069,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "to": [
+    42.8,
+    36.83,
+    44.0
+   ],
+   "horizontal": 2.83,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 9069,
+   "to_component": 8904,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "to": [
+    46.2,
+    36.83,
+    40.5
+   ],
+   "horizontal": 2.12,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 9069,
+   "to_component": 8954,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "to": [
+    45.8,
+    36.81,
+    41.0
+   ],
+   "horizontal": 1.41,
+   "dy": -0.05
+  },
+  {
+   "frm_component": 9069,
+   "to_component": 9032,
+   "kind": "jump",
+   "frm": [
+    44.8,
+    36.87,
+    42.0
+   ],
+   "to": [
+    45.2,
+    36.83,
+    41.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 9090,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -24.8,
+    38.2,
+    42.5
+   ],
+   "to": [
+    -25.8,
+    36.84,
+    41.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.36
+  },
+  {
+   "frm_component": 9112,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -41.8,
+    36.83,
+    43.0
+   ],
+   "to": [
+    -42.2,
+    36.85,
+    42.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.02
+  },
+  {
+   "frm_component": 9112,
+   "to_component": 9190,
+   "kind": "jump",
+   "frm": [
+    -41.8,
+    36.83,
+    43.0
+   ],
+   "to": [
+    -40.2,
+    36.85,
+    44.0
+   ],
+   "horizontal": 1.8,
+   "dy": 0.02
+  },
+  {
+   "frm_component": 9159,
+   "to_component": 8671,
+   "kind": "drop",
+   "frm": [
+    -37.2,
+    56.12,
+    43.5
+   ],
+   "to": [
+    -38.2,
+    54.2,
+    44.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.92
+  },
+  {
+   "frm_component": 9159,
+   "to_component": 8968,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    56.12,
+    43.5
+   ],
+   "to": [
+    -37.8,
+    56.12,
+    43.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 9159,
+   "to_component": 8973,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    56.12,
+    43.5
+   ],
+   "to": [
+    -36.8,
+    56.12,
+    42.0
+   ],
+   "horizontal": 1.58,
+   "dy": -0.0
+  },
+  {
+   "frm_component": 9190,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -38.2,
+    36.85,
+    46.0
+   ],
+   "to": [
+    -37.2,
+    36.85,
+    47.0
+   ],
+   "horizontal": 1.41,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 9190,
+   "to_component": 9112,
+   "kind": "jump",
+   "frm": [
+    -40.2,
+    36.85,
+    44.0
+   ],
+   "to": [
+    -41.8,
+    36.83,
+    43.0
+   ],
+   "horizontal": 1.8,
+   "dy": -0.02
+  },
+  {
+   "frm_component": 9190,
+   "to_component": 9322,
+   "kind": "jump",
+   "frm": [
+    -38.2,
+    36.85,
+    46.0
+   ],
+   "to": [
+    -37.8,
+    36.89,
+    46.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.04
+  },
+  {
+   "frm_component": 9322,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -37.8,
+    36.89,
+    46.5
+   ],
+   "to": [
+    -37.2,
+    36.85,
+    47.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.04
+  },
+  {
+   "frm_component": 9322,
+   "to_component": 9190,
+   "kind": "jump",
+   "frm": [
+    -37.8,
+    36.89,
+    46.5
+   ],
+   "to": [
+    -38.2,
+    36.85,
+    46.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.04
+  },
+  {
+   "frm_component": 9447,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    -3.2,
+    39.85,
+    51.0
+   ],
+   "to": [
+    -3.8,
+    39.84,
+    51.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.01
+  },
+  {
+   "frm_component": 9500,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    -2.2,
+    41.2,
+    52.5
+   ],
+   "to": [
+    -3.2,
+    39.87,
+    53.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.33
+  },
+  {
+   "frm_component": 9500,
+   "to_component": 9447,
+   "kind": "drop",
+   "frm": [
+    -2.2,
+    41.2,
+    52.0
+   ],
+   "to": [
+    -3.2,
+    39.85,
+    51.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 9844,
+   "to_component": 9727,
+   "kind": "drop",
+   "frm": [
+    2.2,
+    56.88,
+    62.0
+   ],
+   "to": [
+    1.2,
+    55.2,
+    63.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.68
+  },
+  {
+   "frm_component": 9980,
+   "to_component": 1211,
+   "kind": "drop",
+   "frm": [
+    7.2,
+    41.2,
+    61.5
+   ],
+   "to": [
+    6.2,
+    39.85,
+    60.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.35
+  },
+  {
+   "frm_component": 9980,
+   "to_component": 10071,
+   "kind": "drop",
+   "frm": [
+    8.2,
+    41.2,
+    62.0
+   ],
+   "to": [
+    9.2,
+    39.83,
+    63.0
+   ],
+   "horizontal": 1.41,
+   "dy": -1.37
+  },
+  {
+   "frm_component": 10071,
+   "to_component": 1211,
+   "kind": "jump",
+   "frm": [
+    9.2,
+    39.83,
+    63.0
+   ],
+   "to": [
+    8.8,
+    39.83,
+    63.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.0
+  },
+  {
+   "frm_component": 10170,
+   "to_component": 10198,
+   "kind": "jump",
+   "frm": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "to": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.04
+  },
+  {
+   "frm_component": 10170,
+   "to_component": 10222,
+   "kind": "jump",
+   "frm": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "to": [
+    -43.8,
+    40.01,
+    65.5
+   ],
+   "horizontal": 1.12,
+   "dy": 1.05
+  },
+  {
+   "frm_component": 10170,
+   "to_component": 10226,
+   "kind": "jump",
+   "frm": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "to": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "horizontal": 1.8,
+   "dy": 0.01
+  },
+  {
+   "frm_component": 10170,
+   "to_component": 10294,
+   "kind": "jump",
+   "frm": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "to": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "horizontal": 2.83,
+   "dy": 0.19
+  },
+  {
+   "frm_component": 10198,
+   "to_component": 10170,
+   "kind": "jump",
+   "frm": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "to": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.04
+  },
+  {
+   "frm_component": 10198,
+   "to_component": 10226,
+   "kind": "jump",
+   "frm": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "to": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "horizontal": 1.12,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 10198,
+   "to_component": 10294,
+   "kind": "jump",
+   "frm": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "to": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "horizontal": 2.12,
+   "dy": 0.15
+  },
+  {
+   "frm_component": 10220,
+   "to_component": 10222,
+   "kind": "jump",
+   "frm": [
+    -45.8,
+    39.19,
+    65.5
+   ],
+   "to": [
+    -44.8,
+    39.6,
+    65.5
+   ],
+   "horizontal": 1.0,
+   "dy": 0.41
+  },
+  {
+   "frm_component": 10222,
+   "to_component": 10170,
+   "kind": "drop",
+   "frm": [
+    -43.8,
+    40.01,
+    65.5
+   ],
+   "to": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.05
+  },
+  {
+   "frm_component": 10222,
+   "to_component": 10198,
+   "kind": "drop",
+   "frm": [
+    -43.2,
+    40.38,
+    66.0
+   ],
+   "to": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "horizontal": 1.12,
+   "dy": -1.38
+  },
+  {
+   "frm_component": 10222,
+   "to_component": 10220,
+   "kind": "drop",
+   "frm": [
+    -44.8,
+    39.6,
+    65.5
+   ],
+   "to": [
+    -45.8,
+    39.19,
+    65.5
+   ],
+   "horizontal": 1.0,
+   "dy": -0.41
+  },
+  {
+   "frm_component": 10222,
+   "to_component": 10226,
+   "kind": "drop",
+   "frm": [
+    -42.8,
+    40.79,
+    66.5
+   ],
+   "to": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "horizontal": 1.41,
+   "dy": -1.82
+  },
+  {
+   "frm_component": 10222,
+   "to_component": 10294,
+   "kind": "drop",
+   "frm": [
+    -42.8,
+    40.79,
+    66.5
+   ],
+   "to": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "horizontal": 1.5,
+   "dy": -1.64
+  },
+  {
+   "frm_component": 10226,
+   "to_component": 10170,
+   "kind": "jump",
+   "frm": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "to": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "horizontal": 1.8,
+   "dy": -0.01
+  },
+  {
+   "frm_component": 10226,
+   "to_component": 10198,
+   "kind": "jump",
+   "frm": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "to": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "horizontal": 1.12,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 10226,
+   "to_component": 10294,
+   "kind": "jump",
+   "frm": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "to": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "horizontal": 1.12,
+   "dy": 0.18
+  },
+  {
+   "frm_component": 10244,
+   "to_component": 11133,
+   "kind": "jump",
+   "frm": [
+    -43.8,
+    18.86,
+    81.0
+   ],
+   "to": [
+    -43.2,
+    18.87,
+    80.5
+   ],
+   "horizontal": 0.71,
+   "dy": 0.01
+  },
+  {
+   "frm_component": 10294,
+   "to_component": 10170,
+   "kind": "jump",
+   "frm": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "to": [
+    -43.2,
+    38.96,
+    64.5
+   ],
+   "horizontal": 2.83,
+   "dy": -0.19
+  },
+  {
+   "frm_component": 10294,
+   "to_component": 10198,
+   "kind": "jump",
+   "frm": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "to": [
+    -42.8,
+    39.0,
+    65.0
+   ],
+   "horizontal": 2.12,
+   "dy": -0.15
+  },
+  {
+   "frm_component": 10294,
+   "to_component": 10226,
+   "kind": "jump",
+   "frm": [
+    -41.2,
+    39.15,
+    66.5
+   ],
+   "to": [
+    -41.8,
+    38.97,
+    65.5
+   ],
+   "horizontal": 1.12,
+   "dy": -0.18
+  },
+  {
+   "frm_component": 10336,
+   "to_component": 10460,
+   "kind": "drop",
+   "frm": [
+    -46.2,
+    41.13,
+    69.5
+   ],
+   "to": [
+    -46.2,
+    38.96,
+    70.5
+   ],
+   "horizontal": 1.0,
+   "dy": -2.17
+  },
+  {
+   "frm_component": 10713,
+   "to_component": 10987,
+   "kind": "jump",
+   "frm": [
+    -37.2,
+    47.59,
+    78.5
+   ],
+   "to": [
+    -36.8,
+    47.62,
+    79.0
+   ],
+   "horizontal": 0.71,
+   "dy": 0.03
+  },
+  {
+   "frm_component": 10890,
+   "to_component": 10713,
+   "kind": "drop",
+   "frm": [
+    -44.2,
+    51.71,
+    81.0
+   ],
+   "to": [
+    -44.2,
+    48.27,
+    81.0
+   ],
+   "horizontal": 0.0,
+   "dy": -3.44
+  },
+  {
+   "frm_component": 10890,
+   "to_component": 10987,
+   "kind": "drop",
+   "frm": [
+    -37.8,
+    49.16,
+    80.0
+   ],
+   "to": [
+    -36.8,
+    47.64,
+    79.5
+   ],
+   "horizontal": 1.12,
+   "dy": -1.53
+  },
+  {
+   "frm_component": 10890,
+   "to_component": 11383,
+   "kind": "drop",
+   "frm": [
+    -39.2,
+    48.47,
+    86.0
+   ],
+   "to": [
+    -38.8,
+    47.47,
+    87.0
+   ],
+   "horizontal": 1.12,
+   "dy": -0.99
+  },
+  {
+   "frm_component": 10987,
+   "to_component": 10713,
+   "kind": "jump",
+   "frm": [
+    -36.8,
+    47.62,
+    79.0
+   ],
+   "to": [
+    -37.2,
+    47.59,
+    78.5
+   ],
+   "horizontal": 0.71,
+   "dy": -0.03
+  },
+  {
+   "frm_component": 10987,
+   "to_component": 10890,
+   "kind": "jump",
+   "frm": [
+    -36.8,
+    47.64,
+    79.5
+   ],
+   "to": [
+    -37.2,
+    48.83,
+    80.5
+   ],
+   "horizontal": 1.12,
+   "dy": 1.2
+  },
+  {
+   "frm_component": 11133,
+   "to_component": 10244,
+   "kind": "jump",
+   "frm": [
+    -43.2,
+    18.87,
+    80.5
+   ],
+   "to": [
+    -43.8,
+    18.86,
+    81.0
+   ],
+   "horizontal": 0.71,
+   "dy": -0.01
+  },
+  {
+   "frm_component": 11383,
+   "to_component": 10890,
+   "kind": "jump",
+   "frm": [
+    -38.8,
+    47.47,
+    87.0
+   ],
+   "to": [
+    -39.8,
+    48.61,
+    86.5
+   ],
+   "horizontal": 1.12,
+   "dy": 1.14
+  }
+ ],
+ "passed": true
+}

@@ -117,6 +117,10 @@ var suppression: Suppression
 ## Respawn at the start position this long after the corpse is cleared
 ## (testing convenience; < 0 = never).
 @export var respawn_time := 5.0
+## Won't walk on over a drop deeper than this (m): platform levels like
+## Skyforge Arena. Knock-backs, blasts and black holes can still send it
+## over. Skirmishers steer round drops their own way.
+@export var ledge_drop := 3.0
 ## Torn apart by a black hole's core: blast force (sets how completely it
 ## breaks) and how hard the pieces are thrown (gently, they get pulled back).
 @export var swallow_force := 45.0
@@ -650,6 +654,17 @@ func _think() -> void:
 			_sep += off / d * (room - d)
 
 
+## Is there a drop deeper than `ledge_drop` just ahead along `dir`?
+func _drop_ahead(dir: Vector3) -> bool:
+	if ledge_drop <= 0.0 or dir.length_squared() < 0.01:
+		return false
+	var p := global_position + Vector3(dir.x, 0.0, dir.z).normalized() * 1.2
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 1.0, p + Vector3.DOWN * ledge_drop)
+	q.collision_mask = 1
+	q.exclude = [get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
 ## How many times its normal size this robot is (spacing from others).
 func _size_factor() -> float:
 	return 1.0
@@ -687,6 +702,13 @@ func _combat(delta: float) -> void:
 			_strafe_dir = -_strafe_dir
 			_strafe_t = randf_range(strafe_time.x, strafe_time.y)
 			want = Vector3.UP.cross(dir_to) * _strafe_dir * 0.8 + _sep * 1.5
+	# Don't walk off a ledge: try the other strafe side, else hold still.
+	if want.length_squared() > 0.01 and _drop_ahead(want.normalized()):
+		_strafe_dir = -_strafe_dir
+		_strafe_t = randf_range(strafe_time.x, strafe_time.y)
+		want = Vector3.UP.cross(dir_to) * _strafe_dir * 0.8
+		if _drop_ahead(want.normalized()):
+			want = Vector3.ZERO
 	var spd_want := combat_speed * (backpedal_speed_factor if _backing else 1.0)
 	want = want.normalized() * spd_want if want.length_squared() > 0.01 else Vector3.ZERO
 	var v := linear_velocity
@@ -862,6 +884,9 @@ func _patrol(delta: float) -> void:
 		elif off < -patrol_distance * 0.5:
 			_dir = 1.0
 		want = axis * _dir * walk_speed
+		if _drop_ahead(axis * _dir):
+			_dir = -_dir
+			want = Vector3.ZERO
 	# Being dragged around (e.g. by a gravity well): don't fight it.
 	if (hv - want).length() < 3.0:
 		hv += (want - hv).limit_length(walk_accel * delta)
