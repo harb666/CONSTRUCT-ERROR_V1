@@ -34,7 +34,7 @@ var _embers: CPUParticles3D
 
 ## A burst at `at`; `normal` points out of the surface it hit.
 static func spawn(tree: SceneTree, at: Vector3, normal: Vector3, power := 1.0) -> MagmaImpact:
-	_pool = _pool.filter(func(m: MagmaImpact) -> bool: return is_instance_valid(m) and m.is_inside_tree())
+	_pool = _pool.filter(func(m) -> bool: return is_instance_valid(m) and m.is_inside_tree())
 	for m in _pool:
 		if m.active and m._t < MERGE_TIME and m._at.distance_to(at) < MERGE_DIST:
 			m.strength = minf(m.strength + 0.15 * power, 1.5)

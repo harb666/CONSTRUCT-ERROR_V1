@@ -85,7 +85,7 @@ static func active_count() -> int:
 
 
 static func _take(parent: Node, missile_length: float) -> BossMissile:
-	_pool = _pool.filter(func(m: BossMissile) -> bool: return is_instance_valid(m) and m.is_inside_tree())
+	_pool = _pool.filter(func(m) -> bool: return is_instance_valid(m) and m.is_inside_tree())
 	for m in _pool:
 		if m.done and m._trail.is_done() and m._wait <= 0.0 and is_equal_approx(m.length, missile_length):
 			if m.get_parent() != parent:

@@ -46,7 +46,7 @@ static func play(skel: Skeleton3D, strength := 1.0) -> RobotDeathSparks:
 
 static func _take(tree: SceneTree) -> RobotDeathSparks:
 	var host: Node = tree.current_scene if tree.current_scene else tree.root
-	_pool = _pool.filter(func(p: RobotDeathSparks) -> bool: return is_instance_valid(p) and p.is_inside_tree())
+	_pool = _pool.filter(func(p) -> bool: return is_instance_valid(p) and p.is_inside_tree())
 	for p in _pool:
 		if p._t >= p.duration:
 			return p

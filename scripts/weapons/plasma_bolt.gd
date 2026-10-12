@@ -73,7 +73,7 @@ static func fire(tree: SceneTree, from: Vector3, dir: Vector3, by: Node, bolt_sp
 
 static func _take(tree: SceneTree) -> PlasmaBolt:
 	var host: Node = tree.current_scene if tree.current_scene else tree.root
-	_pool = _pool.filter(func(p: PlasmaBolt) -> bool: return is_instance_valid(p) and p.is_inside_tree())
+	_pool = _pool.filter(func(p) -> bool: return is_instance_valid(p) and p.is_inside_tree())
 	for p in _pool:
 		if not p.active:
 			return p

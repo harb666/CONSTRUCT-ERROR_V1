@@ -1158,7 +1158,7 @@ func _fire_one() -> void:
 
 ## Shared pool of machine-gun muzzle flashes (the player's yellow flash).
 func _flash(at: Vector3, dir: Vector3) -> void:
-	_flashes = _flashes.filter(func(f: MachineGunFlash) -> bool: return is_instance_valid(f) and f.is_inside_tree())
+	_flashes = _flashes.filter(func(f) -> bool: return is_instance_valid(f) and f.is_inside_tree())
 	var f: MachineGunFlash
 	if _flashes.size() < FLASH_POOL:
 		f = MachineGunFlash.new()

@@ -24,9 +24,12 @@ extends Node3D
 signal level_exit_entered(target: String, body: Node)
 
 const DIR := "res://levels/skyforge_arena"
-const LEVEL := preload("res://levels/skyforge_arena/mobile/level_mobile.glb")
-const BACKGROUND := preload("res://levels/skyforge_arena/mobile/background_mobile.glb")
-const COLLISION := preload("res://levels/skyforge_arena/mobile/collision.glb")
+## Loaded when the level starts, not preloaded: the script stays cached
+## after the level is gone (the hub lift), and preloads would keep the whole
+## level's meshes and textures in memory with it.
+const LEVEL := "res://levels/skyforge_arena/mobile/level_mobile.glb"
+const BACKGROUND := "res://levels/skyforge_arena/mobile/background_mobile.glb"
+const COLLISION := "res://levels/skyforge_arena/mobile/collision.glb"
 const APPLY_MOBILE := preload("res://levels/skyforge_arena/mobile/apply_mobile.gd")
 const SKY_SHADER := preload("res://scripts/world/preview_sky.gdshader")
 const APPLY_EFFECTS := preload("res://levels/skyforge_arena/fx/godot/apply_effects.gd")
@@ -49,13 +52,13 @@ var look: SkyforgePreviewLook
 
 func _ready() -> void:
 	env_data = _json(DIR + "/environment.json")
-	level = LEVEL.instantiate()
+	level = (load(LEVEL) as PackedScene).instantiate()
 	level.name = "Level"
 	add_child(level)
-	background = BACKGROUND.instantiate()
+	background = (load(BACKGROUND) as PackedScene).instantiate()
 	background.name = "Background"
 	add_child(background)
-	collision = COLLISION.instantiate()
+	collision = (load(COLLISION) as PackedScene).instantiate()
 	collision.name = "Collision"
 	add_child(collision)
 	# The collision meshes are only for shapes: never drawn.

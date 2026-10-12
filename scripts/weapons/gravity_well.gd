@@ -101,9 +101,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	# Bodies can be removed at any time (e.g. old debris despawning).
-	_captured = _captured.filter(func(e: Dictionary) -> bool: return is_instance_valid(e.body))
-	_release_queue = _release_queue.filter(func(q: Array) -> bool: return is_instance_valid(q[0].body))
-	_bodies = _bodies.filter(func(b: Variant) -> bool: return is_instance_valid(b))
+	_captured = _captured.filter(func(e) -> bool: return is_instance_valid(e.body))
+	_release_queue = _release_queue.filter(func(q) -> bool: return is_instance_valid(q[0].body))
+	_bodies = _bodies.filter(func(b) -> bool: return is_instance_valid(b))
 	if active:
 		_query_t -= delta
 		if _query_t <= 0.0:

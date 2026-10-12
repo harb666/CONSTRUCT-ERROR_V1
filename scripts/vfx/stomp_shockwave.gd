@@ -30,7 +30,7 @@ var _chunks: CPUParticles3D
 
 
 static func spawn(tree: SceneTree, at: Vector3, wave_radius: float) -> StompShockwave:
-	_pool = _pool.filter(func(s: StompShockwave) -> bool: return is_instance_valid(s) and s.is_inside_tree())
+	_pool = _pool.filter(func(s) -> bool: return is_instance_valid(s) and s.is_inside_tree())
 	var w: StompShockwave = null
 	for s in _pool:
 		if not s.active:

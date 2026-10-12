@@ -225,7 +225,10 @@
   It must look exactly like the map maker (owner asked): its materials use
   `preview_lit.gdshaderinc`, a port of the map maker preview's three.js
   lighting / fog / sky reflections (`SkyforgePreviewLook`); check changes
-  side by side with the preview (`pipeline/make_preview.py`). Grunts turn
+  side by side with the preview (`pipeline/make_preview.py`). One change from
+  it (owner asked): the panorama's bright pink patch behind the sun had hard
+  straight edges (two-tone sky), so it's now a soft glow round the sun
+  (`tools/smooth_sky_glow.py`; original in `sky/source/`). Grunts turn
   back from drops deeper than 3 m (`ledge_drop`). `?level=battle` / `toxic`.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green

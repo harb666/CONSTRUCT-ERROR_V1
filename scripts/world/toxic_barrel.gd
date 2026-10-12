@@ -9,7 +9,9 @@ extends StaticBody3D
 ## dents the boss, hurts players close by and sets off other barrels near
 ## it (a chain). While it waits its slime glows and bubbles out of the top.
 
-const MODEL := preload("res://assets/props/toxic_barrel/toxic_barrel.glb")
+## Loaded with the first barrel, not preloaded (the script stays cached
+## after the level is gone; a preload would keep the model in memory).
+const MODEL := "res://assets/props/toxic_barrel/toxic_barrel.glb"
 ## The model's base sits this far below its origin (m).
 const MODEL_BASE := 0.952
 
@@ -43,7 +45,7 @@ var _t := randf() * 10.0
 
 func _ready() -> void:
 	add_to_group(&"toxic_barrels")
-	model = MODEL.instantiate()
+	model = (load(MODEL) as PackedScene).instantiate()
 	model.name = "Model"
 	add_child(model)
 	model.position = Vector3.UP * MODEL_BASE

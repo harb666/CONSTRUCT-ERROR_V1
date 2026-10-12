@@ -51,7 +51,7 @@ static func play_on_bone(skel: Skeleton3D, bone: int, strength_k := 1.0, offset 
 static func _take(tree: SceneTree) -> JointSparks:
 	var host: Node = tree.current_scene if tree.current_scene else tree.root
 	# Drop pooled effects that went away with an old scene.
-	_pool = _pool.filter(func(f: JointSparks) -> bool: return is_instance_valid(f) and f.is_inside_tree())
+	_pool = _pool.filter(func(f) -> bool: return is_instance_valid(f) and f.is_inside_tree())
 	if _pool.size() < POOL_SIZE:
 		var f := JointSparks.new()
 		host.add_child(f)

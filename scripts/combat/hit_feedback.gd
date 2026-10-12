@@ -339,7 +339,7 @@ func _scrap(at: Vector3, dir: Vector3, n: int) -> void:
 
 func _take_chips() -> CPUParticles3D:
 	var host: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root
-	_chips = _chips.filter(func(c: CPUParticles3D) -> bool: return is_instance_valid(c) and c.is_inside_tree())
+	_chips = _chips.filter(func(c) -> bool: return is_instance_valid(c) and c.is_inside_tree())
 	for c in _chips:
 		if not c.emitting:
 			return c

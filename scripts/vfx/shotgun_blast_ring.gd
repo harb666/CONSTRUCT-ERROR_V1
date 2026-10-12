@@ -37,7 +37,7 @@ var _dir := Vector3.FORWARD
 
 
 static func spawn(tree: SceneTree, at: Vector3, dir: Vector3) -> ShotgunBlastRing:
-	_pool = _pool.filter(func(m: ShotgunBlastRing) -> bool: return is_instance_valid(m) and m.is_inside_tree())
+	_pool = _pool.filter(func(m) -> bool: return is_instance_valid(m) and m.is_inside_tree())
 	var r: ShotgunBlastRing = null
 	for m in _pool:
 		if not m.active:

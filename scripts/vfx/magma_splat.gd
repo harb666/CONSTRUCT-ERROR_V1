@@ -31,7 +31,7 @@ var _mat: ShaderMaterial
 
 
 static func spawn(tree: SceneTree, at: Vector3, normal: Vector3) -> MagmaSplat:
-	_pool = _pool.filter(func(m: MagmaSplat) -> bool: return is_instance_valid(m) and m.is_inside_tree())
+	_pool = _pool.filter(func(m) -> bool: return is_instance_valid(m) and m.is_inside_tree())
 	for m in _pool:
 		if m.active and m._t < MERGE_TIME and m.global_position.distance_to(at) < MERGE_DIST:
 			m.size = minf(m.size + 0.18, SIZE_MAX)

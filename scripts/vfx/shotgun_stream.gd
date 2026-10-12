@@ -95,7 +95,7 @@ static func active_count() -> int:
 
 static func _take(tree: SceneTree) -> ShotgunStream:
 	var host: Node = tree.current_scene if tree.current_scene else tree.root
-	_pool = _pool.filter(func(p: ShotgunStream) -> bool: return is_instance_valid(p) and p.is_inside_tree())
+	_pool = _pool.filter(func(p) -> bool: return is_instance_valid(p) and p.is_inside_tree())
 	for p in _pool:
 		if not p.active:
 			return p

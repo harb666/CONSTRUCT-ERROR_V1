@@ -24,7 +24,7 @@ var _roll := 0.0
 
 ## A burst at `at`, `size` m across, tinted `col`.
 static func spawn(tree: SceneTree, at: Vector3, col: Color, burst_size := 0.5) -> HitStar:
-	_pool = _pool.filter(func(h: HitStar) -> bool: return is_instance_valid(h) and h.is_inside_tree())
+	_pool = _pool.filter(func(h) -> bool: return is_instance_valid(h) and h.is_inside_tree())
 	var b: HitStar = null
 	for h in _pool:
 		if not h.active:

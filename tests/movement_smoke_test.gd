@@ -541,6 +541,7 @@ func _run() -> void:
 	await _level_flow_tests()
 	await _net_tests()
 	await _music_tests()
+	await _level_change_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4608,6 +4609,48 @@ func _net_tests() -> void:
 ## Music (owner's tracks): the main menu music on the menus once loaded,
 ## Level 1's (quieter) as the players arrive in Skyforge; a level without
 ## its own music stops the menu music.
+## Leaving a level (the hub lift): effect pools whose nodes went with it
+## refill cleanly (they used to choke on the freed nodes), and Skyforge's
+## level models don't stay in memory once it's gone.
+func _level_change_tests() -> void:
+	var prev := current_scene
+	var shooter := Node3D.new()
+	root.add_child(shooter)
+	var lvl := Node3D.new()
+	root.add_child(lvl)
+	current_scene = lvl
+	PlasmaBolt.fire(self, Vector3(0, 60, 0), Vector3.FORWARD, shooter)
+	PlasmaFx.flash_light(self, Vector3(0, 60, 0), Color.GREEN)
+	await _ticks(2)
+	lvl.queue_free()
+	await _ticks(2)
+	var lvl2 := Node3D.new()
+	root.add_child(lvl2)
+	current_scene = lvl2
+	var b := PlasmaBolt.fire(self, Vector3(0, 60, 0), Vector3.FORWARD, shooter)
+	PlasmaFx.flash_light(self, Vector3(0, 60, 0), Color.GREEN)
+	_check(b != null and is_instance_valid(b) and b.is_inside_tree() and PlasmaBolt._pool.all(func(p) -> bool: return is_instance_valid(p))
+		and PlasmaFx._lights.all(func(l) -> bool: return is_instance_valid(l)),
+		"level change: effect pools drop the old level's nodes and fire in the new one")
+	lvl2.queue_free()
+	shooter.queue_free()
+	current_scene = prev
+	await _ticks(2)
+	var sf: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
+	root.add_child(sf)
+	await _ticks(5)
+	# Weak references to a mesh of the level, the background and a barrel.
+	var refs: Array[WeakRef] = []
+	var arena: Node = sf.get_node("SkyforgeArena")
+	for n: Node in [arena.level, arena.background, sf.find_children("*", "ToxicBarrel", true, false)[0]]:
+		var mi := n.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+		refs.append(weakref(mi.mesh))
+	_check(refs.all(func(r: WeakRef) -> bool: return r.get_ref() != null), "level change: Skyforge's models are in memory while it runs")
+	sf.queue_free()
+	await _ticks(5)
+	_check(refs.all(func(r: WeakRef) -> bool: return r.get_ref() == null), "level change: and freed once it's gone (not kept with its scripts)")
+
+
 func _music_tests() -> void:
 	_check(Music.MAIN_MENU is AudioStreamOggVorbis and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop,
 		"music: the owner's menu and level 1 tracks are in, looping")

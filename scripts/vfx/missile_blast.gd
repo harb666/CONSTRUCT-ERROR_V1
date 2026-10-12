@@ -46,7 +46,7 @@ var _debris: CPUParticles3D
 
 
 static func spawn(parent: Node, at: Vector3, blast_radius: float, scale_fx := 1.0, on_ground := true, floor_point := Vector3.INF) -> MissileBlast:
-	_pool = _pool.filter(func(b: MissileBlast) -> bool: return is_instance_valid(b) and b.is_inside_tree())
+	_pool = _pool.filter(func(b) -> bool: return is_instance_valid(b) and b.is_inside_tree())
 	var b: MissileBlast = null
 	for p in _pool:
 		if not p.active:

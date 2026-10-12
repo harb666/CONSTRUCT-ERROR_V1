@@ -53,7 +53,7 @@ var _done := {}
 
 
 static func fire(tree: SceneTree, at: Vector3, dir: Vector3, from: Node3D) -> FrostBlizzard:
-	_pool = _pool.filter(func(b: FrostBlizzard) -> bool: return is_instance_valid(b) and b.is_inside_tree())
+	_pool = _pool.filter(func(b) -> bool: return is_instance_valid(b) and b.is_inside_tree())
 	var b: FrostBlizzard = null
 	for p in _pool:
 		if not p.active:

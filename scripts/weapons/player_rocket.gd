@@ -120,7 +120,7 @@ static func active_count() -> int:
 
 
 static func _take(parent: Node) -> PlayerRocket:
-	_pool = _pool.filter(func(r: PlayerRocket) -> bool: return is_instance_valid(r) and r.is_inside_tree())
+	_pool = _pool.filter(func(r) -> bool: return is_instance_valid(r) and r.is_inside_tree())
 	for r in _pool:
 		if r.done and r._trail.is_done() and r._wait <= 0.0:
 			if r.get_parent() != parent:

@@ -95,7 +95,7 @@ static func _host(tree: SceneTree) -> Node:
 
 static func _take(tree: SceneTree, k: Kind) -> PlasmaFx:
 	var pool: Array[PlasmaFx] = _flashes if k == Kind.FLASH else _impacts
-	var valid := pool.filter(func(p: PlasmaFx) -> bool: return is_instance_valid(p) and p.is_inside_tree())
+	var valid := pool.filter(func(p) -> bool: return is_instance_valid(p) and p.is_inside_tree())
 	pool.assign(valid)
 	for p in pool:
 		if not p.is_processing():
@@ -116,7 +116,7 @@ static func _take(tree: SceneTree, k: Kind) -> PlasmaFx:
 
 
 static func _flash_light(tree: SceneTree, at: Vector3, col := GREEN, energy := 3.0) -> void:
-	_lights = _lights.filter(func(l: OmniLight3D) -> bool: return is_instance_valid(l) and l.is_inside_tree())
+	_lights = _lights.filter(func(l) -> bool: return is_instance_valid(l) and l.is_inside_tree())
 	if _lights.size() < MAX_LIGHTS:
 		var l := OmniLight3D.new()
 		l.light_color = GREEN
