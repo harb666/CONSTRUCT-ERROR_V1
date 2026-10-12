@@ -2942,6 +2942,8 @@ func _weapon_switch_tests(main: Node) -> void:
 	h.equip(cannon, "Left")
 	for i in 10:
 		await process_frame
+	# (The wheel eases closed in real time: give slow / busy runners time.)
+	await _wall_wait(func() -> bool: return Engine.time_scale == 1.0, 3.0)
 	_check(Engine.time_scale == 1.0, "game speed back to normal")
 
 
