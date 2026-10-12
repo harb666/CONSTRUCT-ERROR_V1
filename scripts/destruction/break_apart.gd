@@ -336,51 +336,80 @@ func _make_piece(group: Array[BreakSection], info: DamageInfo, power: float, bas
 ## directions, in that bone's space (cached per mesh) - a small point set
 ## whose hull hugs the part however its joints are bent.
 static func _outline(mi: MeshInstance3D, sk: Skeleton3D) -> Dictionary:
-	var key := mi.mesh.get_instance_id()
+	return outline_of(mi.mesh, mi.skin, sk)
+
+
+static var _outline_dirs: Array[Vector3] = []
+
+
+## `_outline` of a mesh + skin (bones looked up by name in `sk` where the
+## skin doesn't name them). Also the skirmisher's corpse outline. Costly the
+## first time per mesh (every vertex), so skirmishers work it out while the
+## level loads (`RobotSkirmisher._warm_outlines`).
+static func outline_of(mesh: Mesh, skin: Skin, sk: Skeleton3D) -> Dictionary:
+	var key := mesh.get_instance_id()
 	if _outline_cache.has(key):
 		return _outline_cache[key]
-	var dirs: Array[Vector3] = []
-	for x in [-1, 0, 1]:
-		for y in [-1, 0, 1]:
-			for z in [-1, 0, 1]:
-				if x != 0 or y != 0 or z != 0:
-					dirs.append(Vector3(x, y, z).normalized())
-	var best := {}
-	var skin := mi.skin
-	for k in mi.mesh.get_surface_count():
-		var arr := mi.mesh.surface_get_arrays(k)
+	if _outline_dirs.is_empty():
+		for x in [-1, 0, 1]:
+			for y in [-1, 0, 1]:
+				for z in [-1, 0, 1]:
+					if x != 0 or y != 0 or z != 0:
+						_outline_dirs.append(Vector3(x, y, z).normalized())
+	var dirs := _outline_dirs
+	var nd := dirs.size()
+	var best := {}  # bone -> [points by direction]
+	var reach := {}  # bone -> PackedFloat64Array: those points' extent along each direction
+	for k in mesh.get_surface_count():
+		var arr := mesh.surface_get_arrays(k)
 		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 		var bones = arr[Mesh.ARRAY_BONES]
 		var weights = arr[Mesh.ARRAY_WEIGHTS]
 		if skin == null or bones == null or weights == null or verts.is_empty():
 			continue
 		var per: int = (bones as Array).size() / verts.size()
+		var bind_bone := {}  # bind -> bone (or -1)
 		for i in verts.size():
 			var bi := 0
 			for j in per:
 				if weights[i * per + j] > weights[i * per + bi]:
 					bi = j
 			var bind: int = bones[i * per + bi]
-			var bone := skin.get_bind_bone(bind)
-			if bone < 0:
-				bone = sk.find_bone(skin.get_bind_name(bind))
+			var bone: int
+			if bind_bone.has(bind):
+				bone = bind_bone[bind]
+			else:
+				bone = skin.get_bind_bone(bind)
+				if bone < 0:
+					bone = sk.find_bone(skin.get_bind_name(bind))
+				bind_bone[bind] = bone
 			if bone < 0:
 				continue
 			var p := skin.get_bind_pose(bind) * verts[i]
 			if not best.has(bone):
 				var init := []
+				var ext := PackedFloat64Array()
 				for d in dirs:
 					init.append(p)
+					ext.append(p.dot(d))
 				best[bone] = init
+				reach[bone] = ext
 			var pts: Array = best[bone]
-			for d in dirs.size():
-				if p.dot(dirs[d]) > (pts[d] as Vector3).dot(dirs[d]):
+			var ext: PackedFloat64Array = reach[bone]
+			for d in nd:
+				var e := p.dot(dirs[d])
+				if e > ext[d]:
 					pts[d] = p
+					ext[d] = e
 	var out := {}
 	for b in best:
 		out[b] = PackedVector3Array(best[b])
 	_outline_cache[key] = out
 	return out
+
+
+static func has_outline(mesh: Mesh) -> bool:
+	return _outline_cache.has(mesh.get_instance_id())
 
 
 func _joint_position(s: BreakSection, sk: Skeleton3D) -> Vector3:

@@ -210,7 +210,8 @@
   the owner's (below): ice blaster firing (+6 dB, owner asked for it way
   louder); frozen robots play the two frozen sounds one after the other
   while frozen, quiet unless the player is near (full within 2.5 m, silent
-  at 9 m; boss 5-15 m).
+  at 9 m; boss 5-15 m). Its textures are stored like the other weapons'
+  (1024, GPU-compressed; they were 2048 raw, ~64 MB of graphics memory).
 
 - Heavy weapons (owner asked): the Black Hole Generator and the Frost Byte
   (`WeaponDefinition.heavy`) - right arm only, so never two at once; only

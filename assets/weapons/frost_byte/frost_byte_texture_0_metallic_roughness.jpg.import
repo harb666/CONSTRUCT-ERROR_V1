@@ -3,9 +3,11 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bp1wx6flq6bkx"
-path="res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.ctex"
+path.s3tc="res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.s3tc.ctex"
+path.etc2="res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "4ffd121ab92d1cd0b6341be37a2c86f2"
@@ -14,11 +16,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/weapons/frost_byte/frost_byte_texture_0_metallic_roughness.jpg"
-dest_files=["res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.ctex"]
+dest_files=["res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.s3tc.ctex", "res://.godot/imported/frost_byte_texture_0_metallic_roughness.jpg-e623d4710c004b7f820feb10c1dfbd86.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -39,5 +41,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=0
-detect_3d/compress_to=1
+process/size_limit=1024
+detect_3d/compress_to=0

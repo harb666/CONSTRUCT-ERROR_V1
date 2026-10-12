@@ -542,6 +542,7 @@ func _run() -> void:
 	await _net_tests()
 	await _music_tests()
 	await _level_change_tests()
+	await _optimisation_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _vfx_tests()
@@ -4651,6 +4652,37 @@ func _level_change_tests() -> void:
 	sf.queue_free()
 	await _ticks(5)
 	_check(refs.all(func(r: WeakRef) -> bool: return r.get_ref() == null), "level change: and freed once it's gone (not kept with its scripts)")
+
+
+## Optimisations that must not change anything you see: the Frost Byte's
+## textures are stored like the other weapons' (1024, GPU-compressed, not
+## 2048 raw: ~64 MB of graphics memory), and a skirmisher's outlines (corpse
+## settling, break-off pieces: one shared calculation) are worked out while
+## it loads, not as the first one dies.
+func _optimisation_tests() -> void:
+	var big := 0
+	for t in ["frost_byte_texture_0.jpg", "frost_byte_normal.jpg", "frost_byte_texture_0_metallic_roughness.jpg"]:
+		var tex: Texture2D = load("res://assets/weapons/frost_byte/" + t)
+		big = maxi(big, maxi(tex.get_width(), tex.get_height()))
+	_check(big <= 1024, "optimisation: Frost Byte textures stored at 1024 like the other weapons (%d)" % big)
+	var holder := Node3D.new()
+	root.add_child(holder)
+	var s: RobotSkirmisher = load("res://scenes/enemies/robot_skirmisher.tscn").instantiate()
+	holder.add_child(s)
+	s.global_position = Vector3(0, 60, 0)
+	await _ticks(12)
+	var warm := true
+	for sec in s._sections:
+		var m: Mesh = sec.mesh if sec.mesh else s._section_meshes.get(sec)
+		if m and not BreakApart.has_outline(m):
+			warm = false
+	_check(warm and s._sections.size() > 0, "optimisation: a skirmisher's outlines are ready soon after it appears")
+	var sec0: MeshInstance3D = s._sections[0]
+	if sec0.mesh == null:
+		sec0.mesh = s._section_meshes[sec0]
+	_check(s._section_hull(sec0) == BreakApart._outline(sec0, s._skeleton), "optimisation: corpse outline and break-off outline are one calculation")
+	holder.queue_free()
+	await _ticks(2)
 
 
 func _music_tests() -> void:

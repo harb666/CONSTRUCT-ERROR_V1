@@ -257,6 +257,24 @@ func _ready() -> void:
 	if tg:
 		tg.position.y *= size_scale
 	_hop_t = randf_range(hop_time.x, hop_time.y)
+	_warm_outlines.call_deferred()
+
+
+## Work out the sections' outlines (corpse settling, break-off pieces) while
+## the level loads, one section a frame, instead of all at once at the first
+## skirmisher death (a stall on phones). Shared by every skirmisher.
+func _warm_outlines() -> void:
+	for sec in _sections.duplicate():
+		if not is_inside_tree():
+			return
+		if not is_instance_valid(sec):
+			continue
+		var m: Mesh = sec.mesh if sec.mesh else _section_meshes.get(sec)
+		if m == null or BreakApart.has_outline(m):
+			continue
+		await get_tree().process_frame
+		if is_inside_tree() and is_instance_valid(sec):
+			BreakApart.outline_of(m, sec.skin, _skeleton)
 
 
 # --- Model ---
@@ -1331,11 +1349,6 @@ func _on_mixer_applied() -> void:
 
 # --- Corpse grounding ---
 
-## Per section mesh: { bone index: PackedVector3Array } - each bone's
-## outermost vertices (bone space; every part is rigid to one bone).
-static var _hull_cache := {}
-## Directions the outermost points are taken along (26: axes, edges, corners).
-static var _hull_dirs: Array[Vector3] = []
 ## The corpse settled onto the floor (tests), and how far its lowest part
 ## was off the floor when the death clip ended (m).
 var corpse_settled := false
@@ -1443,52 +1456,10 @@ func _exit_tree() -> void:
 		get_tree().physics_frame.disconnect(_follow_settle)
 
 
+## Per bone, the section's outermost points (shared with its break-off
+## pieces' outlines: BreakApart.outline_of, the same calculation and cache).
 func _section_hull(sec: MeshInstance3D) -> Dictionary:
-	var key := sec.mesh.get_instance_id()
-	if _hull_cache.has(key):
-		return _hull_cache[key]
-	if _hull_dirs.is_empty():
-		for x in [-1, 0, 1]:
-			for y in [-1, 0, 1]:
-				for z in [-1, 0, 1]:
-					if x != 0 or y != 0 or z != 0:
-						_hull_dirs.append(Vector3(x, y, z).normalized())
-	var best := {}  # bone -> [points by direction]
-	var skin := sec.skin
-	for k in sec.mesh.get_surface_count():
-		var arr := sec.mesh.surface_get_arrays(k)
-		var verts: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-		var bones = arr[Mesh.ARRAY_BONES]
-		var weights = arr[Mesh.ARRAY_WEIGHTS]
-		if bones == null or weights == null or skin == null:
-			continue
-		var per := (bones as Array).size() / maxi(verts.size(), 1)
-		for i in verts.size():
-			var bi := 0
-			for j in per:
-				if weights[i * per + j] > weights[i * per + bi]:
-					bi = j
-			var bind: int = bones[i * per + bi]
-			var bone := skin.get_bind_bone(bind)
-			if bone < 0:
-				bone = _skeleton.find_bone(skin.get_bind_name(bind))
-			if bone < 0:
-				continue
-			var p := skin.get_bind_pose(bind) * verts[i]
-			if not best.has(bone):
-				var init := []
-				for d in _hull_dirs:
-					init.append(p)
-				best[bone] = init
-			var pts: Array = best[bone]
-			for d in _hull_dirs.size():
-				if p.dot(_hull_dirs[d]) > (pts[d] as Vector3).dot(_hull_dirs[d]):
-					pts[d] = p
-	var out := {}
-	for b in best:
-		out[b] = PackedVector3Array(best[b])
-	_hull_cache[key] = out
-	return out
+	return BreakApart.outline_of(sec.mesh, sec.skin, _skeleton)
 
 
 func _death_options(info: DamageInfo) -> Array:
