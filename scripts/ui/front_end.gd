@@ -51,6 +51,13 @@ var _preview_vp: SubViewport
 var _preview_pivot: Node3D
 var _preview_def: CharacterDefinition
 var _buttons := {}  # id -> Rect2 (this frame's layout)
+## Backdrop (tint + scrolling grid) and the title emblem's turning rings, as
+## layers drawn under this control's own drawing: the emblem is drawn once
+## and turned, not redrawn every frame (a redraw remakes its graphics
+## buffers - see HudStyle.fill).
+var _backdrop: HudSpinLayer
+var _emblem: Array[HudSpinLayer] = []
+var _emblem_at := Vector3.INF
 ## Room-code number pad (JOIN).
 var pad_open := false
 var pad_code := ""
@@ -74,6 +81,32 @@ func _ready() -> void:
 		selected = roster.characters[0]
 	if FileAccess.file_exists("res://build_info.txt"):
 		_build = FileAccess.get_file_as_string("res://build_info.txt").strip_edges()
+	_backdrop = HudSpinLayer.new()
+	_backdrop.name = "Backdrop"
+	_backdrop.show_behind_parent = true
+	_backdrop.painter = func(ci: CanvasItem) -> void:
+		var a := _fade
+		var r := Rect2(Vector2.ZERO, size)
+		ci.draw_rect(r, Color(HudStyle.BG, (0.86 if screen == Screen.TITLE else 0.9) * a))
+		HudStyle.grid(ci, r, 48.0, Color(HudStyle.CYAN, 0.05 * a), Vector2(_t * 6.0, _t * 3.0))
+	add_child(_backdrop)
+	move_child(_backdrop, 0)
+
+
+## The title emblem's layers at `ec` (radius `er`), faded by `a`.
+func _show_emblem(ec: Vector2, er: float, a: float) -> void:
+	var at := Vector3(ec.x, ec.y, er)
+	if at != _emblem_at:
+		for l in _emblem:
+			l.queue_free()
+		_emblem = HudStyle.emblem_layers(self, ec, er)
+		for i in _emblem.size():
+			move_child(_emblem[i], 1 + i)
+		_emblem_at = at
+	for l in _emblem:
+		l.visible = true
+		l.modulate = Color(1, 1, 1, a)
+	HudStyle.spin_layers(_emblem, _t)
 
 
 func _process(delta: float) -> void:
@@ -97,6 +130,12 @@ func _process(delta: float) -> void:
 		if _fade <= 0.0:
 			queue_free()
 			return
+	_backdrop.queue_redraw()
+	if screen == Screen.TITLE:
+		_show_emblem(Vector2(size.x * 0.5, size.y * 0.6), minf(size.y * 0.13, 96.0), _fade)
+	else:
+		for l in _emblem:
+			l.visible = false
 	queue_redraw()
 
 
@@ -374,7 +413,7 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 	if def.banner:
 		draw_texture_rect(def.banner, Rect2(p, Vector2(cr.size.x, ah)), false, Color(dim, dim, dim, a))
 	else:
-		draw_colored_polygon(art, Color(HudStyle.FILL, a))
+		HudStyle.fill(self, art, Color(HudStyle.FILL, a))
 	# Scan lines across the art.
 	var y := 3.0
 	while y < ah:
@@ -393,7 +432,7 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 	var px := p.x - step * 4.0
 	var plate := PackedVector2Array([Vector2(px, py), Vector2(px + pw, py),
 		Vector2(px + pw - step * PLATE_H, py + PLATE_H), Vector2(px - step * PLATE_H, py + PLATE_H)])
-	draw_colored_polygon(plate, Color(HudStyle.CYAN, 0.9 * a) if sel else Color(HudStyle.FILL_DARK, 0.9 * a))
+	HudStyle.fill(self, plate, Color(HudStyle.CYAN, 0.9 * a) if sel else Color(HudStyle.FILL_DARK, 0.9 * a))
 	var po := plate.duplicate()
 	po.append(plate[0])
 	draw_polyline(po, Color(HudStyle.CYAN, a), 1.5, true)
@@ -416,9 +455,7 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 func _draw() -> void:
 	_buttons.clear()
 	var a := _fade
-	var r := Rect2(Vector2.ZERO, size)
-	draw_rect(r, Color(HudStyle.BG, (0.86 if screen == Screen.TITLE else 0.9) * a))
-	HudStyle.grid(self, r, 48.0, Color(HudStyle.CYAN, 0.05 * a), Vector2(_t * 6.0, _t * 3.0))
+	# (Backdrop and title emblem: the layers underneath, see _process.)
 	if screen == Screen.TITLE:
 		_draw_title(a)
 	else:
@@ -451,7 +488,7 @@ func _draw_title(a: float) -> void:
 	# Emblem + button.
 	var ec := Vector2(cx, size.y * 0.6)
 	var er := minf(size.y * 0.13, 96.0)
-	HudStyle.emblem(self, ec, er, _t, HudStyle.CYAN, a)
+	# (Emblem: the turning layers underneath, placed in _process.)
 	var btn := Rect2(Vector2(cx - 170, ec.y + er + 26), Vector2(340, 58))
 	if not loaded:
 		# Loading gauge (reference sheet's percentage rings).
@@ -553,7 +590,7 @@ func _draw_select(a: float) -> void:
 		var mate: Dictionary = by_slot.get(i + 1, {}) if not you else {}
 		HudStyle.panel(self, rr, HudStyle.CYAN if you else HudStyle.CYAN_DIM, HudStyle.FILL if you else Color(HudStyle.FILL_DARK, 0.5), 8.0, a)
 		var chip := Rect2(rr.position + Vector2(10, (row_h - 22) * 0.5), Vector2(36, 22))
-		draw_colored_polygon(HudStyle.chamfer(chip, [6.0, 0.0, 6.0, 0.0]), Color(HudStyle.CYAN, (1.0 if you else 0.35) * a))
+		HudStyle.fill(self, HudStyle.chamfer(chip, [6.0, 0.0, 6.0, 0.0]), Color(HudStyle.CYAN, (1.0 if you else 0.35) * a))
 		HudStyle.text(self, nf, Vector2(chip.get_center().x, chip.end.y - 5), "P%d" % (i + 1), 13, Color(HudStyle.BG, a), 0.5)
 		var ty := rr.get_center().y + 7
 		if you:

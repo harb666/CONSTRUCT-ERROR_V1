@@ -22,6 +22,11 @@ var _trail := [[1.0, 0.0], [0.0, 0.0]]
 var _t := 0.0
 var _circle_uv := PackedVector2Array()
 var _circle := PackedVector2Array()
+## The portrait ring's turning layers (drawn once, rotated each frame).
+var _emblem: Array[HudSpinLayer] = []
+## What the panel showed when last drawn: it's redrawn only when that
+## changes (every redraw remakes its graphics buffers - see HudStyle.fill).
+var _shown := []
 
 
 func _ready() -> void:
@@ -32,6 +37,7 @@ func _ready() -> void:
 		var v := Vector2.from_angle(TAU * i / 32.0)
 		_circle.append(v)
 		_circle_uv.append(Vector2(0.5, 0.5) + v * 0.5)
+	_emblem = HudStyle.emblem_layers(self, Vector2(RING_R + 4, RING_R + 6), RING_R)
 	_place()
 	get_viewport().size_changed.connect(_place)
 
@@ -52,7 +58,30 @@ func _process(delta: float) -> void:
 	var drops := RecoveryDrops.get_for(get_tree()) if is_inside_tree() else null
 	if drops and not drops.collected.is_connected(_on_collected):
 		drops.collected.connect(_on_collected)
-	queue_redraw()
+	for l in _emblem:
+		l.visible = player != null
+	HudStyle.spin_layers(_emblem, _t)
+	var now := _state()
+	if now != _shown:
+		_shown = now
+		queue_redraw()
+
+
+## Everything `_draw` shows (besides the turning ring).
+func _state() -> Array:
+	if player == null:
+		return []
+	var pd := player.get_node_or_null("PerfectDodge") as PerfectDodge
+	var drops := get_tree().get_first_node_in_group(RecoveryDrops.GROUP) as RecoveryDrops
+	var st := [player, player.character, player.player_id, player.health, player.max_health, player.armour, player.max_armour,
+		_trail[0][0], _trail[1][0], _flash[0], _flash[1], pd != null and pd.counter_active(),
+		drops != null and drops.bonus_active(), drops.streak_bonus if drops else 0.0]
+	for n in get_tree().get_nodes_in_group(&"players"):
+		var mate := n as PlayerController
+		if mate == null or mate == player:
+			continue
+		st.append_array([mate, mate.character, mate.player_id, mate.health, mate.max_health])
+	return st
 
 
 func _update_trail(i: int, frac: float, delta: float) -> void:
@@ -76,14 +105,13 @@ func _draw() -> void:
 	var lf := HudStyle.label_font()
 	var nf := HudStyle.num_font()
 	var def := player.character
-	# Portrait ring.
+	# Portrait ring (its turning layers are drawn underneath, see _emblem).
 	var c := Vector2(RING_R + 4, RING_R + 6)
-	HudStyle.emblem(self, c, RING_R, _t)
 	if def and def.portrait:
 		var pts := PackedVector2Array()
 		for v in _circle:
 			pts.append(c + v * RING_R * 0.66)
-		draw_colored_polygon(pts, Color.WHITE, _circle_uv, def.portrait)
+		HudStyle.fill(self, pts, Color.WHITE, _circle_uv, def.portrait)
 	else:
 		HudStyle.text(self, nf, c + Vector2(0, 8), "P%d" % player.player_id, 22, HudStyle.TEXT, 0.5)
 	# Name plate.
@@ -92,7 +120,7 @@ func _draw() -> void:
 	HudStyle.panel(self, plate, HudStyle.CYAN, HudStyle.FILL, 8.0)
 	HudStyle.text(self, lf, Vector2(x0 + 12, 24), def.display_name if def else "PLAYER", 21, HudStyle.TEXT)
 	var chip := Rect2(plate.end.x - 40, 8, 32, 18)
-	draw_colored_polygon(HudStyle.chamfer(chip, [5.0, 0.0, 5.0, 0.0]), HudStyle.CYAN)
+	HudStyle.fill(self, HudStyle.chamfer(chip, [5.0, 0.0, 5.0, 0.0]), HudStyle.CYAN)
 	HudStyle.text(self, nf, Vector2(chip.get_center().x, 23), "P%d" % player.player_id, 13, HudStyle.BG, 0.5)
 	# Bars.
 	var h := player.health / maxf(player.max_health, 1.0)
@@ -124,7 +152,7 @@ func _tag(x: float, s: String, col: Color) -> float:
 	var lf := HudStyle.label_font()
 	var w := lf.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 18
 	var r := Rect2(x, 78, w, 20)
-	draw_colored_polygon(HudStyle.chamfer(r, [6.0, 0.0, 6.0, 0.0]), Color(col, 0.22))
+	HudStyle.fill(self, HudStyle.chamfer(r, [6.0, 0.0, 6.0, 0.0]), Color(col, 0.22))
 	var pts := HudStyle.chamfer(r, [6.0, 0.0, 6.0, 0.0])
 	pts.append(pts[0])
 	draw_polyline(pts, col, 1.5, true)

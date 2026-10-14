@@ -12,6 +12,9 @@ const SIDES := ["Left", "Right"]
 
 var holder: WeaponHolder
 var _fire_glow := {"Left": 0.0, "Right": 0.0}
+## What the boxes showed when last drawn: redrawn only when that changes
+## (every redraw remakes graphics buffers - see HudStyle.fill).
+var _shown := []
 
 
 func _ready() -> void:
@@ -32,7 +35,14 @@ func _place() -> void:
 func _process(delta: float) -> void:
 	for s in SIDES:
 		_fire_glow[s] = maxf(_fire_glow[s] - delta * 4.0, 0.0)
-	queue_redraw()
+	var now := []
+	if holder:
+		for s in SIDES:
+			var w := holder.weapon(s)
+			now.append_array([w, w.definition if w else null, _fire_glow[s], status_of(w) if w else null])
+	if now != _shown:
+		_shown = now
+		queue_redraw()
 
 
 ## [fraction 0..1, label, colour] for a weapon's status bar.

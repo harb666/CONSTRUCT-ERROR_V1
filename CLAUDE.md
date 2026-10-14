@@ -253,6 +253,11 @@
   (`Net`, `NetPlayerInput`, `RobotEnemy.net_puppet`). Two-game test:
   `tests/run_net_pair.sh godot` (also in CI).
 
+- HUD / menus: fill shapes with `HudStyle.fill` (batched), not
+  `draw_colored_polygon`, and only redraw a panel when what it shows changes
+  (spinning rings / the move stick are layers that rotate / move). Every
+  polygon / AA line drawn makes graphics buffers again on each redraw: the
+  HUD made ~400 a frame, and iPhone Safari closed the page after ~2.5 min.
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

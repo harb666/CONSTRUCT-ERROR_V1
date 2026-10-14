@@ -45,6 +45,28 @@ static func _font(path: String) -> Font:
 	return _fonts[path]
 
 
+## Fills a convex polygon (cut-corner panels, bar segments, plates, the
+## portrait disc with `uvs` / `tex`). Drawn as batched triangles: every
+## draw_colored_polygon call gets graphics buffers of its own, made again
+## on each redraw (~400 a frame for the HUD, which wore iPhone Safari down
+## until it closed the page after ~2.5 minutes). Same pixels.
+static func fill(ci: CanvasItem, pts: PackedVector2Array, col: Color, uvs := PackedVector2Array(), tex: Texture2D = null) -> void:
+	var n := pts.size()
+	if n < 3:
+		return
+	if n <= 4:
+		var cols := PackedColorArray()
+		cols.resize(n)
+		cols.fill(col)
+		ci.draw_primitive(pts, cols, uvs, tex)
+		return
+	var tri_cols := PackedColorArray([col, col, col])
+	for i in range(1, n - 1):
+		var tri := PackedVector2Array([pts[0], pts[i], pts[i + 1]])
+		var tri_uv := PackedVector2Array([uvs[0], uvs[i], uvs[i + 1]]) if uvs.size() == n else PackedVector2Array()
+		ci.draw_primitive(tri, tri_cols, tri_uv, tex)
+
+
 ## A rectangle with cut corners (the reference's panel shape). `cuts` =
 ## [top-left, top-right, bottom-right, bottom-left] cut sizes.
 static func chamfer(r: Rect2, cuts: Array) -> PackedVector2Array:
@@ -62,9 +84,9 @@ static func chamfer(r: Rect2, cuts: Array) -> PackedVector2Array:
 
 ## Panel: translucent fill, bright outline, a thicker tab on the top edge and
 ## a stripe tick group bottom-right (like the reference frames).
-static func panel(ci: CanvasItem, r: Rect2, col := CYAN, fill := FILL, cut := 10.0, alpha := 1.0) -> void:
+static func panel(ci: CanvasItem, r: Rect2, col := CYAN, fill_col := FILL, cut := 10.0, alpha := 1.0) -> void:
 	var pts := chamfer(r, [cut, 0.0, cut, 0.0])
-	ci.draw_colored_polygon(pts, Color(fill, fill.a * alpha))
+	fill(ci, pts, Color(fill_col, fill_col.a * alpha))
 	var closed := pts.duplicate()
 	closed.append(pts[0])
 	ci.draw_polyline(closed, Color(col, col.a * 0.85 * alpha), 1.5, true)
@@ -108,7 +130,7 @@ static func stripes(ci: CanvasItem, at: Vector2, n: int, col: Color, h := 5.0, s
 ## shows as a fading white chunk; `flash` brightens the fill.
 static func seg_bar(ci: CanvasItem, r: Rect2, frac: float, col: Color, segments := 20, trail := 0.0, flash := 0.0, alpha := 1.0) -> void:
 	var frame := chamfer(r, [0.0, r.size.y * 0.6, 0.0, r.size.y * 0.6])
-	ci.draw_colored_polygon(frame, Color(0, 0, 0, 0.5 * alpha))
+	fill(ci, frame, Color(0, 0, 0, 0.5 * alpha))
 	var inner := r.grow(-2.0)
 	var gap := 2.0
 	var w := (inner.size.x - gap * (segments - 1)) / segments
@@ -116,7 +138,7 @@ static func seg_bar(ci: CanvasItem, r: Rect2, frac: float, col: Color, segments 
 		return  # too small to draw (no degenerate polygons)
 	frac = clampf(frac, 0.0, 1.0)
 	trail = clampf(trail, frac, 1.0)
-	var fill := col.lerp(Color.WHITE, flash * 0.6)
+	var lit := col.lerp(Color.WHITE, flash * 0.6)
 	var low := frac <= 0.25
 	for i in segments:
 		var x0 := inner.position.x + i * (w + gap)
@@ -127,10 +149,10 @@ static func seg_bar(ci: CanvasItem, r: Rect2, frac: float, col: Color, segments 
 		var sk := inner.size.y * 0.35
 		var poly := PackedVector2Array([seg.position + Vector2(sk, 0), Vector2(seg.end.x, seg.position.y),
 			seg.end - Vector2(sk, 0), Vector2(seg.position.x, seg.end.y)])
-		ci.draw_colored_polygon(poly, Color(col, 0.12 * alpha))
+		fill(ci, poly, Color(col, 0.12 * alpha))
 		var k := clampf((frac - s0) / (s1 - s0), 0.0, 1.0)
 		if k > 0.0:
-			var c := fill
+			var c := lit
 			if low:
 				c = c.lerp(DANGER, 0.35)
 			_part(ci, poly, k, Color(c, alpha))
@@ -148,7 +170,7 @@ static func _part(ci: CanvasItem, poly: PackedVector2Array, k: float, col: Color
 	var bl := poly[3].lerp(poly[2], from)
 	var tr := poly[0].lerp(poly[1], k)
 	var br := poly[3].lerp(poly[2], k)
-	ci.draw_colored_polygon(PackedVector2Array([tl, tr, br, bl]), col)
+	fill(ci, PackedVector2Array([tl, tr, br, bl]), col)
 
 
 ## Ring made of `n` arc dashes, rotated by `spin` (radians).
@@ -169,6 +191,41 @@ static func emblem(ci: CanvasItem, c: Vector2, radius: float, t: float, col := C
 	dashed_ring(ci, c, radius * 0.8, 48, 0.45, Color(col, 0.45 * a), 1.5, -t * 0.25)
 	ci.draw_arc(c, radius * 0.7, t * -0.9, t * -0.9 + TAU * 0.7, 48, Color(col, 0.7 * a), 2.0, true)
 	dashed_ring(ci, c, radius * 1.08, 6, 0.12, Color(col, 0.75 * a), radius * 0.035, -t * 0.35)
+
+
+## The emblem as rotating layers under `host` (drawn behind its own
+## drawing, in the emblem's order), centred at `c`: drawn once, then only
+## turned by `spin_layers` - the same picture as `emblem` at that `t`.
+static func emblem_layers(host: CanvasItem, c: Vector2, radius: float, col := CYAN, alpha := 1.0) -> Array[HudSpinLayer]:
+	var a := alpha
+	var parts := [
+		[0.0, func(ci: CanvasItem) -> void:
+			ci.draw_circle(Vector2.ZERO, radius * 0.98, Color(FILL_DARK, 0.55 * a))
+			ci.draw_arc(Vector2.ZERO, radius, 0, TAU, 64, Color(col, 0.9 * a), 2.0, true)],
+		[0.6, func(ci: CanvasItem) -> void:
+			dashed_ring(ci, Vector2.ZERO, radius * 0.9, 3, 0.26, Color(col, 0.9 * a), radius * 0.06, 0.0)],
+		[-0.25, func(ci: CanvasItem) -> void:
+			dashed_ring(ci, Vector2.ZERO, radius * 0.8, 48, 0.45, Color(col, 0.45 * a), 1.5, 0.0)],
+		[-0.9, func(ci: CanvasItem) -> void:
+			ci.draw_arc(Vector2.ZERO, radius * 0.7, 0.0, TAU * 0.7, 48, Color(col, 0.7 * a), 2.0, true)],
+		[-0.35, func(ci: CanvasItem) -> void:
+			dashed_ring(ci, Vector2.ZERO, radius * 1.08, 6, 0.12, Color(col, 0.75 * a), radius * 0.035, 0.0)],
+	]
+	var out: Array[HudSpinLayer] = []
+	for p in parts:
+		var l := HudSpinLayer.new()
+		l.speed = p[0]
+		l.painter = p[1]
+		l.position = c
+		l.show_behind_parent = true
+		host.add_child(l)
+		out.append(l)
+	return out
+
+
+static func spin_layers(layers: Array[HudSpinLayer], t: float) -> void:
+	for l in layers:
+		l.rotation = l.speed * t
 
 
 ## Text helpers. `x_align`: 0 left, 0.5 centre, 1 right of `pos.x`.

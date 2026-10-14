@@ -85,6 +85,7 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if dir.length_squared() < 0.5:
 		dir = get_barrel_direction()
 	last_blizzard = FrostBlizzard.fire(get_tree(), from, dir, shooter)
+	DebugHud.note("frost blast")
 	cel_flash.fire(from, dir, 1.3)
 	PlasmaFx.muzzle_flash(get_tree(), from, dir, Color(0.5, 0.85, 1.0), Color(1, 1, 1), true)
 	if _fire_sound:

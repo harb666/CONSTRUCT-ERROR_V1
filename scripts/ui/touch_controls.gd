@@ -47,6 +47,11 @@ var _tap_track := {}
 var wheel_enabled := false
 ## Actions whose buttons are drawn dimmed (shown, still pressable).
 var _dim := {}
+## The held move stick: base and knob drawn once, then only moved with the
+## finger (redrawing every move would remake their graphics buffers - see
+## HudStyle.fill). Under this control's own drawing, as before.
+var _stick_base_layer: HudSpinLayer
+var _stick_knob_layer: HudSpinLayer
 
 
 func _ready() -> void:
@@ -56,6 +61,28 @@ func _ready() -> void:
 	_button_fingers.fill(-1)
 	_button_last.resize(BUTTONS.size())
 	visible = DisplayServer.is_touchscreen_available()
+	_stick_base_layer = HudSpinLayer.new()
+	_stick_base_layer.painter = func(ci: CanvasItem) -> void:
+		ci.draw_circle(Vector2.ZERO, stick_radius, Color(HudStyle.FILL, 0.4))
+		ci.draw_arc(Vector2.ZERO, stick_radius, 0, TAU, 48, Color(HudStyle.CYAN, 0.75), 2.0, true)
+		HudStyle.dashed_ring(ci, Vector2.ZERO, stick_radius + 7.0, 4, 0.18, Color(HudStyle.CYAN, 0.8), 3.0, PI * 0.25 - 0.28)
+	_stick_knob_layer = HudSpinLayer.new()
+	_stick_knob_layer.painter = func(ci: CanvasItem) -> void:
+		ci.draw_circle(Vector2.ZERO, 34.0, Color(HudStyle.CYAN, 0.35))
+		ci.draw_arc(Vector2.ZERO, 34.0, 0, TAU, 32, Color(HudStyle.CYAN, 0.95), 2.0, true)
+	for l in [_stick_base_layer, _stick_knob_layer]:
+		l.show_behind_parent = true
+		l.visible = false
+		add_child(l)
+
+
+## Shows / moves the held stick's layers.
+func _place_stick() -> void:
+	var held := _move_finger != -1
+	_stick_base_layer.visible = held
+	_stick_knob_layer.visible = held
+	_stick_base_layer.position = _stick_origin
+	_stick_knob_layer.position = _stick_knob
 
 
 ## Centre of a button by action name (for overlays like the weapon wheel).
@@ -114,6 +141,7 @@ func _on_touch_down(index: int, pos: Vector2) -> void:
 		_stick_origin = pos
 		_stick_knob = pos
 		_apply_stick(Vector2.ZERO)
+		_place_stick()
 	elif _look_finger == -1 and pos.x >= size.x * move_zone:
 		_look_finger = index
 		_look_last = pos
@@ -131,7 +159,7 @@ func _on_touch_drag(index: int, pos: Vector2) -> void:
 			offset = pos - _stick_origin
 		_stick_knob = pos
 		_apply_stick(offset / stick_radius)
-		queue_redraw()
+		_place_stick()
 	elif index == _look_finger:
 		var d := pos - _look_last
 		_look_last = pos
@@ -161,6 +189,7 @@ func _on_touch_up(index: int) -> void:
 	if index == _move_finger:
 		_move_finger = -1
 		_apply_stick(Vector2.ZERO)
+		_place_stick()
 	elif index == _look_finger:
 		_look_finger = -1
 	for i in BUTTONS.size():
@@ -229,11 +258,7 @@ func _draw() -> void:
 	var cyan := HudStyle.CYAN
 	# Move stick (shows a hint at rest).
 	if _move_finger != -1:
-		draw_circle(_stick_origin, stick_radius, Color(HudStyle.FILL, 0.4))
-		draw_arc(_stick_origin, stick_radius, 0, TAU, 48, Color(cyan, 0.75), 2.0, true)
-		HudStyle.dashed_ring(self, _stick_origin, stick_radius + 7.0, 4, 0.18, Color(cyan, 0.8), 3.0, PI * 0.25 - 0.28)
-		draw_circle(_stick_knob, 34.0, Color(cyan, 0.35))
-		draw_arc(_stick_knob, 34.0, 0, TAU, 32, Color(cyan, 0.95), 2.0, true)
+		pass  # (held: the stick's layers, see _place_stick)
 	else:
 		var hint := Vector2(_safe_margins().x + 150.0, size.y - 160.0)
 		draw_arc(hint, stick_radius, 0, TAU, 48, Color(cyan, 0.3), 2.0, true)

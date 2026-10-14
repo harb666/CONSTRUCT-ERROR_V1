@@ -5054,6 +5054,34 @@ func _front_end_tests() -> void:
 	await _wall_wait(func() -> bool: return vit._trail[0][0] <= 0.51, 3.0)
 	_check(vit._trail[0][0] <= 0.51, "HUD: the lost-health chunk drains away")
 	p.health = p.max_health
+	# The HUD only redraws what changed (each redraw remakes graphics
+	# buffers: ~400 a frame wore iPhone Safari down in ~2.5 minutes).
+	await _ticks(40)
+	var draws := [0, 0]
+	vit.draw.connect(func() -> void: draws[0] += 1)
+	wh.draw.connect(func() -> void: draws[1] += 1)
+	var spin0: float = vit._emblem[1].rotation
+	await _ticks(30)
+	_check(draws[0] == 0 and draws[1] == 0, "HUD: panels aren't redrawn while nothing on them changes (%d, %d)" % draws)
+	_check(vit._emblem.size() == 5 and not is_equal_approx(vit._emblem[1].rotation, spin0), "HUD: the portrait ring keeps turning (layers rotated, not redrawn)")
+	p.health = p.max_health * 0.8
+	await _ticks(2)
+	_check(draws[0] > 0, "HUD: and the panel redraws when health changes")
+	p.health = p.max_health
+	var tc: TouchControls = main.touch_controls
+	var tc_draws := [0]
+	tc.draw.connect(func() -> void: tc_draws[0] += 1)
+	tc._on_touch_down(7, Vector2(120, tc.size.y - 140))
+	await _ticks(2)
+	tc_draws[0] = 0
+	for k in 10:
+		tc._on_touch_drag(7, Vector2(120 + k * 9, tc.size.y - 140 - k * 4))
+		await _ticks(1)
+	_check(tc_draws[0] == 0 and tc._stick_knob_layer.visible and tc._stick_knob_layer.position == tc._stick_knob,
+		"touch: the move stick follows the finger without redrawing (%d)" % tc_draws[0])
+	tc._on_touch_up(7)
+	await _ticks(2)
+	_check(not tc._stick_knob_layer.visible, "touch: the stick hides when the finger lifts")
 	main.queue_free()
 	await _ticks(5)
 
