@@ -350,6 +350,7 @@ func _release_one(entry: Array) -> void:
 	var want := capture_radius + 0.6 + 0.35 * randf()
 	if is_inside_tree():
 		var ray := PhysicsRayQueryParameters3D.create(c, c + dir * (want + 0.6))
+		ray.collision_mask = 0xFFFFFFFF & ~ShaftBarrier.LAYER  # (not the invisible pit wall)
 		ray.exclude = exclude
 		var hit := get_world_3d().direct_space_state.intersect_ray(ray)
 		if hit:

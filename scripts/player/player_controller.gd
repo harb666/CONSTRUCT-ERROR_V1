@@ -190,6 +190,8 @@ var _fall_speed := 0.0
 
 
 func _ready() -> void:
+	# The shaft barrier (Skyforge) keeps players off the pit.
+	collision_mask |= ShaftBarrier.LAYER
 	health = max_health
 	armour = minf(start_armour, max_armour)
 	if get_node_or_null("Knockdown") == null:

@@ -555,7 +555,9 @@ func _combat(delta: float) -> void:
 	to.y = 0.0
 	var d := to.length()
 	var dir_to := to / d if d > 0.01 else -_visual.global_basis.z
-	var player_yaw := atan2(dir_to.x, dir_to.z)
+	# Hunting out of sight / range: along the path, facing the way it goes.
+	var nav := _nav_dir()
+	var player_yaw := atan2(dir_to.x, dir_to.z) if nav == Vector3.ZERO or _los else atan2(nav.x, nav.z)
 	# Just spotted: turn on the spot to face it first.
 	if not _engaged:
 		_engaged = true
@@ -565,7 +567,9 @@ func _combat(delta: float) -> void:
 			return
 	# Unprompted hops / dives keep it hard to pin down.
 	_hop_t -= delta
-	if _hop_t <= 0.0:
+	# (Not while hunting its way over bridges / ramps out of sight: a hop
+	# there can carry it off an edge.)
+	if _hop_t <= 0.0 and nav == Vector3.ZERO:
 		_hop_t = randf_range(hop_time.x, hop_time.y)
 		if _cam_d < far_logic_distance and _evade_cd <= 0.0:
 			_evade(Vector3.ZERO, true)
@@ -578,7 +582,9 @@ func _combat(delta: float) -> void:
 		_pick_position(dir_to, d)
 	var want := _repos - flat
 	want = want.normalized() if want.length_squared() > 0.01 else Vector3.UP.cross(dir_to)
-	if not _los:
+	if nav != Vector3.ZERO:
+		want = nav
+	elif not _los:
 		want = (want + dir_to).normalized()
 	want += _sep * 1.2
 	want = _steered(want.normalized() if want.length_squared() > 0.001 else want, delta)

@@ -4336,7 +4336,7 @@ func _skyforge_tests() -> void:
 		if hit.is_empty() or r.global_position.y < 36.5:
 			off_deck += 1
 		nearest = minf(nearest, r.global_position.distance_to(p.global_position))
-	_check(grunts == 4 and skirm == 2, "skyforge: 6 enemies - %d grunts, %d skirmishers" % [grunts, skirm])
+	_check(grunts == 4 and skirm == 0, "skyforge: round 1 is 4 grunts (%d grunts, %d skirmishers)" % [grunts, skirm])
 	_check(off_deck == 0, "skyforge: every enemy stands on a deck")
 	_check(respawning == 0, "skyforge: they don't respawn (a level, not an arena)")
 	_check(p.is_on_floor() and p.global_position.distance_to(Vector3(3, 40, 55.09)) < 1.0 and nearest > 20.0,
@@ -4464,15 +4464,46 @@ func _level_flow_tests() -> void:
 	var lift: ElevatorLift = main.get_node("ElevatorLift")
 	var flow: LevelFlow = main.get_node("LevelFlow")
 	var p: PlayerController = main.players[1]
-	_check(dir.total_waves() == 3 and dir.wave == 1 and dir.state == WaveDirector.State.FIGHTING and dir.active_count() == 6,
-		"flow: wave 1 of 3 is the 6 robots placed on the map")
-	_check(flow.hud != null and flow.hud.banners >= 1 and flow.hud.status.begins_with("WAVE 1 / 3"), "flow: WAVE 1 / 3 banner and status (%s)" % flow.hud.status)
+	_check(dir.total_waves() == 7 and dir.wave == 1 and dir.state == WaveDirector.State.FIGHTING and dir.active_count() == 4,
+		"flow: round 1 of 7 is the 4 grunts placed on the map")
+	_check(flow.hud != null and flow.hud.banners >= 1 and flow.hud.status.begins_with("WAVE 1 / 7"), "flow: WAVE 1 / 7 banner and status (%s)" % flow.hud.status)
+	var hunting := true
+	for c in main.get_node("Targets").get_children():
+		if c is RobotEnemy and not ((c as RobotEnemy).hunt_nav and (c as RobotEnemy).detect_range >= 300.0):
+			hunting = false
+	_check(hunting, "flow: every robot hunts the players from anywhere on the map (owner asked)")
+	var nav_map := (main as Node3D).get_world_3d().navigation_map
+	var cut_off := []
+	for m in main.get_node("WaveSpawns").get_children():
+		var route := NavigationServer3D.map_get_path(nav_map, (m as Node3D).global_position, Vector3(3, 40, 55), true)
+		if route.is_empty() or route[route.size() - 1].distance_to(Vector3(3, 40, 55)) > 2.5:
+			cut_off.append(m.name)
+	_check(cut_off.is_empty(), "flow: robots can find a path from every spawn point to the start deck %s" % [cut_off])
 	var no_floor := []
 	for m in main.get_node("WaveSpawns").get_children():
-		if dir._floor((m as Node3D).global_position) == Vector3.INF:
+		var f := dir._floor((m as Node3D).global_position)
+		# (On the deck itself, not on a crate: robots would be stuck up there.)
+		if f == Vector3.INF or absf(f.y - (m as Node3D).global_position.y) > 0.3:
 			no_floor.append(m.name)
 	_check(no_floor.is_empty(), "flow: every wave spawn point is on a deck %s" % [no_floor])
-	_check(lift.state == ElevatorLift.State.DOWN and lift.deck_height() < 31.0, "flow: the lift waits at the bottom of the shaft")
+	_check(lift.state == ElevatorLift.State.DOWN and lift.deck_height() < 31.0 and not lift.visible, "flow: the lift waits out of sight down the shaft (just the pit)")
+	# The invisible barrier round the pit: walk at it, shove a robot at it.
+	_check(lift.barrier.is_active(), "flow: an invisible barrier rings the pit while the lift is down")
+	p.global_position = Vector3(0, 40.2, 10)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var r0: RobotEnemy = main.get_node("Targets/HubGruntWest")
+	r0.global_position = Vector3(-10, 40.3, 0)
+	await _ticks(10)
+	var closest := [99.0, 99.0]
+	for i in 120:
+		p.velocity = Vector3(0, p.velocity.y, -6.0)
+		r0.linear_velocity = Vector3(8.0, r0.linear_velocity.y, 0)
+		await _ticks(1)
+		closest[0] = minf(closest[0], Vector2(p.global_position.x, p.global_position.z).length())
+		closest[1] = minf(closest[1], Vector2(r0.global_position.x, r0.global_position.z).length())
+	_check(closest[0] > 5.5 and p.global_position.y > 39.5, "flow: players can't walk into the pit (closest %.2f m from its centre)" % closest[0])
+	_check(closest[1] > 5.5 and r0.global_position.y > 39.5, "flow: robots can't be pushed into it either (%.2f m)" % closest[1])
 	# Falling into the shaft with the lift down is still a fall.
 	p.global_position = Vector3(0, 36, 0)
 	p.velocity = Vector3.ZERO
@@ -4495,14 +4526,16 @@ func _level_flow_tests() -> void:
 					if r.name.begins_with("W") and r.global_position.distance_to(p.global_position) < dir.min_player_distance - 0.5:
 						spawned_near += 1
 					r.apply_damage(DamageInfo.make(1.0e4, DamageInfo.Type.ENERGY, r.global_position, Vector3.FORWARD, 0.0))
-	_check(dir.state == WaveDirector.State.DONE and dir.spawned == 19, "flow: waves 2 and 3 teleport in 8 then 11 robots (%d)" % dir.spawned)
+	_check(dir.state == WaveDirector.State.DONE and dir.spawned == 50, "flow: rounds 2-7 teleport in 8, 10, 6, 10, 8, 8 robots (%d)" % dir.spawned)
 	_check(most <= 8 and most >= 8, "flow: never more than 8 alive at once (most %d)" % most)
 	_check(spawned_near == 0, "flow: wave robots teleport in away from the player")
 	await _ticks(2)
-	_check(lift.state == ElevatorLift.State.RISING, "flow: last wave cleared -> the lift rises")
+	_check(lift.state == ElevatorLift.State.RISING and lift.visible, "flow: last wave cleared -> the lift appears and rises")
 	lift.rise_time = 0.5
 	await _ticks(45)
 	_check(lift.state == ElevatorLift.State.READY and absf(lift.deck_height() - 40.0) < 0.01, "flow: the lift's deck stops flush with the hub floor")
+	await _ticks(2)
+	_check(not lift.barrier.is_active(), "flow: with the lift up the barrier is gone (the squad can step on)")
 	_check(flow.hud.marker != Vector3.INF and flow.hud.status == "GET TO THE LIFT", "flow: GET TO THE LIFT, marker on it")
 	# Walking on: the deck holds the player up; the countdown starts.
 	p.global_position = lift.global_position + Vector3(1.5, 0.3, 1.0)

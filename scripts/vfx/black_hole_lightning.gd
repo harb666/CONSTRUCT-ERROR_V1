@@ -175,6 +175,7 @@ func _strike(major: bool, center: Vector3, erupt := false) -> void:
 		var y := randf_range(-0.75, -0.25) if roll < 0.45 else (randf_range(-0.2, 0.3) if roll < 0.85 else randf_range(0.3, 0.8))
 		var dir := Vector3(flat.x, y, flat.y).normalized()
 		var q := PhysicsRayQueryParameters3D.create(center + dir * shell, center + dir * reach)
+		q.collision_mask = 0xFFFFFFFF & ~ShaftBarrier.LAYER  # (not the invisible pit wall)
 		q.exclude = exclude
 		var hit := get_world_3d().direct_space_state.intersect_ray(q)
 		# The closer the surface, the more likely the bolt jumps the gap.

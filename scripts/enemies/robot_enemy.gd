@@ -166,6 +166,13 @@ static var ai_enabled := true
 var net_puppet := false
 var _net_pos := Vector3.INF
 var _net_target: Node3D
+## Hunting (WaveDirector.hunt_players, Skyforge): out of sight or far from
+## its target, it follows a path over the level's navigation mesh, so it
+## finds the way round walls and down ramps instead of getting stuck.
+var hunt_nav := false
+var _path := PackedVector3Array()
+var _path_i := 0
+var _path_t := 0.0
 ## Cartoon cel muzzle flashes (over the usual ones) within this camera
 ## distance (m); counted for tests.
 @export var cel_flash_distance := 35.0
@@ -210,6 +217,8 @@ func _ready() -> void:
 	physics_material_override.friction = 0.0
 	collision_layer |= GravityWell.MOVABLE_LAYER
 	add_to_group(&"enemies")
+	# Kept off the pit by the shaft barrier (Skyforge) like the players.
+	collision_mask |= ShaftBarrier.LAYER
 	_layers = collision_layer
 	_mask = collision_mask
 	set_meta("gravity_center_y", 0.9)
@@ -682,6 +691,7 @@ func _think() -> void:
 	q.exclude = [get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	_los = hit.is_empty() or hit.collider == target or (hit.collider is Node and (hit.collider as Node).is_in_group(&"enemies"))
+	_update_path()
 	# Keep a little space from other robots.
 	_sep = Vector3.ZERO
 	for e in get_tree().get_nodes_in_group(&"enemies"):
@@ -694,6 +704,42 @@ func _think() -> void:
 		var room := 0.9 * (_size_factor() + (e as RobotEnemy)._size_factor())
 		if d > 0.01 and d < room:
 			_sep += off / d * (room - d)
+
+
+## (Called from _think.) The path to the target while hunting it out of
+## sight / range; none once it's in view and close.
+func _update_path() -> void:
+	if not hunt_nav or target == null or net_puppet:
+		_path = PackedVector3Array()
+		return
+	var off := target.global_position - global_position
+	if _los and Vector2(off.x, off.z).length() <= preferred_range.y + 2.0:
+		_path = PackedVector3Array()
+		return
+	# Keep the route it's on (re-planning every step, two near-equal routes
+	# made it dither between them): a new one every 3 s, or sooner when the
+	# target has moved well away from its end or it's used up.
+	_path_t -= 0.25
+	var moved := _path.size() >= 2 and _path[_path.size() - 1].distance_to(target.global_position) > 5.0
+	if _path_t > 0.0 and _path.size() >= 2 and _path_i < _path.size() - 1 and not moved:
+		return
+	_path_t = 3.0
+	var map := get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(map) == 0:
+		return
+	_path = NavigationServer3D.map_get_path(map, global_position, target.global_position, true)
+	_path_i = 1
+
+
+## Flat direction along the hunting path, or ZERO when not following one.
+func _nav_dir() -> Vector3:
+	if _path.size() < 2:
+		return Vector3.ZERO
+	while _path_i < _path.size() - 1 and Vector2(_path[_path_i].x - global_position.x, _path[_path_i].z - global_position.z).length() < 1.2:
+		_path_i += 1
+	var to := _path[mini(_path_i, _path.size() - 1)] - global_position
+	to.y = 0.0
+	return to.normalized() if to.length() > 0.3 else Vector3.ZERO
 
 
 ## Is there a drop deeper than `ledge_drop` just ahead along `dir`?
@@ -728,8 +774,11 @@ func _combat(delta: float) -> void:
 		if randf() < 0.6:
 			_strafe_dir = -_strafe_dir
 	var side := Vector3.UP.cross(dir_to) * _strafe_dir
-	var want := side * 0.8
-	if d > preferred_range.y or not _los:
+	var nav := _nav_dir()
+	var want := side * (0.25 if nav != Vector3.ZERO else 0.8)
+	if nav != Vector3.ZERO:
+		want += nav * 1.1  # hunting: along the path
+	elif d > preferred_range.y or not _los:
 		want += dir_to * 1.1
 	elif d < preferred_range.x:
 		want -= dir_to * 0.9
@@ -761,7 +810,9 @@ func _combat(delta: float) -> void:
 	# strafe switching sides) it first brakes with the legs still facing the
 	# old way, then turns the legs and sets off; while the legs turn it holds
 	# back, so it never slides sideways.
-	var player_yaw := atan2(dir_to.x, dir_to.z)
+	# (Hunting out of sight: faces the way it's going.)
+	var face := nav if nav != Vector3.ZERO and not _los else dir_to
+	var player_yaw := atan2(face.x, face.z)
 	var reversing := hv.length() > 0.6 and want.length_squared() > 0.01 and hv.dot(want) < 0.0
 	var heading := hv if reversing or want.length_squared() <= 0.01 else want
 	var legs_yaw := player_yaw

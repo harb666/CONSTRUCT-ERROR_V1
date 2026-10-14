@@ -52,6 +52,9 @@ var _rim_mat: StandardMaterial3D
 var _beam: MeshInstance3D
 var _beam_mat: ShaderMaterial
 var _light: OmniLight3D
+var _shape: CollisionShape3D
+## Invisible wall round the pit while the lift is down (owner asked).
+var barrier: ShaftBarrier
 
 
 ## One of each of its shaders, for Vfx.warm_up (built behind the title
@@ -73,12 +76,19 @@ func _ready() -> void:
 	sync_to_physics = true
 	_top = global_position
 	_build()
+	barrier = ShaftBarrier.new()
+	barrier.name = "ShaftBarrier"
+	barrier.top_level = true
+	add_child(barrier)
+	barrier.global_transform = Transform3D(Basis.IDENTITY, _top)
 	_place(_top.y - depth)
+	_show_for_state()
 	_apply_look()
 
 
 func _build() -> void:
 	var cs := CollisionShape3D.new()
+	_shape = cs
 	var cyl := CylinderShape3D.new()
 	cyl.radius = collision_radius
 	cyl.height = thickness
@@ -180,6 +190,17 @@ func _build() -> void:
 	Vfx.tame_light(_light)
 
 
+## Down the shaft it's out of sight - just the bottomless pit (owner
+## asked) - until the last enemy falls and it rises. The barrier round the
+## pit stands until it's up.
+func _show_for_state() -> void:
+	visible = state != State.DOWN
+	if _shape:
+		_shape.set_deferred(&"disabled", state == State.DOWN)
+	if barrier:
+		barrier.set_active(state == State.DOWN or state == State.RISING)
+
+
 ## Deck top at height `y`.
 func _place(y: float) -> void:
 	global_position = Vector3(_top.x, y, _top.z)
@@ -208,6 +229,7 @@ func _set_state(s: int) -> void:
 	if state == State.READY:
 		arrived.emit()
 	_lock_riders(state == State.DESCENDING)
+	_show_for_state()
 	state_changed.emit(state)
 	Net.world_event(self, &"lift", [int(state), _t])
 

@@ -27,6 +27,15 @@ const SCENES: Array[PackedScene] = [
 @export var waves: Array[Vector2i] = [Vector2i(6, 2), Vector2i(7, 4)]
 ## Most robots alive on the map at once.
 @export var max_active := 8
+## Per later wave (same order as `waves`): the spawn points (WaveSpawns
+## marker names) its robots teleport in at, so each wave comes from its own
+## part of the map. Empty / missing: any. Falls back to any free point.
+@export var wave_spawn_sets: Array[PackedStringArray] = []
+## Robots go straight for the players wherever they are (owner asked for
+## Skyforge: a small map, the fighting never stops) instead of waiting
+## until someone comes within their usual range.
+@export var hunt_players := false
+@export var hunt_range := 400.0
 ## Pause between one wave cleared and the next starting (s).
 @export var wave_gap := 4.0
 ## Between one robot teleporting in and the next (s).
@@ -109,6 +118,11 @@ func _physics_process(delta: float) -> void:
 func _start_wave(index: int) -> void:
 	wave = index
 	state = State.FIGHTING
+	var t := targets()
+	if t and hunt_players:
+		for c in t.get_children():
+			if c is RobotEnemy:
+				_hunt(c as RobotEnemy)
 	_queue.clear()
 	_t = 0.0
 	if index >= 2:
@@ -154,12 +168,27 @@ func _spawn(scene_index: int) -> bool:
 		yaw = atan2(to.x, to.z)
 	r.transform = Transform3D(Basis(Vector3.UP, yaw), at)
 	t.add_child(r)
+	if hunt_players:
+		_hunt(r)
 	var visual := r.get(&"_visual") as Node3D
 	Hologram.teleport_in(visual, 0.0, Color(1.0, 0.35, 0.3))
 	spawned += 1
 	Net.robot_spawned(r, t)
 	robot_spawned.emit(r, scene_index)
 	return true
+
+
+## Make `r` hunt the players from anywhere on the map.
+func _hunt(r: RobotEnemy) -> void:
+	r.detect_range = hunt_range
+	r.lose_range = hunt_range
+	r.hunt_nav = true
+
+
+## The current wave's spawn points (marker names), empty = any.
+func _wave_set() -> PackedStringArray:
+	var i := wave - 2
+	return wave_spawn_sets[i] if i >= 0 and i < wave_spawn_sets.size() else PackedStringArray()
 
 
 func _nearest_player(at: Vector3) -> Node3D:
@@ -177,9 +206,20 @@ func _pick_spot() -> Vector3:
 	var spawns := get_node_or_null(spawns_path)
 	if spawns == null:
 		return Vector3.INF
+	var allowed := _wave_set()
+	if not allowed.is_empty():
+		var at := _pick_from(spawns, allowed)
+		if at != Vector3.INF:
+			return at
+	return _pick_from(spawns, PackedStringArray())
+
+
+func _pick_from(spawns: Node, allowed: PackedStringArray) -> Vector3:
 	var good: Array[Vector3] = []
 	var ok: Array[Vector3] = []
 	for m in spawns.get_children():
+		if not allowed.is_empty() and not allowed.has(String(m.name)):
+			continue
 		var p := (m as Node3D).global_position
 		var near := _nearest_player(p)
 		var d := near.global_position.distance_to(p) if near else 999.0

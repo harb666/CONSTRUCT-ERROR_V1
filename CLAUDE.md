@@ -236,13 +236,23 @@
   cartoon blast, chain to barrels within 5 m) and leave burning green slime
   puddles with green cartoon flames that hurt anyone standing in them
   (`ToxicBarrel`, `ToxicBlast`, `ToxicSlime`).
-- Skyforge waves (owner asked): wave 1 = the 6 placed robots, then 6+2
-  and 7+4 grunts / skirmishers teleporting in, never more than 8 alive at
-  once (`WaveDirector`). Then the lift rises out of the hub shaft; with the
-  whole squad on it, it goes down and the next part of the level loads
-  (`ElevatorLift`, `LevelFlow`, `LevelTransfer`; next part = Battle Arena
-  as a stand-in until the owner's is made). The shaft's collision was
-  opened (it was capped by the map export's convex hulls).
+- Skyforge rounds (owner asked): 1) the 4 placed grunts, 2) 8 grunts,
+  3) 10 grunts, 4) 4 grunts + 2 skirmishers, 5) 6 + 4, 6) 4 + 4,
+  7) 8 skirmishers; later rounds teleport in, each round from its own part
+  of the map (`WaveDirector.wave_spawn_sets`: west, north + east, the
+  south octagons, a west / north / east pincer, hub + turrets, anywhere),
+  never more than 8 alive at once. Robots there always hunt the players
+  (`hunt_players`): out of sight they follow paths over the level's baked
+  navigation mesh (`gameplay/navmesh.res`, `tools/bake_skyforge_navmesh.gd`;
+  hunting skirmishers don't hop while pathing). Then the lift rises out of
+  the hub shaft; with the whole squad on it, it goes down and the next part
+  of the level loads (`ElevatorLift`, `LevelFlow`, `LevelTransfer`; next
+  part = Battle Arena as a stand-in until the owner's is made). Until it
+  rises the lift is hidden (just the bottomless pit) and an invisible
+  barrier rings the pit (`ShaftBarrier`, physics layer 4 "barrier": only
+  players / robots collide with it, not shots or debris; off once the lift
+  is up). The shaft's collision was opened (it was capped by the map
+  export's convex hulls).
 
 - Online co-op (owner asked, free): HOST / JOIN on character select, 4-digit
   room code (SHARE / ?join=<code> link), WebRTC phone to phone; phones find
