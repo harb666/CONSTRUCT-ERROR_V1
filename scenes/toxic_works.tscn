@@ -1,0 +1,131 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/world/toxic_works.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/touch_controls.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/robot_enemy.tscn" id="7"]
+[ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/robot_skirmisher.tscn" id="12"]
+[ext_resource type="Script" path="res://scripts/world/elevator_lift.gd" id="lift"]
+[ext_resource type="Script" path="res://scripts/camera/arrival_camera.gd" id="arrcam"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.17, 0.27, 0.12, 1)
+
+[sub_resource type="LabelSettings" id="hud_text"]
+font_size = 18
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.7)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+level_music = ExtResource("music1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+shadow_enabled = true
+
+[node name="ToxicWorks" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="Targets" type="Node3D" parent="."]
+
+[node name="HallNorthGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, 0, 7.05, -29.5)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="HallNorthEastGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, -0.707107, 37, 7.05, -37)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="AssemblyGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, 0, 7.05, -82)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="PipeworksSkirmisher" parent="Targets" instance=ExtResource("12")]
+transform = Transform3D(-0.968148, 0, 0.25038, 0, 1, 0, -0.25038, 0, -0.968148, -36, 10.05, -139.09)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="PurificationGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-0.996493, 0, 0.083678, 0, 1, 0, -0.083678, 0, -0.996493, -14, 10.05, -166)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="CoreSkirmisher" parent="Targets" instance=ExtResource("12")]
+transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, -0.08, 12.05, -191.93)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="ProcessingGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-0.971549, 0, -0.236838, 0, 1, 0, 0.236838, 0, -0.971549, 42, 14.05, -172)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="ConduitGrunt" parent="Targets" instance=ExtResource("7")]
+transform = Transform3D(-0.938493, 0, -0.345298, 0, 1, 0, 0.345298, 0, -0.938493, 47.9, 8.05, -130)
+respawn_time = -1.0
+patrol_distance = 0.0
+
+[node name="ElevatorLift" type="AnimatableBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+script = ExtResource("lift")
+arrival = true
+pit_barrier = false
+
+[node name="ArrivalCamera" type="Camera3D" parent="."]
+script = ExtResource("arrcam")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(-1.0, 0, -0.0, 0, 1, 0, 0.0, 0, -1.0, 0, 8.25, 0)
+
+[node name="Spawn2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(-1.0, 0, -0.0, 0, 1, 0, 0.0, 0, -1.0, 1.6, 8.25, 0.6)
+
+[node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(-1.0, 0, -0.0, 0, 1, 0, 0.0, 0, -1.0, -1.6, 8.25, 0.6)
+
+[node name="Spawn4" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(-1.0, 0, -0.0, 0, 1, 0, 0.0, 0, -1.0, 0, 8.25, -1.7)
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TargetMarker" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8")
+
+[node name="TouchControls" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="DebugHud" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 16.0
+offset_right = 700.0
+offset_bottom = 70.0
+label_settings = SubResource("hud_text")
+script = ExtResource("4")

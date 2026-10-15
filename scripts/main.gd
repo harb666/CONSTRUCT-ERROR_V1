@@ -4,7 +4,7 @@ extends Node3D
 ## and only creating a camera/touch UI for the local one.
 
 const CAMERA_RIG_SCENE := preload("res://scenes/camera_rig.tscn")
-const LEVELS := {"skyforge": "res://scenes/skyforge_arena.tscn", "battle": "res://scenes/battle_arena.tscn", "toxic": "res://scenes/main.tscn"}
+const LEVELS := {"skyforge": "res://scenes/skyforge_arena.tscn", "works": "res://scenes/toxic_works.tscn", "battle": "res://scenes/battle_arena.tscn", "toxic": "res://scenes/main.tscn"}
 
 @onready var players_root: Node3D = $Players
 @onready var spawn_points: Node3D = $SpawnPoints

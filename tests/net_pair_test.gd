@@ -128,7 +128,7 @@ func _host() -> void:
 	ok = await until(func() -> bool: return lift.state == ElevatorLift.State.COUNTDOWN, 900)
 	check(ok and lift.riders == 2 and lift.aboard == 2, "both players aboard -> countdown (%d / %d)" % [lift.aboard, lift.riders])
 	lift.ride_time = 1.5
-	ok = await until(func() -> bool: return current_scene != main and current_scene != null and current_scene.scene_file_path.ends_with("battle_arena.tscn"), 900)
+	ok = await until(func() -> bool: return current_scene != main and current_scene != null and current_scene.scene_file_path.ends_with("toxic_works.tscn"), 900)
 	check(ok, "the squad rides down to the next part")
 	main = current_scene
 	ok = await until(func() -> bool: return main.players.has(1) and main.players.has(2), 600)
@@ -182,7 +182,7 @@ func _client() -> void:
 	await until(func() -> bool: return lift.state == ElevatorLift.State.READY, 300)
 	me.global_position = lift.global_position + Vector3(-1.5, 0.3, 0)
 	me.reset_physics_interpolation()
-	ok = await until(func() -> bool: return current_scene != main and current_scene != null and current_scene.scene_file_path.ends_with("battle_arena.tscn"), 1800)
+	ok = await until(func() -> bool: return current_scene != main and current_scene != null and current_scene.scene_file_path.ends_with("toxic_works.tscn"), 1800)
 	check(ok, "rode down with the squad to the next part")
 	main = current_scene
 	ok = await until(func() -> bool: return main.players.has(1) and main.players.has(2) and (main.players[2] as PlayerController).character.id == &"harbinger", 600)

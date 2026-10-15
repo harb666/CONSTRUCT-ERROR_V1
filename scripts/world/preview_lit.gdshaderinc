@@ -18,13 +18,13 @@
 // Compatibility renderer: textures / colour uniforms arrive sRGB-encoded,
 // ALBEDO and EMISSION are taken as sRGB, light and FOG are linear - so the
 // maths runs in linear and is encoded back on the way out.
-#if defined(CULL_DISABLED) && defined(ALPHA)
+#if defined(CULL_DISABLED) && defined(PREVIEW_ALPHA)
 render_mode cull_disabled, blend_mix, depth_draw_opaque, ambient_light_disabled, specular_disabled;
 #elif defined(CULL_DISABLED)
 render_mode cull_disabled, ambient_light_disabled, specular_disabled;
 #elif defined(CULL_FRONT)
 render_mode cull_front, ambient_light_disabled, specular_disabled;
-#elif defined(ALPHA)
+#elif defined(PREVIEW_ALPHA)
 render_mode cull_back, blend_mix, depth_draw_opaque, ambient_light_disabled, specular_disabled;
 #else
 render_mode cull_back, ambient_light_disabled, specular_disabled;
@@ -194,7 +194,7 @@ void fragment() {
 	// robot shadows it.
 	ALBEDO = to_srgb(v_diffuse);
 	EMISSION = outc;
-#ifdef ALPHA
+#ifdef PREVIEW_ALPHA
 	ALPHA = alpha;
 #endif
 }

@@ -15,8 +15,12 @@ signal arrived
 signal departed
 signal ride_finished
 signal state_changed(state: int)
+## Arrival mode: it has brought the squad down to the floor.
+signal arrival_finished
 
-enum State { DOWN, RISING, READY, COUNTDOWN, DESCENDING, GONE }
+## ARRIVING / ARRIVED: arrival mode (the next part of the level: the squad
+## comes down on it through the roof).
+enum State { DOWN, RISING, READY, COUNTDOWN, DESCENDING, GONE, ARRIVING, ARRIVED }
 
 const DECK_SHADER := preload("res://scripts/world/lift_deck.gdshader")
 const BEAM_SHADER := preload("res://scripts/world/lift_beam.gdshader")
@@ -40,6 +44,17 @@ const NEON := Color(1.0, 0.2, 0.5)
 @export var ride_depth := 13.0
 @export var ride_time := 4.5
 @export var beam_height := 34.0
+## Arrival mode (owner asked, Toxic Works): the lift Skyforge's squad rode
+## down comes down through this level's roof with them aboard: it starts
+## `arrival_height` above where it's placed and lands over `arrival_time`
+## (controls held), then lets them off.
+@export var arrival := false
+@export var arrival_height := 19.8
+@export var arrival_time := 6.0
+## Where each player stands on the deck as it comes down (by join order).
+const ARRIVAL_SPOTS: Array[Vector2] = [Vector2(0, 0), Vector2(1.6, 0.6), Vector2(-1.6, 0.6), Vector2(0, -1.7)]
+## The invisible barrier round the pit while it's down (Skyforge).
+@export var pit_barrier := true
 
 var state := State.DOWN
 var aboard := 0
@@ -76,12 +91,17 @@ func _ready() -> void:
 	sync_to_physics = true
 	_top = global_position
 	_build()
-	barrier = ShaftBarrier.new()
-	barrier.name = "ShaftBarrier"
-	barrier.top_level = true
-	add_child(barrier)
-	barrier.global_transform = Transform3D(Basis.IDENTITY, _top)
-	_place(_top.y - depth)
+	if pit_barrier:
+		barrier = ShaftBarrier.new()
+		barrier.name = "ShaftBarrier"
+		barrier.top_level = true
+		add_child(barrier)
+		barrier.global_transform = Transform3D(Basis.IDENTITY, _top)
+	if arrival:
+		state = State.ARRIVING
+		_place(_top.y + arrival_height)
+	else:
+		_place(_top.y - depth)
 	_show_for_state()
 	_apply_look()
 
@@ -203,7 +223,8 @@ func _show_for_state() -> void:
 
 ## Deck top at height `y`.
 func _place(y: float) -> void:
-	global_position = Vector3(_top.x, y, _top.z)
+	_deck = Vector3(_top.x, y, _top.z)
+	global_position = _deck
 
 
 func deck_height() -> float:
@@ -279,7 +300,44 @@ func _physics_process(delta: float) -> void:
 				ride_finished.emit()
 		State.GONE:
 			pass
+		State.ARRIVING:
+			var k := clampf(_t / arrival_time, 0.0, 1.0)
+			_place(_top.y + arrival_height * (1.0 - smoothstep(0.0, 1.0, k)))
+			_board_arrivals()
+			if k >= 1.0:
+				_set_state(State.ARRIVED)
+				arrival_finished.emit()
+		State.ARRIVED:
+			_place(_top.y)
 	_apply_look()
+
+
+var _boarded := {}
+## Where the deck was last placed (the body itself only gets there after the
+## next physics step: sync_to_physics).
+var _deck := Vector3.ZERO
+
+
+## Arrival mode: every player (each one as they appear) stands on the deck,
+## controls held, until it lands. Online, each device boards its own
+## player; teammates' characters follow their own devices.
+func _board_arrivals() -> void:
+	for p in get_tree().get_nodes_in_group(&"players"):
+		var pc := p as PlayerController
+		if pc == null or pc.is_remote:
+			continue
+		if not _boarded.has(pc.get_instance_id()):
+			var spot: Vector2 = ARRIVAL_SPOTS[_boarded.size() % ARRIVAL_SPOTS.size()]
+			_boarded[pc.get_instance_id()] = true
+			pc.global_position = _deck + Vector3(spot.x, 0.15, spot.y)
+			pc.velocity = Vector3.ZERO
+			pc.reset_physics_interpolation()
+		pc.controls_locked = true
+
+
+## Arrival mode: still coming down.
+func arriving() -> bool:
+	return state == State.ARRIVING
 
 
 ## Players standing on the deck (and how many there are in all).
@@ -313,7 +371,7 @@ func _apply_look() -> void:
 	match state:
 		State.RISING:
 			power = smoothstep(0.6, 1.0, _t / rise_time)
-		State.READY, State.COUNTDOWN, State.DESCENDING:
+		State.READY, State.COUNTDOWN, State.DESCENDING, State.ARRIVING, State.ARRIVED:
 			power = 1.0
 	_deck_mat.set_shader_parameter("power", power)
 	_deck_mat.set_shader_parameter("alert", 1.0 if state == State.COUNTDOWN or state == State.DESCENDING else 0.0)

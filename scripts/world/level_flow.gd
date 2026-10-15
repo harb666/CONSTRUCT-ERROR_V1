@@ -9,9 +9,8 @@ extends Node
 
 @export var director_path: NodePath = ^"../WaveDirector"
 @export var lift_path: NodePath = ^"../ElevatorLift"
-## The next part of the level. A stand-in until the owner's next part is
-## made: Battle Arena.
-@export_file("*.tscn") var next_level := "res://scenes/battle_arena.tscn"
+## The next part of the level: the Toxic Works (part 2 of 3).
+@export_file("*.tscn") var next_level := "res://scenes/toxic_works.tscn"
 
 var director: WaveDirector
 var lift: ElevatorLift

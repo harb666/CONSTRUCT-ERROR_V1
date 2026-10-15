@@ -231,6 +231,17 @@
   straight edges (two-tone sky), so it's now a soft glow round the sun
   (`tools/smooth_sky_glow.py`; original in `sky/source/`). Grunts turn
   back from drops deeper than 3 m (`ledge_drop`). `?level=battle` / `toxic`.
+- Toxic Works (owner asked; image-to-level's `slime_arena` package in
+  `levels/slime_arena`, level 1 part 2 of 3; `ToxicWorks`, `?level=works`):
+  the map maker preview's look with its own sky lighting
+  (`sky/ibl_atlas.png`), effects as packaged. The squad arrives on
+  Skyforge's lift coming down through the roof, controls held
+  (`ElevatorLift.arrival`; the ceiling's collider got its exact shape so the
+  shaft hole is open; the package's own elevator car is hidden), seen from
+  a corner of the hall, then the camera swoops in behind the player
+  (`ArrivalCamera`). 6 grunts + 2 skirmishers at the package's enemy spawns
+  (not hunting, no respawn). Slime / falling: player back to spawn, robots
+  die. Exit door: "PART 3 COMING SOON" banner.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime
@@ -247,7 +258,7 @@
   hunting skirmishers don't hop while pathing). Then the lift rises out of
   the hub shaft; with the whole squad on it, it goes down and the next part
   of the level loads (`ElevatorLift`, `LevelFlow`, `LevelTransfer`; next
-  part = Battle Arena as a stand-in until the owner's is made). Until it
+  part = the Toxic Works). Until it
   rises the lift is hidden (just the bottomless pit) and an invisible
   barrier rings the pit (`ShaftBarrier`, physics layer 4 "barrier": only
   players / robots collide with it, not shots or debris; off once the lift

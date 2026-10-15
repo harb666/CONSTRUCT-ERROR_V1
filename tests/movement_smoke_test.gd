@@ -539,6 +539,7 @@ func _run() -> void:
 	await _skyforge_tests()
 	await _toxic_barrel_tests()
 	await _level_flow_tests()
+	await _toxic_works_tests()
 	await _net_tests()
 	await _music_tests()
 	await _level_change_tests()
@@ -4562,17 +4563,83 @@ func _level_flow_tests() -> void:
 		await _ticks(1)
 	_check(flow.leaving and LevelTransfer.pending and LevelTransfer.character_id == p.character.id and LevelTransfer.weapons.has("Right"),
 		"flow: the ride ends -> the next part loads with the same character and weapons")
+	# As in the game, the old part is gone before the next one loads (here it
+	# isn't the current scene, so the swap wouldn't free it).
+	var char_id := p.character.id
+	var want := flow.next_level
+	main.queue_free()
 	await _ticks(80)
 	var next := root.get_tree().current_scene
-	_check(next != null and next.scene_file_path == flow.next_level, "flow: the next part of the level is loaded (%s)" % (next.scene_file_path if next else "-"))
+	_check(next != null and next.scene_file_path == want, "flow: the next part of the level is loaded (%s)" % (next.scene_file_path if next else "-"))
 	var np: PlayerController = next.players.get(1) if next and next.get(&"players") is Dictionary else null
-	_check(np != null and np.character.id == p.character.id and np.get_node("WeaponHolder").weapon("Right") != null and next.front_end == null,
+	_check(np != null and np.character.id == char_id and np.get_node("WeaponHolder").weapon("Right") != null and next.front_end == null,
 		"flow: the player arrives straight in (no title screen), same character, armed")
-	main.queue_free()
+	var arr := next.get_node_or_null("ElevatorLift") as ElevatorLift if next else null
+	_check(want == "res://scenes/toxic_works.tscn" and arr != null and arr.arriving() and np != null and np.controls_locked
+		and np.global_position.y > 12.0 and absf(np.global_position.y - arr.global_position.y) < 1.0,
+		"flow: the next part is the Toxic Works, the squad riding the lift down into it (%s, lift %s, player %s)" % [
+			arr.state if arr else -1, arr.global_position.y if arr else 0.0, np.global_position.y if np else 0.0])
 	if next:
 		next.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
+
+
+## The Toxic Works (owner asked; part 2 of level 1, image-to-level's
+## slime_arena): the package with the map maker preview's look, the roof
+## opened for the lift, the squad riding Skyforge's lift down from the roof
+## watched from a corner (ArrivalCamera), the slime sends players back.
+func _toxic_works_tests() -> void:
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var main: Node = load("res://scenes/toxic_works.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(20)
+	var tw := main.get_node("ToxicWorks") as ToxicWorks
+	_check(tw != null and tw.level.find_children("*", "MeshInstance3D", true, false).size() > 30 and tw.background != null
+		and tw.collision.find_children("*", "StaticBody3D", true, false).size() > 30,
+		"works: the level, its background and its collision are in")
+	_check(tw.look.converted > 20 and tw.effects.get_child_count() > 5, "works: the map maker preview's look (%d materials) and the level's effects" % tw.look.converted)
+	_check(tw.roof_opened and tw.car_hidden > 0, "works: the roof is open for the lift, the package's own car hidden (%d pieces)" % tw.car_hidden)
+	var grunts := 0
+	var skirm := 0
+	for c in main.get_node("Targets").get_children():
+		if c is RobotSkirmisher: skirm += 1
+		elif c is RobotEnemy: grunts += 1
+	_check(grunts == 6 and skirm == 2, "works: 6 grunts and 2 skirmishers at the level's enemy spawns (%d, %d)" % [grunts, skirm])
+	var lift: ElevatorLift = main.get_node("ElevatorLift")
+	var p: PlayerController = main.players[1]
+	var cam := main.get_viewport().get_camera_3d()
+	_check(lift.arriving() and lift.global_position.y > 20.0 and p.controls_locked and absf(p.global_position.y - lift.global_position.y) < 1.0,
+		"works: the player starts high up the shaft on the lift, controls held (%.1f m)" % p.global_position.y)
+	_check(cam is ArrivalCamera and cam.global_position.distance_to((cam as ArrivalCamera).corner) < 0.1,
+		"works: the view starts wide from a corner of the hall")
+	await _ticks(330)
+	_check(is_instance_valid(cam) and cam is ArrivalCamera and (cam as ArrivalCamera)._swoop_t > 0.0 and cam.global_position.distance_to((cam as ArrivalCamera).corner) > 5.0,
+		"works: then it swoops in to the player")
+	await _ticks(60)
+	var now := main.get_viewport().get_camera_3d()
+	_check(lift.state == ElevatorLift.State.ARRIVED and not p.controls_locked and p.is_on_floor() and absf(p.global_position.y - 8.25) < 0.3,
+		"works: the lift lands, the player is free on the floor (%.2f m)" % p.global_position.y)
+	_check(now != null and not (now is ArrivalCamera) and now == p.get_tree().get_first_node_in_group(&"camera_rigs").camera,
+		"works: the player's own camera takes over")
+	# The slime: back to the spawn.
+	var slime: Area3D = null
+	for a in main.get_tree().get_nodes_in_group(&"hazard"):
+		if a is Area3D and tw.is_ancestor_of(a):
+			slime = a
+			break
+	_check(slime != null and slime.body_entered.is_connected(tw._on_fell), "works: the slime volumes are live")
+	if slime:
+		var shape := slime.find_children("*", "CollisionShape3D", true, false)[0] as CollisionShape3D
+		p.global_position = shape.global_position
+		p.velocity = Vector3.ZERO
+		await _ticks(6)
+		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0, "works: falling in the slime puts the player back at spawn")
+	main.queue_free()
+	await _ticks(5)
+	RobotEnemy.ai_enabled = ai_was
+
 
 ## Online co-op pieces that work in one game (the two-game test is
 ## tests/run_net_pair.sh): offline the game runs everything itself; a

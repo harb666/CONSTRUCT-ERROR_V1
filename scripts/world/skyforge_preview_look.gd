@@ -24,7 +24,9 @@ var converted := 0
 
 
 ## Scene-wide values from environment.json, as the preview uses them.
-func setup(env: Dictionary) -> void:
+## `ibl`: the level's sky lighting atlas (tools/bake_skyforge_ibl.py; the
+## Skyforge one by default - Toxic Works passes its own).
+func setup(env: Dictionary, ibl: Texture2D = null) -> void:
 	var lin := func(a: Array) -> Vector3: return Vector3(float(a[0]), float(a[1]), float(a[2]))
 	var amb: Dictionary = env.get("ambient", {})
 	var sun: Dictionary = env.get("sun", {})
@@ -36,7 +38,7 @@ func setup(env: Dictionary) -> void:
 	# three.js working = linear values).
 	var sky_c: Vector3 = lin.call(amb.get("sky_color", [0.5, 0.5, 0.5])).lerp(Vector3.ONE, 0.5)
 	scene_params = {
-		"ibl_atlas": IBL,
+		"ibl_atlas": ibl if ibl else IBL,
 		"sun_dir": (lin.call(sun.get("direction_to_sun", [0, 1, 0])) as Vector3).normalized(),
 		"sun_color": (lin.call(sun.get("color", [1, 1, 1])) as Vector3) * 1.25 * float(sun.get("energy", 1.0)),
 		"toon_floor": float(toon.get("floor", 0.5)) if not toon.is_empty() else 1.0,
@@ -67,7 +69,10 @@ func apply(root: Node, flows: Dictionary = {}) -> void:
 		var is_ter := n.begins_with("TR_") or n.begins_with("TRM_")
 		for s in mi.mesh.get_surface_count():
 			var src := mi.mesh.surface_get_material(s) as BaseMaterial3D
-			var ov := mi.get_surface_override_material(s) as BaseMaterial3D
+			var ov_any := mi.get_surface_override_material(s)
+			if ov_any and not (ov_any is BaseMaterial3D):
+				continue  # (an effect's own shader, e.g. Toxic Works' TV static)
+			var ov := ov_any as BaseMaterial3D
 			if ov:
 				src = ov
 			if src == null:
@@ -89,7 +94,7 @@ func apply(root: Node, flows: Dictionary = {}) -> void:
 				if src.normal_enabled and src.normal_texture:
 					defs.append("NMAP")
 			if src.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA or src.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS:
-				defs.append("ALPHA")
+				defs.append("PREVIEW_ALPHA")  # (not "ALPHA": that is the shader's own output)
 			var cull := "cull_disabled" if src.cull_mode == BaseMaterial3D.CULL_DISABLED else ("cull_front" if src.cull_mode == BaseMaterial3D.CULL_FRONT else "cull_back")
 			var key := [src, ",".join(defs), cull, flow]
 			var sm: ShaderMaterial = _made.get(key)
