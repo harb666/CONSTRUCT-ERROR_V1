@@ -220,8 +220,9 @@
   across to the right arm; heavier lock-in (bigger burst, arm dips under
   the weight); HUD HEAVY plate.
 
-- Skyforge Arena (owner asked) is the start level, the first part of the
-  first level: image-to-level's game-ready package, 4 grunts + 2
+- Skyforge Arena (owner asked) is the first part of the first level (the
+  game now starts in the Toxic Works, owner asked; `?level=skyforge` for
+  Skyforge): image-to-level's game-ready package, 4 grunts + 2
   skirmishers (no respawn), no weapon pads, player on the south tower deck.
   It must look exactly like the map maker (owner asked): its materials use
   `preview_lit.gdshaderinc`, a port of the map maker preview's three.js
@@ -237,9 +238,12 @@
   (`sky/ibl_atlas.png`), effects as packaged. The squad arrives on
   Skyforge's lift coming down through the roof, controls held
   (`ElevatorLift.arrival`; the ceiling's collider got its exact shape so the
-  shaft hole is open; the package's own elevator car is hidden), seen from
-  a corner of the hall, then the camera swoops in behind the player
-  (`ArrivalCamera`). 6 grunts + 2 skirmishers at the package's enemy spawns
+  shaft hole is open; the package's own elevator car is hidden). It's the
+  game's start level (owner asked; DEPLOY drops the squad in on the lift).
+  Opening shot (`ArrivalCamera`; owner asked for it closer, still dynamic):
+  rides down the shaft just above the squad, breaks out under the roof,
+  pulls out (staying under the ceiling's beams, < 21 m) into a crane shot
+  circling the lift, then swoops round behind the player. 6 grunts + 2 skirmishers at the package's enemy spawns
   (not hunting, no respawn). Slime / falling: player back to spawn, robots
   die. Exit door: "PART 3 COMING SOON" banner.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in

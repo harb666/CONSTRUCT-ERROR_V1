@@ -4296,7 +4296,6 @@ func _battle_arena_tests() -> void:
 ## the first level and the game's start level - 4 grunts + 2 skirmishers,
 ## no weapon pads, the player on the south tower deck.
 func _skyforge_tests() -> void:
-	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/skyforge_arena.tscn", "skyforge: Skyforge Arena is the game's start level")
 	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(40)
@@ -4590,6 +4589,7 @@ func _level_flow_tests() -> void:
 ## opened for the lift, the squad riding Skyforge's lift down from the roof
 ## watched from a corner (ArrivalCamera), the slime sends players back.
 func _toxic_works_tests() -> void:
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/toxic_works.tscn", "works: the Toxic Works is the game's start level (owner asked)")
 	var ai_was := RobotEnemy.ai_enabled
 	RobotEnemy.ai_enabled = false
 	var main: Node = load("res://scenes/toxic_works.tscn").instantiate()
@@ -4612,10 +4612,16 @@ func _toxic_works_tests() -> void:
 	var cam := main.get_viewport().get_camera_3d()
 	_check(lift.arriving() and lift.global_position.y > 20.0 and p.controls_locked and absf(p.global_position.y - lift.global_position.y) < 1.0,
 		"works: the player starts high up the shaft on the lift, controls held (%.1f m)" % p.global_position.y)
-	_check(cam is ArrivalCamera and cam.global_position.distance_to((cam as ArrivalCamera).corner) < 0.1,
-		"works: the view starts wide from a corner of the hall")
-	await _ticks(330)
-	_check(is_instance_valid(cam) and cam is ArrivalCamera and (cam as ArrivalCamera)._swoop_t > 0.0 and cam.global_position.distance_to((cam as ArrivalCamera).corner) > 5.0,
+	var lift_xz := Vector2(lift.global_position.x, lift.global_position.z)
+	_check(cam is ArrivalCamera and cam.global_position.y > 26.5 and Vector2(cam.global_position.x, cam.global_position.z).distance_to(lift_xz) < 5.0
+		and cam.global_position.y > p.global_position.y,
+		"works: the view starts riding down the shaft just above the squad (%s)" % cam.global_position)
+	await _ticks(240)
+	var cxz := Vector2(cam.global_position.x, cam.global_position.z).distance_to(lift_xz) if is_instance_valid(cam) else 0.0
+	_check(is_instance_valid(cam) and cam is ArrivalCamera and cam.global_position.y < 21.0 and cxz > 7.0 and cam.global_position.y > p.global_position.y + 2.0,
+		"works: out of the roof it pulls out to circle the lift, under the ceiling's beams, looking down on the squad (%.1f m out, %.1f m up)" % [cxz, cam.global_position.y if is_instance_valid(cam) else 0.0])
+	await _ticks(90)
+	_check(is_instance_valid(cam) and cam is ArrivalCamera and (cam as ArrivalCamera)._swoop_t > 0.0,
 		"works: then it swoops in to the player")
 	await _ticks(60)
 	var now := main.get_viewport().get_camera_3d()
