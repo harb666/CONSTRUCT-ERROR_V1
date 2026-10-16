@@ -10,6 +10,7 @@ extends Node3D
 @export_enum("off", "performance", "balanced", "quality") var quality: String = "balanced"
 @export var level_root: Node3D
 @export var environment: WorldEnvironment
+@export var hazard_group: StringName = &"hazard"  # Stage 72: crusher kill zones join this group while the ram is down (same as apply_mobile.gd)
 
 var _base_dir: String = ""
 var _anims: Array = []    # [material, base_energy, params, kind, next_change]
@@ -21,6 +22,9 @@ var _t: float = 0.0
 var _spins: Array = []  # [rotor node, rad/s]
 var _travel: Array = []  # [node, rest position, speed m/s, spacing m] (Stage 43: barrels up the column bores)
 var _launch: Array = []  # [node, rest position, speed, period, phase, travel] (Stage 49: pods shooting up the columns)
+var _crushers: Array = []  # Stage 72: [crusher dict, ram nodes, warning lamps, kill CollisionShape3D]
+var _risers: Array = []  # Stage 80: [riser dict, Skeleton3D, {bone name: index}, [[CollisionShape3D...] per pad], start time (-1: waiting)]
+var _lines: Array = []  # Stage 61: working assembly lines - [line dict, move nodes, [[station, arm nodes, held nodes, scan nodes]]]
 
 
 func _ready() -> void:
@@ -70,6 +74,12 @@ func _ready() -> void:
 				_flyby(fx, p)
 			"environment":
 				_sky_speed = deg_to_rad(float(p.get("speed_deg_s", 0.0)))
+			"assembly":  # Stage 61: conveyors with parcels, dipping arms and parts revealed past each arm
+				_assembly(fx["line"])
+			"crusher":  # Stage 72: a ram slamming down onto a pad - kills whatever stands there
+				_crusher(fx["crusher"])
+			"emerge":  # Stage 80: pads surging up out of the liquid when a player comes near
+				_riser(fx["riser"])
 			"launch":  # Stage 49: each entry's nodes wait, shoot up `travel` m at `speed`, repeat every `period` s (own phase)
 				for l in fx.get("launches", []):
 					for n in l.get("targets", []):
@@ -149,6 +159,346 @@ func _material_anim(fx: Dictionary, p: Dictionary) -> void:
 		seen[m] = true
 		m.emission_enabled = true
 		_anims.append([m, m.emission_energy_multiplier, p, fx["type"], 0.0])
+
+
+func _group_nodes(group: String) -> Array:
+	return level_root.find_children(group + "__*", "Node3D", true, false)
+
+
+func _assembly(line: Dictionary) -> void:
+	var mv: Array = []
+	for gname in line["move"]:
+		mv.append_array(_group_nodes(String(gname)))
+	var stations: Array = []
+	var reveal_shader: Shader = load(_base_dir + "/fx/godot/assembly_reveal.gdshader")
+	for st in line["stations"]:
+		var arm: Array = []
+		for gname in st["groups"]:
+			arm.append_array(_group_nodes(String(gname)))
+		var held: Array = []
+		for gname in st["held"]:
+			held.append_array(_group_nodes(String(gname)))
+		var scan: Array = []
+		for gname in st["scan"]:
+			scan.append_array(_group_nodes(String(gname)))
+		var ring: Array = []
+		for gname in st.get("ring", []):
+			ring.append_array(_group_nodes(String(gname)))
+		var rv: Dictionary = st["reveal"]
+		var mats: Array = []
+		for nd in _group_nodes(String(rv["group"])):  # a part shows whole once its parcel reaches the arm
+			var mi := nd as MeshInstance3D
+			if mi == null:
+				continue
+			var src := mi.get_active_material(0) as BaseMaterial3D
+			var sm := ShaderMaterial.new()
+			sm.shader = reveal_shader
+			if src:
+				sm.set_shader_parameter("albedo_tex", src.albedo_texture if src.albedo_texture else src.emission_texture)
+				sm.set_shader_parameter("tint", src.albedo_color)
+			for k in ["s0", "spacing", "s_arm", "id_step"]:
+				sm.set_shader_parameter(k, float(rv[k]))
+			mi.material_override = sm
+			mats.append(sm)
+		var sk: Skeleton3D = null  # Stage 65: a skinned arm - one bone per joint (turret, shoulder, elbow, wrist, twist, 3 fingers)
+		var bones := {}
+		if st.has("rig"):
+			for nd in arm:
+				var mi := nd as MeshInstance3D
+				if mi and mi.skin != null:
+					sk = mi.get_node_or_null(mi.skeleton) as Skeleton3D
+					if sk:
+						break
+			if sk:
+				for role in st["rig"]["bones"]:
+					bones[role] = sk.find_bone(String(st["rig"]["bones"][role]))
+			for nd in arm + held + scan:  # bounds are the rest pose: never culled while the arm is swung out
+				(nd as GeometryInstance3D).extra_cull_margin = 6.0
+		stations.append([st, arm, held, scan, mats, ring, sk, bones])
+	var belts: Array = []  # Stage 68: the belt surface runs with the parcels (UV offset on the belt's own material)
+	if line.has("belt"):
+		var bn := String(line["belt"]["material"])
+		for node in level_root.find_children("*", "MeshInstance3D", true, false):
+			var mi := node as MeshInstance3D
+			for si in mi.get_surface_override_material_count():
+				var bm := mi.get_active_material(si) as BaseMaterial3D
+				if bm and (bm.resource_name == bn or bm.resource_name.begins_with(bn + "__")) and not belts.has(bm):
+					belts.append(bm)
+	_lines.append([line, mv, stations, belts])
+
+
+func _update_lines() -> void:
+	for ln in _lines:
+		var line: Dictionary = ln[0]
+		var ax := Vector3(line["axis"][0], line["axis"][1], line["axis"][2])
+		var d := fmod(_t * float(line["speed"]), float(line["spacing"]))
+		var off := ax * d
+		for nd in ln[1]:
+			(nd as Node3D).position = off
+		if line.has("belt"):
+			var sc: Array = line["belt"]["scroll"]
+			for bm in ln[3]:
+				(bm as BaseMaterial3D).uv1_offset = Vector3(fposmod(float(sc[0]) * _t, 1.0), fposmod(float(sc[1]) * _t, 1.0), 0.0)
+		for sa in ln[2]:
+			var st: Dictionary = sa[0]
+			for sm in sa[4]:
+				(sm as ShaderMaterial).set_shader_parameter("offset", d)
+			var P := float(st["period"])
+			var W := float(st["window"])
+			var tau := fposmod(_t - float(st["t0"]), P)
+			var u := fposmod(_t - float(st["t0"]) + W * 0.5, P)
+			var k := 0.5 - 0.5 * cos(TAU * u / W) if u < W else 0.0  # dip to the parcel, deepest when it is under the claw
+			var ang := deg_to_rad(float(st["angle_deg"])) * k
+			var psi := 0.0
+			var kb := 0.0
+			var t_pick := 0.6 * P
+			var picked := tau > 0.6 * P
+			if st.has("bin_yaw_deg"):  # Stage 63: turn to the bin, reach in for the next canister, turn back
+				var ty := float(st["turn"])
+				var wb := float(st["bin_window"])
+				var a := W * 0.5
+				var b := a + ty
+				var c := b + wb
+				var pb := deg_to_rad(float(st["bin_yaw_deg"]))
+				if tau >= a and tau < b:
+					psi = pb * smoothstep(0.0, 1.0, (tau - a) / ty)
+				elif tau >= b and tau < c:
+					psi = pb
+					kb = 0.5 - 0.5 * cos(TAU * (tau - b) / wb)
+					ang += deg_to_rad(float(st["bin_angle_deg"])) * kb
+				elif tau >= c and tau < c + ty:
+					psi = pb * (1.0 - smoothstep(0.0, 1.0, (tau - c) / ty))
+				t_pick = b + wb * 0.5
+				picked = tau >= t_pick
+			var sk := sa[6] as Skeleton3D
+			var held_on := picked
+			var scanning := absf(u - W * 0.5) < W * 0.35
+			var ring_e := 0.0
+			var ring_f := clampf((u - 0.15 * W) / (0.7 * W), 0.0, 1.0)
+			if sk:  # Stage 66: a motion program (pipeline/arm_motion.py) - servo moves through the joints only, no sway
+				var rig: Dictionary = st["rig"]
+				var pg: Dictionary = rig["program"]
+				var v := float(line["speed"])
+				var s0 := float(pg["start"])
+				var x := _t - float(st["t0"]) - s0
+				var n := floorf(x / P)
+				var tq := x - n * P + s0
+				var J := _arm_joints(rig, pg, tq, v, P)
+				var A := {"yaw": J[0], "shoulder": J[1], "elbow": J[2], "wrist": -(J[1] + J[2]),
+					"twist": deg_to_rad(float(pg["twist_cycle"]) * n + _keyed(pg["twist"], tq, 0.0))}
+				var fa := deg_to_rad(_keyed(pg["fingers"], tq, float(pg["fingers_start"])))
+				for i in 3:
+					A["finger%d" % (i + 1)] = fa
+				var bones: Dictionary = sa[7]
+				for role in A:
+					if bones.has(role) and int(bones[role]) >= 0:
+						var axv: Array = rig["axes"][role]
+						sk.set_bone_pose_rotation(int(bones[role]), Quaternion(Vector3(axv[0], axv[1], axv[2]).normalized(), float(A[role])))
+				var hh = pg.get("held_hidden")
+				held_on = not (hh != null and tq >= float(hh[0]) and tq < float(hh[1]))
+				var sc = pg.get("scan")
+				scanning = sc != null and tq >= float(sc[0]) and tq < float(sc[1])
+				if sc != null:  # the laser frame rides along with the parcel it scans
+					ring_e = v * tq
+					ring_f = clampf((tq - float(sc[0])) / (float(sc[1]) - float(sc[0])), 0.0, 1.0)
+			if sk == null:  # no skeleton: the whole upper arm swings as one piece (Stage 61)
+				# Construct Error: this transform was dropped upstream (0abdb30) but is still used here.
+				var hinge := Vector3(st["hinge"][0], st["hinge"][1], st["hinge"][2]).normalized()
+				var pv := Vector3(st["pivot"][0], st["pivot"][1], st["pivot"][2])
+				var bas := Basis(Vector3.UP, psi) * Basis(hinge, ang)
+				var xf := Transform3D(bas, pv - bas * pv)
+				for nd in sa[1] + sa[2] + sa[3]:
+					(nd as Node3D).transform = xf
+			for nd in sa[2]:  # the held canister: gone from the drop until it is lifted out of the bin
+				(nd as Node3D).visible = held_on
+			for nd in sa[3]:  # the scan beam shows while the arm is down
+				(nd as Node3D).visible = scanning
+			for nd in sa[5]:  # the laser frame sweeps up and down the parcel while it scans
+				(nd as Node3D).visible = scanning
+				(nd as Node3D).position = ax * ring_e + Vector3(0.0, float(st.get("ring_travel", 0.6)) * (0.5 - 0.5 * cos(TAU * float(st.get("sweeps", 2)) * ring_f)), 0.0)
+
+
+func _crusher(c: Dictionary) -> void:
+	var lo := Vector3(c["kill"][0][0], c["kill"][0][1], c["kill"][0][2])
+	var hi := Vector3(c["kill"][1][0], c["kill"][1][1], c["kill"][1][2])
+	var area := Area3D.new()
+	area.name = String(c["id"]) + "_Kill"
+	var cs := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = hi - lo
+	cs.shape = bx
+	cs.position = (lo + hi) * 0.5
+	cs.disabled = true  # only while the ram is down
+	area.add_child(cs)
+	level_root.add_child(area)
+	area.add_to_group(hazard_group)
+	_crushers.append([c, _group_nodes(String(c["group"])), _group_nodes(String(c["warn_group"])), cs])
+
+
+func _riser(r: Dictionary) -> void:
+	var sk: Skeleton3D = null
+	for nd in _group_nodes(String(r["group"])):
+		var mi := nd as MeshInstance3D
+		if mi and mi.skin != null:
+			sk = mi.get_node_or_null(mi.skeleton) as Skeleton3D
+			(mi as GeometryInstance3D).extra_cull_margin = float(r["pads"][0]["rise"]) + 2.0  # bounds are the raised pose
+	if sk == null:
+		push_warning("rising pads " + String(r["id"]) + ": no skinned mesh / skeleton found")
+		return
+	var bones := {}
+	for i in sk.get_bone_count():
+		bones[sk.get_bone_name(i)] = i
+	var cols: Array = []  # each pad's colliders (collision.glb nodes named after the cap) stay off until it is up
+	for pd in r["pads"]:
+		var cs: Array = []
+		for cn in pd["colliders"]:
+			for c in get_tree().root.find_children(String(cn) + "*", "CollisionShape3D", true, false):
+				(c as CollisionShape3D).disabled = true
+				cs.append(c)
+		cols.append(cs)
+	var tr: Dictionary = r["trigger"]  # a player entering this sphere starts the sequence
+	var area := Area3D.new()
+	area.name = String(r["id"]) + "_Trigger"
+	var sh := CollisionShape3D.new()
+	var sp := SphereShape3D.new()
+	sp.radius = float(tr["radius"])
+	sh.shape = sp
+	sh.position = Vector3(tr["center"][0], tr["center"][1], tr["center"][2])
+	area.add_child(sh)
+	level_root.add_child(area)
+	var rec := [r, sk, bones, cols, -1.0]
+	area.body_entered.connect(func(b: Node3D) -> void:
+		if rec[4] < 0.0 and b is CharacterBody3D:
+			rec[4] = _t)
+	_risers.append(rec)
+	_pose_riser(rec, -1.0)
+
+
+## Stage 80: start a riser sequence from game code (e.g. a cutscene) instead of the trigger sphere.
+func raise_pads(riser_id: String) -> void:
+	for rec in _risers:
+		if String(rec[0]["id"]) == riser_id and rec[4] < 0.0:
+			rec[4] = _t
+
+
+func _pose_riser(rec: Array, t: float) -> void:  # t: seconds since the trigger (< 0: still waiting)
+	var r: Dictionary = rec[0]
+	var sk: Skeleton3D = rec[1]
+	var bones: Dictionary = rec[2]
+	var D := float(r["rise_s"])
+	for k in r["pads"].size():
+		var pd: Dictionary = r["pads"][k]
+		var tk: float = t - k * float(r["stagger"]) if t >= 0.0 else -1.0
+		var off := -float(pd["rise"])
+		if tk >= 0.0 and tk < D:
+			off = -float(pd["rise"]) * pow(1.0 - tk / D, 3.0)  # bursts up, decelerates
+		elif tk >= D:
+			var tb := tk - D
+			off = 0.22 * sin(9.0 * tb) * exp(-4.0 * tb) if tb < 1.4 else 0.0  # settles with a damped bob
+		var rs := 0.4
+		var ry := -3.0
+		var r0 := 0.35 * D
+		if tk >= r0:  # surge ring bursts out where the pad breaks the surface, sinking back under it
+			var f := clampf((tk - r0) / 1.6, 0.0, 1.0)
+			var e := 1.0 - pow(1.0 - f, 2.0)
+			rs = 0.4 + 2.6 * e
+			ry = -0.9 * f * f if f < 1.0 else -3.0
+		var bi: int = bones.get(String(pd["joint"]), -1)
+		if bi >= 0:
+			sk.set_bone_pose_position(bi, sk.get_bone_rest(bi).origin + Vector3(0.0, off, 0.0))
+		var ri: int = bones.get(String(pd["ring"]), -1)
+		if ri >= 0:
+			sk.set_bone_pose_position(ri, sk.get_bone_rest(ri).origin + Vector3(0.0, ry, 0.0))
+			sk.set_bone_pose_scale(ri, Vector3(rs, 1.0, rs))
+		for c in rec[3][k]:
+			(c as CollisionShape3D).disabled = tk < 0.85 * D
+
+
+func _update_risers() -> void:
+	for rec in _risers:
+		if rec[4] >= 0.0 and _t - rec[4] < 60.0:
+			_pose_riser(rec, _t - rec[4])
+
+
+func _update_crushers() -> void:
+	for cr in _crushers:
+		var c: Dictionary = cr[0]
+		var P := float(c["period"])
+		var tr := float(c["travel"])
+		var wa := float(c["warn"])
+		var dn := float(c["down"])
+		var ho := float(c["hold"])
+		var ri := float(c["rise"])
+		var t0 := P - wa - dn - ho - ri
+		var u := fposmod(_t + float(c["phase"]), P)
+		var off := 0.0
+		var warn := u >= t0 and u < t0 + wa
+		if u >= t0 + wa and u < t0 + wa + dn:  # slam: accelerating
+			var f := (u - t0 - wa) / dn
+			off = -tr * f * f
+		elif u >= t0 + wa + dn and u < t0 + wa + dn + ho:
+			off = -tr
+		elif u >= t0 + wa + dn + ho:  # climb back, eased
+			off = -tr * (1.0 - smoothstep(0.0, 1.0, (u - t0 - wa - dn - ho) / ri))
+		for nd in cr[1]:
+			(nd as Node3D).position = Vector3(0.0, off, 0.0)
+		for nd in cr[2]:  # warning lamps blink before the slam
+			(nd as Node3D).visible = not warn or int(_t * 8.0) % 2 == 0
+		(cr[3] as CollisionShape3D).set_deferred("disabled", tr + off > 1.8)  # deadly once the head is lower than a player
+
+
+static func _smoother(x: float) -> float:
+	x = clampf(x, 0.0, 1.0)
+	return x * x * x * (x * (6.0 * x - 15.0) + 10.0)
+
+
+static func _keyed(keys: Array, tau: float, v0: float) -> float:
+	var val := v0
+	for k in keys:
+		if tau >= float(k[1]):
+			val = float(k[3])
+		elif tau >= float(k[0]):
+			return float(k[2]) + (float(k[3]) - float(k[2])) * _smoother((tau - float(k[0])) / (float(k[1]) - float(k[0])))
+	return val
+
+
+static func _arm_target(rig: Dictionary, q: Dictionary, tau: float, v: float) -> Vector3:
+	if q["k"] == "bin":
+		return Vector3(rig["bin"][0], float(rig["bin"][1]) + float(q["h"]), rig["bin"][2])
+	var e := v * tau if q["k"] == "track" else float(q["e"])
+	return Vector3(float(rig["tip"][0]) + float(rig["axis"][0]) * e, float(rig["tip"][1]) + float(q["h"]), float(rig["tip"][2]) + float(rig["axis"][2]) * e)
+
+
+static func _arm_ik(rig: Dictionary, p: Vector3) -> Array:  # [yaw, shoulder, elbow] offsets from the rest pose (arm_motion.ik)
+	var l1 := float(rig["l1"])
+	var l2 := float(rig["l2"])
+	var dx := p.x - float(rig["base"][0])
+	var dz := p.z - float(rig["base"][1])
+	var r := sqrt(dx * dx + dz * dz)
+	var dy := p.y + float(rig["claw"]) - float(rig["py"])
+	var D := clampf(sqrt(r * r + dy * dy), absf(l1 - l2) + 0.001, l1 + l2 - 0.001)
+	var b1 := atan2(r, dy) - acos(clampf((l1 * l1 + D * D - l2 * l2) / (2.0 * l1 * D), -1.0, 1.0))
+	var b2 := atan2(r - l1 * sin(b1), dy - l1 * cos(b1))
+	var yw := fposmod(atan2(dx, dz) - float(rig["yaw0"]) + PI, TAU) - PI
+	return [yw, b1 - float(rig["a1"]), (b2 - b1) - (float(rig["a2"]) - float(rig["a1"]))]
+
+
+static func _arm_joints(rig: Dictionary, pg: Dictionary, tau: float, v: float, period: float) -> Array:
+	for sg in pg["segs"]:
+		var a := float(sg[0])
+		var b := float(sg[1])
+		if b <= a:
+			b += period
+		if tau >= a and tau < b:
+			var w := _smoother((tau - a) / (b - a))
+			var pa := _arm_target(rig, sg[3], tau, v)
+			var pb := _arm_target(rig, sg[4], tau, v)
+			if sg[2] == "lin":
+				return _arm_ik(rig, pa.lerp(pb, w))
+			var ja := _arm_ik(rig, pa)
+			var jb := _arm_ik(rig, pb)
+			return [lerpf(ja[0], jb[0], w), lerpf(ja[1], jb[1], w), lerpf(ja[2], jb[2], w)]
+	return [0.0, 0.0, 0.0]
 
 
 func _bubbles(fx: Dictionary, p: Dictionary) -> void:
@@ -451,6 +801,9 @@ func _process(delta: float) -> void:
 	_t += delta
 	for sp in _spins:
 		(sp[0] as Node3D).rotate_object_local(Vector3.UP, float(sp[1]) * delta)
+	_update_lines()
+	_update_crushers()
+	_update_risers()
 	for la in _launch:
 		(la[0] as Node3D).position = (la[1] as Vector3) + Vector3.UP * minf(fmod(_t + float(la[4]), float(la[3])) * float(la[2]), float(la[5]))
 	for tv in _travel:

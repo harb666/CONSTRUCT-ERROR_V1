@@ -243,9 +243,21 @@
   Opening shot (`ArrivalCamera`; owner asked for it closer, still dynamic):
   rides down the shaft just above the squad, breaks out under the roof,
   pulls out (staying under the ceiling's beams, < 21 m) into a crane shot
-  circling the lift, then swoops round behind the player. 6 grunts + 2 skirmishers at the package's enemy spawns
-  (not hunting, no respawn). Slime / falling: player back to spawn, robots
-  die. Exit door: "PART 3 COMING SOON" banner.
+  circling the lift, then swoops round behind the player.
+  Owner's latest map maker update (image-to-level 6f473a6, rebuilt here with
+  its own `generate.py` + `package.py --game`; its 4 newest changes weren't in
+  its committed export): the hall's 3 waves (4 grunts; 4 + 2 skirmishers;
+  5 + 3; `WaveDirector` with `first_wave_placed` / `auto_start` off, started
+  when the lift lands, hunting over `gameplay/navmesh.res`,
+  `tools/bake_skyforge_navmesh.gd -- --level=works`) open the laser gate
+  into the Works; 4 grunts + 2 skirmishers wait in the Works (no respawn);
+  working assembly lines (skinned robot arms, running belts - the look's
+  converted belt material is scrolled in `ToxicWorks`), the crusher (its
+  pad kills), pads that surge up out of the slime, and the control terminal
+  at their end: walking up to it opens the exit's laser gate. The package's
+  `apply_effects.gd` needed compile fixes here (typed vars, a transform
+  dropped upstream). Slime / crusher / falling: player back to spawn, robots
+  die. Exit hallway: "PART 3 COMING SOON" banner.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime

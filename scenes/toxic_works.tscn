@@ -9,6 +9,8 @@
 [ext_resource type="PackedScene" path="res://scenes/enemies/robot_skirmisher.tscn" id="12"]
 [ext_resource type="Script" path="res://scripts/world/elevator_lift.gd" id="lift"]
 [ext_resource type="Script" path="res://scripts/camera/arrival_camera.gd" id="arrcam"]
+[ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
+[ext_resource type="NavigationMesh" path="res://levels/slime_arena/gameplay/navmesh.res" id="navmesh"]
 [ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 
 [sub_resource type="Environment" id="env"]
@@ -34,16 +36,6 @@ shadow_enabled = true
 script = ExtResource("2")
 
 [node name="Targets" type="Node3D" parent="."]
-
-[node name="HallNorthGrunt" parent="Targets" instance=ExtResource("7")]
-transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, 0, 7.05, -29.5)
-respawn_time = -1.0
-patrol_distance = 0.0
-
-[node name="HallNorthEastGrunt" parent="Targets" instance=ExtResource("7")]
-transform = Transform3D(-0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, -0.707107, 37, 7.05, -37)
-respawn_time = -1.0
-patrol_distance = 0.0
 
 [node name="AssemblyGrunt" parent="Targets" instance=ExtResource("7")]
 transform = Transform3D(-1.0, 0, 0.0, 0, 1, 0, -0.0, 0, -1.0, 0, 7.05, -82)
@@ -74,6 +66,27 @@ patrol_distance = 0.0
 transform = Transform3D(-0.938493, 0, -0.345298, 0, 1, 0, 0.345298, 0, -0.938493, 47.9, 8.05, -130)
 respawn_time = -1.0
 patrol_distance = 0.0
+
+[node name="HallTargets" type="Node3D" parent="."]
+
+[node name="WaveSpawns" type="Node3D" parent="."]
+
+[node name="HallNorth" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 7, -29.5)
+
+[node name="HallNorthEast" type="Marker3D" parent="WaveSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 37, 7, -37)
+
+[node name="WaveDirector" type="Node" parent="."]
+script = ExtResource("waves")
+targets_path = NodePath("../HallTargets")
+waves = Array[Vector2i]([Vector2i(4, 0), Vector2i(4, 2), Vector2i(5, 3)])
+first_wave_placed = false
+auto_start = false
+hunt_players = true
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+navigation_mesh = ExtResource("navmesh")
 
 [node name="ElevatorLift" type="AnimatableBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)

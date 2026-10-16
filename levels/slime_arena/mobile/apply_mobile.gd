@@ -12,6 +12,14 @@ extends Node3D
 signal level_exit_entered(target: String, body: Node)
 ## emitted when an arriving elevator car (collision.json "entrances") reaches its rest position
 signal arrival_finished(entrance_id: String)
+## Stage 59: emitted when a laser gate (collision.json "gates") has opened (call open_gate(id) when its encounter is cleared)
+signal gate_opened(gate_id: String)
+
+## Stage 80: emitted when a control terminal (collision.json "terminals") is used - after its gates were told to open
+signal terminal_activated(terminal_id: String)
+
+var _gates := {}  # id -> {"data": gate dict, "blocker": StaticBody3D}
+var _terminals := {}  # id -> terminal dict (Stage 80)
 
 var _entrances := {}  # id -> {"data": entrance dict, "pivot": Node3D holding the car's merged nodes}
 
@@ -50,6 +58,35 @@ func _ready() -> void:
 		ta.add_to_group(&"level_exit")
 		ta.body_entered.connect(func(b): level_exit_entered.emit(String(tr["target"]), b))
 		add_child(ta)
+	for gt in col.get("gates", []):  # Stage 59: laser gates - a solid blocker while closed (group "laser_gate", meta "gate_id")
+		var sb := StaticBody3D.new()
+		sb.name = String(gt["id"]) + "_Blocker"
+		var gcs := CollisionShape3D.new()
+		var gbox := BoxShape3D.new()
+		gbox.size = Vector3(gt["size"][0], gt["size"][1], gt["size"][2])
+		gcs.shape = gbox
+		sb.add_child(gcs)
+		sb.position = Vector3(gt["center"][0], gt["center"][1], gt["center"][2])
+		sb.rotation_degrees.y = float(gt.get("yaw_deg", 0.0))
+		sb.set_meta("gate_id", gt["id"])
+		sb.add_to_group(&"laser_gate")
+		add_child(sb)
+		_gates[String(gt["id"])] = {"data": gt, "blocker": sb}
+		if not bool(gt.get("closed_at_start", true)):
+			open_gate.call_deferred(String(gt["id"]), 0.0)
+	for tm in col.get("terminals", []):  # Stage 80: control terminals - an interaction area (group "terminal", meta "terminal_id")
+		var ia := Area3D.new()
+		ia.name = String(tm["id"]) + "_Use"
+		var ics := CollisionShape3D.new()
+		var isp := SphereShape3D.new()
+		isp.radius = float(tm.get("radius", 1.8))
+		ics.shape = isp
+		ia.add_child(ics)
+		ia.position = Vector3(tm["center"][0], tm["center"][1], tm["center"][2])
+		ia.set_meta("terminal_id", tm["id"])
+		ia.add_to_group(&"terminal")
+		add_child(ia)
+		_terminals[String(tm["id"])] = tm
 	for h in col["hazards"]:
 		var area := Area3D.new()
 		area.name = String(h["name"]) + "_Area"
@@ -96,3 +133,39 @@ func play_arrival(entrance_id: String, player: Node3D = null) -> void:
 	var tw := create_tween()
 	tw.tween_method(step, off, 0.0, float(en["duration_s"])).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.finished.connect(func(): arrival_finished.emit(entrance_id))
+
+
+## Stage 59: open a laser gate - its beams (merged nodes "<group>__<material>") stutter out over `fade` seconds, the
+## blocker is removed, then gate_opened(id) is emitted. Call it when the gate's encounter (level.json "encounters") is cleared.
+## Stage 80: use a control terminal (call it when the player presses interact inside its "terminal" area): every gate in
+## its "activates" list opens (open_gate), then terminal_activated(id) is emitted. Used once.
+func activate_terminal(terminal_id: String) -> void:
+	if not _terminals.has(terminal_id):
+		return
+	var tm: Dictionary = _terminals[terminal_id]
+	_terminals.erase(terminal_id)
+	for gid in tm.get("activates", []):
+		if _gates.has(String(gid)):
+			open_gate(String(gid))
+	terminal_activated.emit(terminal_id)
+
+
+func open_gate(gate_id: String, fade: float = 0.6) -> void:
+	if not _gates.has(gate_id):
+		push_warning("unknown gate " + gate_id)
+		return
+	var g: Dictionary = _gates[gate_id]
+	var nodes: Array = []
+	for c in level_root.find_children(String(g["data"]["group"]) + "__*", "Node3D", true, false):
+		nodes.append(c)
+	if is_instance_valid(g["blocker"]):
+		g["blocker"].queue_free()
+	if fade > 0.0 and not nodes.is_empty():  # beams stutter out (merged meshes sit at the origin: no scaling)
+		for i in 6:
+			for nd in nodes:
+				(nd as Node3D).visible = i % 2 == 1
+			await get_tree().create_timer(fade / 6.0).timeout
+	for nd in nodes:
+		(nd as Node3D).visible = false
+	_gates.erase(gate_id)
+	gate_opened.emit(gate_id)

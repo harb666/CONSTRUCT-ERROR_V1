@@ -13,9 +13,15 @@ extends Node3D
 ##     own sky lighting, sky/ibl_atlas.png).
 ## The squad arrives on Skyforge's lift coming down through the roof
 ## (ElevatorLift in arrival mode; the package's own elevator car is hidden),
-## watched from the corner of the hall (ArrivalCamera). Slime (the hazard
-## volumes) or falling off sends a player back to the spawn and kills a
-## robot. The exit door leads to part 3, not made yet.
+## seen by ArrivalCamera. The level's own gameplay (owner's map maker):
+##   - the hall's 3 waves (WaveDirector, once the lift has landed) open the
+##     laser gate into the Works (collision.json "encounters" / "gates");
+##   - the working assembly lines, the crusher (kills on its pad) and the
+##     pads that surge up out of the slime run in apply_effects.gd;
+##   - the control terminal at the end of the pads opens the exit's laser
+##     gate (walking up to it uses it);
+##   - slime, the crusher or falling off sends a player back to the spawn
+##     and kills a robot; the exit leads to part 3, not made yet.
 
 signal level_exit_entered(target: String, body: Node)
 
@@ -47,6 +53,12 @@ var look: SkyforgePreviewLook
 var hud: LevelFlowHud
 ## Car pieces hidden (tests).
 var car_hidden := 0
+## The hall's waves (WaveDirector), gates opened and terminals used so far.
+var director: WaveDirector
+var gates_open: PackedStringArray = []
+var terminals_used: PackedStringArray = []
+## The laser gate the hall's waves open (into the Works).
+const WORKS_GATE := "Gate_Works_Laser"
 var _exit_shown := false
 var _camera_far := 800.0
 
@@ -72,6 +84,7 @@ func _ready() -> void:
 	mobile.set("level_root", level)
 	add_child(mobile)
 	mobile.connect(&"level_exit_entered", _on_level_exit)
+	mobile.connect(&"gate_opened", _on_gate_opened)
 	_setup_environment()
 	effects = APPLY_EFFECTS.new()
 	effects.name = "ApplyEffects"
@@ -86,6 +99,7 @@ func _ready() -> void:
 	look.setup(env_data, load(DIR + "/sky/ibl_atlas.png"))
 	look.apply(level, _flows())
 	look.apply(background)
+	_find_belts()
 	out_of_bounds = Area3D.new()
 	out_of_bounds.name = "OutOfBounds"
 	out_of_bounds.monitorable = false
@@ -98,8 +112,10 @@ func _ready() -> void:
 	out_of_bounds.add_child(cs)
 	add_child(out_of_bounds)
 	out_of_bounds.body_entered.connect(_on_fell)
-	# The slime: apply_mobile's hazard volumes (group "hazard").
+	# The slime and the crusher: hazard volumes (group "hazard").
 	_connect_hazards.call_deferred()
+	_connect_terminals.call_deferred()
+	_connect_flow.call_deferred()
 	var ui := get_parent().get_node_or_null(^"UI") if get_parent() else null
 	if ui:
 		hud = LevelFlowHud.new()
@@ -157,6 +173,96 @@ func _connect_hazards() -> void:
 		if area and is_ancestor_of(area) and not area.body_entered.is_connected(_on_fell):
 			area.collision_mask = 0xFFFFFFFF
 			area.body_entered.connect(_on_fell)
+
+
+## The hall fight (owner's level: collision.json "encounters"): the waves
+## start once the lift has landed (WaveDirector, begin()); when the last is
+## cleared, the gates it opens (the laser gate into the Works) open.
+func _connect_flow() -> void:
+	var main := get_parent()
+	if main == null:
+		return
+	director = main.get_node_or_null(^"WaveDirector") as WaveDirector
+	var lift := main.get_node_or_null(^"ElevatorLift") as ElevatorLift
+	if director:
+		director.wave_started.connect(_on_wave_started)
+		director.wave_cleared.connect(_on_wave_cleared)
+		director.all_cleared.connect(_on_waves_done)
+		if lift and lift.arrival and lift.arriving():
+			lift.arrival_finished.connect(director.begin)
+		else:
+			director.begin()
+
+
+func _on_wave_started(index: int, total: int) -> void:
+	Net.world_event(self, &"wave_started", [index, total])
+	if hud:
+		hud.banner("WAVE %d / %d" % [index, total], "CLEAR THE HALL" if index == 1 else "ENEMIES INBOUND")
+
+
+func _on_wave_cleared(index: int, total: int) -> void:
+	Net.world_event(self, &"wave_cleared", [index, total])
+	if hud and index < total:
+		hud.banner("WAVE CLEARED", "NEXT WAVE INCOMING")
+
+
+## The hall is clear: its gates open (the world's owner decides; online,
+## everyone follows).
+func _on_waves_done() -> void:
+	Net.world_event(self, &"waves_done")
+	for g in _json(DIR + "/mobile/collision.json").get("gates", []):
+		var on: Dictionary = g.get("opens_on", {})
+		if String(on.get("type", "")) == "waves_cleared":
+			open_gate(String(g["id"]))
+
+
+func open_gate(gate_id: String) -> void:
+	if gates_open.has(gate_id):
+		return
+	gates_open.append(gate_id)
+	mobile.call(&"open_gate", gate_id)
+
+
+## The control terminal(s): walking up to one uses it (the level's own
+## interaction area) - its gates open (the exit's laser gate).
+func _connect_terminals() -> void:
+	for a in get_tree().get_nodes_in_group(&"terminal"):
+		var area := a as Area3D
+		if area and is_ancestor_of(area):
+			area.collision_mask = 0xFFFFFFFF
+			area.monitorable = false
+			var id := String(area.get_meta(&"terminal_id", ""))
+			area.body_entered.connect(func(b: Node3D) -> void:
+				if b is PlayerController and Net.is_authority():
+					use_terminal(id))
+
+
+func use_terminal(id: String) -> void:
+	if terminals_used.has(id):
+		return
+	terminals_used.append(id)
+	Net.world_event(self, &"terminal", [id])
+	mobile.call(&"activate_terminal", id)
+	if hud:
+		hud.banner("TERMINAL ACTIVATED", "EXIT GATE OPEN")
+
+
+func _on_gate_opened(gate_id: String) -> void:
+	if hud and gate_id == WORKS_GATE:
+		hud.banner("HALL CLEARED", "THE WORKS GATE IS OPEN")
+
+
+## The host's events, here too (online).
+func net_event(kind: StringName, args: Array) -> void:
+	match kind:
+		&"wave_started":
+			_on_wave_started(int(args[0]), int(args[1]))
+		&"wave_cleared":
+			_on_wave_cleared(int(args[0]), int(args[1]))
+		&"waves_done":
+			_on_waves_done()
+		&"terminal":
+			use_terminal(String(args[0]))
 
 
 func _json(path: String) -> Dictionary:
@@ -221,7 +327,41 @@ func _flows() -> Dictionary:
 	return out
 
 
-func _process(_delta: float) -> void:
+## The conveyor belts run with their parcels (effects "assembly_line"
+## "belt": apply_effects.gd scrolls the original material's UVs; the look's
+## converted material gets the same scroll here).
+var _belts: Array = []  # [ShaderMaterial, rest offset, scroll per second]
+var _belt_t := 0.0
+
+
+func _find_belts() -> void:
+	var scroll := {}
+	for f in _json(DIR + "/mobile/effects_mobile.json").get("effects", []):
+		var line: Dictionary = f.get("line", {})
+		if f.get("type", "") == "assembly_line" and line.has("belt"):
+			var sc: Array = line["belt"]["scroll"]
+			scroll[String(line["belt"]["material"])] = Vector2(sc[0], sc[1])
+	if scroll.is_empty():
+		return
+	var seen := {}
+	for mi: MeshInstance3D in level.find_children("*", "MeshInstance3D", true, false):
+		for si in mi.get_surface_override_material_count():
+			var sm := mi.get_surface_override_material(si) as ShaderMaterial
+			if sm == null or seen.has(sm):
+				continue
+			for bn: String in scroll:
+				if sm.resource_name == bn or sm.resource_name.begins_with(bn + "__"):
+					seen[sm] = true
+					_belts.append([sm, sm.get_shader_parameter("uv_offset"), scroll[bn]])
+
+
+func _process(delta: float) -> void:
+	_belt_t += delta
+	for b in _belts:
+		var sc: Vector2 = b[2]
+		var rest = b[1]
+		var base: Vector2 = rest if rest is Vector2 else Vector2.ZERO
+		(b[0] as ShaderMaterial).set_shader_parameter("uv_offset", base + Vector2(fposmod(sc.x * _belt_t, 1.0), fposmod(sc.y * _belt_t, 1.0)))
 	var cam := get_viewport().get_camera_3d()
 	if cam and cam.far < _camera_far:
 		cam.far = _camera_far

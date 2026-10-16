@@ -24,7 +24,14 @@ const SCENES: Array[PackedScene] = [
 @export var targets_path: NodePath = ^"../Targets"
 @export var spawns_path: NodePath = ^"../WaveSpawns"
 ## The waves after the first (the placed robots): x grunts, y skirmishers.
+## With `first_wave_placed` off, every wave is listed here (wave 1 too).
 @export var waves: Array[Vector2i] = [Vector2i(6, 2), Vector2i(7, 4)]
+## Wave 1 is the robots already placed under the targets (Skyforge). Off:
+## wave 1 teleports in too (`waves[0]`; the Toxic Works hall).
+@export var first_wave_placed := true
+## Starts by itself once someone is in the level. Off: waits for `begin()`
+## (the Toxic Works: once the lift has landed).
+@export var auto_start := true
 ## Most robots alive on the map at once.
 @export var max_active := 8
 ## Per later wave (same order as `waves`): the spawn points (WaveSpawns
@@ -59,7 +66,18 @@ var _counts := {}
 
 
 func total_waves() -> int:
-	return waves.size() + 1
+	return waves.size() + (1 if first_wave_placed else 0)
+
+
+## Start the fight (with `auto_start` off).
+func begin() -> void:
+	if state == State.WAITING and Net.is_authority():
+		_start_wave(1)
+
+
+## Index into `waves` for wave `index` (1-based); -1 for the placed wave.
+func _wave_slot(index: int) -> int:
+	return index - 2 if first_wave_placed else index - 1
 
 
 func targets() -> Node:
@@ -90,7 +108,7 @@ func _physics_process(delta: float) -> void:
 	match state:
 		State.WAITING:
 			# Starts once someone is in the level (after DEPLOY).
-			if not get_tree().get_nodes_in_group(&"players").is_empty():
+			if auto_start and not get_tree().get_nodes_in_group(&"players").is_empty():
 				_start_wave(1)
 		State.FIGHTING:
 			_t -= delta
@@ -125,8 +143,9 @@ func _start_wave(index: int) -> void:
 				_hunt(c as RobotEnemy)
 	_queue.clear()
 	_t = 0.0
-	if index >= 2:
-		var w := waves[index - 2]
+	var slot := _wave_slot(index)
+	if slot >= 0 and slot < waves.size():
+		var w := waves[slot]
 		for i in w.x:
 			_queue.append(0)
 		for i in w.y:
@@ -187,7 +206,7 @@ func _hunt(r: RobotEnemy) -> void:
 
 ## The current wave's spawn points (marker names), empty = any.
 func _wave_set() -> PackedStringArray:
-	var i := wave - 2
+	var i := _wave_slot(wave)
 	return wave_spawn_sets[i] if i >= 0 and i < wave_spawn_sets.size() else PackedStringArray()
 
 

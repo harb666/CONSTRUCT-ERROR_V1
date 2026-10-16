@@ -4606,7 +4606,26 @@ func _toxic_works_tests() -> void:
 	for c in main.get_node("Targets").get_children():
 		if c is RobotSkirmisher: skirm += 1
 		elif c is RobotEnemy: grunts += 1
-	_check(grunts == 6 and skirm == 2, "works: 6 grunts and 2 skirmishers at the level's enemy spawns (%d, %d)" % [grunts, skirm])
+	_check(grunts == 4 and skirm == 2, "works: 4 grunts and 2 skirmishers wait in the Works (%d, %d)" % [grunts, skirm])
+	var wd: WaveDirector = main.get_node("WaveDirector")
+	_check(wd.state == WaveDirector.State.WAITING and main.get_node("HallTargets").get_child_count() == 0 and wd.total_waves() == 3,
+		"works: the hall's 3 waves wait for the lift to land")
+	var fx: Node = tw.effects
+	var skinned := 0
+	for l in fx.get("_lines"):
+		for st in l[2]:
+			if st[6] != null:
+				skinned += 1
+	_check(fx.get("_lines").size() == 2 and skinned == 4 and tw._belts.size() > 0,
+		"works: two working assembly lines, their 4 robot arms rigged, belts running (%d arms)" % skinned)
+	_check(fx.get("_crushers").size() == 1 and fx.get("_risers").size() == 1, "works: the crusher and the pads in the slime are in")
+	var crush: Area3D = null
+	for a in main.get_tree().get_nodes_in_group(&"hazard"):
+		if a is Area3D and String(a.name).ends_with("_Kill"):
+			crush = a
+	_check(crush != null and crush.body_entered.is_connected(tw._on_fell), "works: the crusher's pad is deadly")
+	var blockers := main.get_tree().get_nodes_in_group(&"laser_gate").map(func(n: Node) -> String: return String(n.name))
+	_check(blockers.has("Gate_Works_Laser_Blocker") and blockers.has("Exit_Hall_Laser_Blocker"), "works: the Works gate and the exit are closed by laser gates %s" % [blockers])
 	var lift: ElevatorLift = main.get_node("ElevatorLift")
 	var p: PlayerController = main.players[1]
 	var cam := main.get_viewport().get_camera_3d()
@@ -4632,7 +4651,7 @@ func _toxic_works_tests() -> void:
 	# The slime: back to the spawn.
 	var slime: Area3D = null
 	for a in main.get_tree().get_nodes_in_group(&"hazard"):
-		if a is Area3D and tw.is_ancestor_of(a):
+		if a is Area3D and tw.is_ancestor_of(a) and not String(a.name).ends_with("_Kill"):
 			slime = a
 			break
 	_check(slime != null and slime.body_entered.is_connected(tw._on_fell), "works: the slime volumes are live")
@@ -4642,6 +4661,28 @@ func _toxic_works_tests() -> void:
 		p.velocity = Vector3.ZERO
 		await _ticks(6)
 		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0, "works: falling in the slime puts the player back at spawn")
+	# The hall's waves (they started as the lift landed), cleared: the
+	# Works gate opens.
+	_check(wd.wave >= 1 and main.get_node("HallTargets").get_child_count() > 0, "works: the waves start once the lift has landed (wave %d)" % wd.wave)
+	wd.finish_now()
+	await _ticks(60)
+	var gates := main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).map(func(n: Node) -> String: return String(n.name))
+	_check(not gates.has("Gate_Works_Laser_Blocker") and gates.has("Exit_Hall_Laser_Blocker") and tw.gates_open.has("Gate_Works_Laser"),
+		"works: the hall cleared, the laser gate into the Works opens (exit still closed)")
+	# The pads surge up out of the slime as a player comes near.
+	var riser: Array = fx.get("_risers")[0]
+	var trig: Vector3 = Vector3(riser[0]["trigger"]["center"][0], riser[0]["trigger"]["center"][1], riser[0]["trigger"]["center"][2])
+	p.global_position = trig + Vector3.UP * 0.5
+	p.velocity = Vector3.ZERO
+	await _ticks(10)
+	_check(float(riser[4]) >= 0.0, "works: walking up to the pool makes the pads rise")
+	# The terminal at the end of the pads opens the exit.
+	var term: Area3D = main.get_tree().get_nodes_in_group(&"terminal")[0]
+	p.global_position = term.global_position
+	p.velocity = Vector3.ZERO
+	await _ticks(60)
+	gates = main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).map(func(n: Node) -> String: return String(n.name))
+	_check(tw.terminals_used.has("Works_Terminal") and not gates.has("Exit_Hall_Laser_Blocker"), "works: using the control terminal opens the exit's laser gate")
 	main.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
