@@ -13,7 +13,9 @@ const ARC_HOT := Color(1.0, 1.0, 1.0)
 ## Joints the failure jumps between (Mixamo rig).
 const BONES := [&"mixamorig_Head", &"mixamorig_Neck", &"mixamorig_Spine2", &"mixamorig_Spine", &"mixamorig_Hips",
 	&"mixamorig_LeftArm", &"mixamorig_RightArm", &"mixamorig_LeftForeArm", &"mixamorig_RightForeArm",
-	&"mixamorig_LeftUpLeg", &"mixamorig_RightUpLeg", &"mixamorig_LeftLeg", &"mixamorig_RightLeg"]
+	&"mixamorig_LeftUpLeg", &"mixamorig_RightUpLeg", &"mixamorig_LeftLeg", &"mixamorig_RightLeg",
+	# The Neon Sentinel's (RobotSentinel).
+	&"Body", &"Cannon_L", &"Cannon_R", &"Elbow_L", &"Elbow_R", &"Rear_Booster", &"Eye_Plasma"]
 
 static var _pool: Array[RobotDeathSparks] = []
 static var _next := 0
@@ -109,6 +111,8 @@ func _start(skel: Skeleton3D, strength: float) -> void:
 		if i >= 0:
 			_bones.append(i)
 	_smoke_bone = skel.find_bone(&"mixamorig_Spine2")
+	if _smoke_bone < 0:
+		_smoke_bone = skel.find_bone(&"Body")
 	_t = 0.0
 	_arc_t = 0.0
 	_burst_t = 0.0
@@ -147,7 +151,7 @@ func _process(delta: float) -> void:
 		for i in _arcs.size():
 			var on := randf() < k * (1.0 if i == 0 else 0.7)
 			_arcs[i].visible = on and cam != null
-			if on:
+			if on and not _bones.is_empty():
 				var a: int = _bones[randi() % _bones.size()]
 				var b: int = _bones[randi() % _bones.size()]
 				if a == b:

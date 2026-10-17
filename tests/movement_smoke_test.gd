@@ -536,6 +536,7 @@ func _run() -> void:
 	await _ticks(5)
 	await _toxic_arena_tests()
 	await _battle_arena_tests()
+	await _sentinel_tests()
 	await _skyforge_tests()
 	await _toxic_barrel_tests()
 	await _level_flow_tests()
@@ -4272,27 +4273,133 @@ func _battle_arena_tests() -> void:
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(30)
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/battle_arena.tscn", "battle: the test map is the game's start level (owner asked)")
 	var t := main.get_node("Targets")
 	var bosses := 0
 	var grunts := 0
 	var skirm := 0
+	var flyers := 0
 	var low := 99.0
 	var high := -99.0
 	var nearest := 999.0
 	var p: PlayerController = main.players[1]
 	for c in t.get_children():
 		if c is RobotBoss: bosses += 1
+		elif c is RobotSentinel: flyers += 1
 		elif c is RobotSkirmisher: skirm += 1
 		elif c is RobotEnemy: grunts += 1
-		low = minf(low, c.global_position.y)
-		high = maxf(high, c.global_position.y)
+		if not (c is RobotSentinel):
+			low = minf(low, c.global_position.y)
+			high = maxf(high, c.global_position.y)
 		nearest = minf(nearest, c.global_position.distance_to(p.global_position))
-	_check(t.get_child_count() == 15 and bosses == 1 and grunts == 7 and skirm == 7, "battle: 15 enemies - %d boss, %d grunts, %d skirmishers" % [bosses, grunts, skirm])
-	_check(low > -0.1 and high < 0.1, "battle: every enemy stands on the arena floor (y %.2f..%.2f)" % [low, high])
+	_check(t.get_child_count() == 4 and bosses == 1 and grunts == 1 and skirm == 1 and flyers == 1, "battle: one of each enemy (owner asked) - %d boss, %d grunt, %d skirmisher, %d sentinel" % [bosses, grunts, skirm, flyers])
+	_check(low > -0.1 and high < 0.1, "battle: the walkers stand on the arena floor (y %.2f..%.2f)" % [low, high])
 	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
+	_check(main.get("level_music") == load("res://assets/audio/music/level_1_music.ogg"), "battle: Level 1 music plays there")
 	main.queue_free()
 	await _ticks(5)
+
+
+## The Neon Sentinel (owner asked): the flying enemy.
+func _sentinel_tests() -> void:
+	# The model: reduced for the phone, neon toned down, wing backs clean.
+	var model: Node3D = RobotSentinel.SENTINEL_MODEL.instantiate()
+	var tris := 0
+	var mats := {}
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		for k in mi.mesh.get_surface_count():
+			tris += mi.mesh.surface_get_array_index_len(k) / 3
+			if mi.name.begins_with("Moving_Wing_Backing"):
+				mats[String(mi.mesh.surface_get_material(k).resource_name)] = true
+	var paint := (model.find_child("Original_Body", true, false) as MeshInstance3D).mesh.surface_get_material(0) as BaseMaterial3D
+	_check(tris < 70000 and paint.emission_energy_multiplier < 2.0 and paint.albedo_texture.get_width() <= 1024,
+		"sentinel: model ready for the phone - %d triangles (was 161k), neon x%.1f (was 3.5, blown out), 1024 textures" % [tris, paint.emission_energy_multiplier])
+	_check(mats.keys() == ["Graphite_Mechanical_Housing"], "sentinel: the wing backs are the clean graphite housing (no torn paint, no saw-tooth neon) %s" % [mats.keys()])
+	model.free()
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = true
+	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(10)
+	var s: RobotSentinel = null
+	for c in main.get_node("Targets").get_children():
+		if c is RobotSentinel:
+			s = c
+		else:
+			c.queue_free()
+	var p: PlayerController = main.players[1]
+	p.global_position = Vector3(30, 0.1, 30)  # out of its sight to start
+	s.global_position = Vector3(0, 3.5, -6)
+	s._home = s.global_position
+	await _ticks(60)
+	var floor_y := 0.0
+	_check(s.gravity_scale == 0.0 and s.global_position.y - floor_y > 2.4 and s.target == null and s.startles == 0,
+		"sentinel: flies - hovers %.1f m up, patrolling (no player in sight yet)" % (s.global_position.y - floor_y))
+	_check(s.cannons.size() == 2 and s.cannons.all(func(c: Node3D) -> bool: return c.get_child_count() > 0 and (c.get_child(0) as MeshInstance3D).mesh == (RobotSentinel._grunt_cannons()["Left"]["meshes"][0] if c.name.ends_with("L") else RobotSentinel._grunt_cannons()["Right"]["meshes"][0])),
+		"sentinel: two of the grunts' own cannons are mounted on its arms")
+	var fwd := s._visual.global_basis.z
+	_check(s.muzzle_position(0).distance_to(s.muzzle_position(1)) > 1.5 and (s.muzzle_position(0) - s.global_position).dot(fwd) > 0.1,
+		"sentinel: their muzzles at the ends of its arms, pointing forward")
+	_check(s.volley_cooldown.x > s.burst_cooldown.y and s.volley_cooldown.x > 2.5,
+		"sentinel: fires its two cannons less often than a grunt (a volley every %.1f-%.1f s; a grunt bursts every %.1f-%.1f s)" % [s.volley_cooldown.x, s.volley_cooldown.y, s.burst_cooldown.x, s.burst_cooldown.y])
+	_check(s.trail != null and s.trail.point_count() >= 4 and s.trail.flare.visible, "sentinel: its booster streams a plasma trail (%d points) with a flare at the booster" % s.trail.point_count())
+	# First sight of a player: startled - wings, antennae and arms flare.
+	var rest_wing := s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
+	p.global_position = s.global_position + Vector3(0, -3.4, 9.0)
+	await _ticks(25)
+	var wing_now := s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
+	_check(s.startles == 1 and s.startle_left > 0.0 and s.shots_fired == 0 and not s.engaged,
+		"sentinel: the first time it sees a player it's startled (and doesn't shoot yet)")
+	await _ticks(25)
+	wing_now = s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
+	_check(rad_to_deg(rest_wing.angle_to(wing_now)) > 10.0, "sentinel: its wings flare out with it (%.0f deg)" % rad_to_deg(rest_wing.angle_to(wing_now)))
+	await _ticks(180)
+	_check(s.engaged and s.target == p, "sentinel: then it engages")
+	# Dodges a shot coming its way.
+	s.evade_chance = 1.0
+	s._evade_cd = 0.0
+	var d0 := s.dashes
+	var from := p.global_position + Vector3.UP * 1.2
+	PlasmaBolt.fire(self, from, (s.global_position - from).normalized(), p, 14.0, 0.0, PlasmaBolt.GREEN, PlasmaBolt.HOT, &"players")
+	var dodged := false
+	var sway := 0.0
+	for i in 40:
+		await _ticks(1)
+		if s.dashes > d0:
+			dodged = true
+		var st: Vector4 = s.flex._s.get(s.get_skeleton().find_bone(&"Antenna_L"), Vector4.ZERO)
+		sway = maxf(sway, Vector2(st.x, st.y).length())
+	_check(dodged, "sentinel: it dodges a player's shot coming its way (banking side-dash)")
+	_check(rad_to_deg(sway) > 3.0, "sentinel: its antennae swing with the dash (%.0f deg) - wings / antennae move with its flight" % rad_to_deg(sway))
+	s.evade_chance = 0.75
+	var shots0 := s.shots_fired
+	await _ticks(600)
+	_check(s.shots_fired > shots0 and s.shots_fired - shots0 <= 8, "sentinel: in 10 s it fires %d green bolts from its cannons (a grunt fires ~15-25)" % (s.shots_fired - shots0))
+	_check(s.global_position.y - floor_y > 2.0, "sentinel: still flying while it fights (%.1f m up)" % (s.global_position.y - floor_y))
+	# Dies: the eye bursts, smoke, electric discharge; the wings break apart
+	# and the antennae snap off; it drops out of the air.
+	var bursts := SentinelEyeBurst.spawned
+	s.apply_damage(DamageInfo.make(10.0, DamageInfo.Type.ENERGY, s.global_position, Vector3.FORWARD))
+	await _ticks(20)
+	var fx: SentinelEyeBurst = null
+	var holders: Array[Node] = [root]
+	if current_scene:
+		holders.append(current_scene)
+	for h in holders:
+		for n in h.get_children():
+			if n is SentinelEyeBurst:
+				fx = n
+	_check(not s.alive and SentinelEyeBurst.spawned == bursts + 1, "sentinel: dies with its eye bursting")
+	_check(s.get_breaker().detached_count() == RobotSentinel.DEATH_BREAKS.size(), "sentinel: its wings break apart and its antennae snap off (%d pieces)" % s.get_breaker().detached_count())
+	_check(s.flex.dying and fx != null and fx.bolts_lit + s.flex.arcs_lit > 0, "sentinel: electric discharge crackles out of the socket (%d bolts, %d arcs)" % [fx.bolts_lit if fx else 0, s.flex.arcs_lit])
+	var shard := s.get_skeleton().get_bone_pose_scale(s.get_skeleton().find_bone(&"Eye_Glass_Shard_05"))
+	_check(shard.x > 0.5, "sentinel: the eye's glass shards fly out")
+	await _ticks(200)
+	_check(s.global_position.y < 1.2 and s.gravity_scale == 1.0, "sentinel: the wreck drops out of the air (%.1f m)" % s.global_position.y)
+	main.queue_free()
+	await _ticks(5)
+	RobotEnemy.ai_enabled = ai_was
 
 
 ## Skyforge Arena (owner asked): the image-to-level map, the first part of
@@ -4592,7 +4699,8 @@ func _level_flow_tests() -> void:
 ## opened for the lift, the squad riding Skyforge's lift down from the roof
 ## watched from a corner (ArrivalCamera), the slime sends players back.
 func _toxic_works_tests() -> void:
-	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/toxic_works.tscn", "works: the Toxic Works is the game's start level (owner asked)")
+	_check((load("res://scripts/main.gd") as Script).get_script_constant_map()["LEVELS"].get("works") == "res://scenes/toxic_works.tscn",
+		"works: the Toxic Works (level 2 so far; saved/level-2-so-far) is still there, ?level=works")
 	var ai_was := RobotEnemy.ai_enabled
 	RobotEnemy.ai_enabled = false
 	var main: Node = load("res://scenes/toxic_works.tscn").instantiate()
@@ -4933,7 +5041,7 @@ func _music_tests() -> void:
 	tw.free()
 	main.queue_free()
 	await _ticks(3)
-	var b: Node = load("res://scenes/battle_arena.tscn").instantiate()
+	var b: Node = load("res://scenes/main.tscn").instantiate()
 	b.front_end_mode = 1
 	root.add_child(b)
 	await _ticks(3)

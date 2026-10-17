@@ -247,9 +247,37 @@
   across to the right arm; heavier lock-in (bigger burst, arm dips under
   the weight); HUD HEAVY plate.
 
-- Skyforge Arena (owner asked) is the first part of the first level (the
-  game now starts in the Toxic Works, owner asked; `?level=skyforge` for
-  Skyforge): image-to-level's game-ready package, 4 grunts + 2
+- Test map = start level (owner asked: "load up the test map and put one
+  of each enemy down"): the game starts in the battle arena
+  (`battle_arena.tscn`, every weapon pad; Level 1's music) with one boss,
+  one Neon Sentinel, one grunt and one skirmisher (`BattleSpawner`
+  `total = 4`, `sentinels = 1`). `?level=works` / `skyforge` for the levels.
+- Neon Sentinel (owner's model, owner asked; `RobotSentinel`, a
+  `RobotEnemy`, `robot_sentinel.tscn`; model `assets/enemies/sentinel/`
+  built from the untouched upload in `source/` by `tools/build_sentinel.py`:
+  161k -> 64k triangles, neon glow 3.5 -> 1.3 (it rendered white), wing backs
+  in the model's graphite housing (their paint mapping was broken and the
+  lime panel had a saw-tooth edge), 1024 textures). Flying: hovers 2.6-5 m
+  up, circles its target 7-13 m out changing height / side, banks into
+  turns, steers round walls; dodges often (player bolts coming its way 75%,
+  after hits 55%, unprompted jukes every 1.4-3.2 s: banking side-dashes).
+  Two of the grunts' own forearm cannons on its arm tips (grunt bolts and
+  the owner's grunt cannon sound), one bolt each per volley every 3.2-4.8 s
+  (less often than a grunt). Its own flight clips blended by its motion
+  (AnimationTree), wings / antennae springing with its acceleration and
+  bank (`SentinelFlex`); first sight of a player: Startled_See_Player
+  (wings, arms, antennae flare out) before it attacks. Halo-sentinel style
+  plasma trail from its booster (`PlasmaTrail`: GPU ribbon, white-hot core,
+  lime to magenta glow, flare, sparks). Death: eye smashes (Death_Eye_Burst
+  from 0.7 s) + `SentinelEyeBurst` (flash, glass splinters, smoke puff,
+  smoke trail, lightning out of the socket, sparks, light - off on phones),
+  the model's arcs crackle from the socket, both wings break apart into
+  their 3 pieces each and the antennae snap off (`DEATH_BREAKS`,
+  BreakApart), the wreck drops out of the air tumbling. Frozen (Frost Byte)
+  it drops as ice and flies again when it thaws. No death sound yet (none
+  supplied).
+- Skyforge Arena (owner asked) is the first part of the first level
+  (`?level=skyforge` for Skyforge): image-to-level's game-ready package, 4 grunts + 2
   skirmishers (no respawn), no weapon pads, player on the south tower deck.
   It must look exactly like the map maker (owner asked): its materials use
   `preview_lit.gdshaderinc`, a port of the map maker preview's three.js
@@ -265,8 +293,9 @@
   (`sky/ibl_atlas.png`), effects as packaged. The squad arrives on
   Skyforge's lift coming down through the roof, controls held
   (`ElevatorLift.arrival`; the ceiling's collider got its exact shape so the
-  shaft hole is open; the package's own elevator car is hidden). It's the
-  game's start level (owner asked; DEPLOY drops the squad in on the lift).
+  shaft hole is open; the package's own elevator car is hidden). Saved as
+  "level 2 so far" (owner asked: branch `saved/level-2-so-far`); reached
+  with `?level=works` (DEPLOY drops the squad in on the lift).
   Opening shot (`ArrivalCamera`; owner asked for it closer, still dynamic):
   rides down the shaft just above the squad, breaks out under the roof,
   pulls out (staying under the ceiling's beams, < 21 m) into a crane shot
@@ -368,6 +397,8 @@
   good (cel muzzle flashes on every gun incl. grunts / skirmishers / black
   hole gun, the black hole portal, shotgun splats and blast rings). The
   newest known-good state.
+- Branch `saved/level-2-so-far` (commit cec36f9): the owner said "save this
+  map as level 2 so far" - the Toxic Works as it was then.
 
 ## Shipping a change
 - Test: `godot --headless --fixed-fps 60 --path . -s tests/movement_smoke_test.gd`

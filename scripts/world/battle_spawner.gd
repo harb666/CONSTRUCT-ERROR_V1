@@ -1,6 +1,7 @@
 extends Node3D
 ## Fills the test arena with a mixed robot army: `bosses` robot bosses,
-## then grunts (RobotEnemy) and skirmishers alternating up to `total`.
+## `sentinels` Neon Sentinels (flying, RobotSentinel), then grunts
+## (RobotEnemy) and skirmishers alternating up to `total`.
 ## Spots are spread over the arena floor, clear of the arena's blocks and
 ## ramps and at least `min_spawn_distance` from the player spawn, so the
 ## fight starts at range rather than on top of the player.
@@ -8,9 +9,13 @@ extends Node3D
 const GRUNT := preload("res://scenes/enemies/robot_enemy.tscn")
 const SKIRMISHER := preload("res://scenes/enemies/robot_skirmisher.tscn")
 const BOSS := preload("res://scenes/enemies/robot_boss.tscn")
+const SENTINEL := preload("res://scenes/enemies/robot_sentinel.tscn")
 
 @export var total := 15
 @export var bosses := 1
+@export var sentinels := 0
+## Sentinels start hovering this high (m).
+@export var sentinel_height := 3.5
 @export var min_spawn_distance := 16.0
 ## Kept clear round each block / ramp footprint (m).
 @export var clearance := 2.5
@@ -32,6 +37,16 @@ func _ready() -> void:
 		add_child(b)
 		n += 1
 	var k := 0
+	for i in sentinels:
+		if n >= total or k >= spots.size():
+			break
+		var f: RobotSentinel = SENTINEL.instantiate()
+		f.name = "Sentinel%d" % (i + 1)
+		f.position = spots[k] + Vector3.UP * sentinel_height
+		f.rotation.y = randf() * TAU
+		add_child(f)
+		k += 1
+		n += 1
 	while n < total and k < spots.size():
 		var at: Vector3 = spots[k]
 		k += 1

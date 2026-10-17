@@ -1,0 +1,124 @@
+class_name SentinelFlex
+extends SkeletonModifier3D
+## The Neon Sentinel's wings and antennae moving with its flight (owner asked:
+## "move fluently with the enemies movement and flight"), on top of its
+## flight clips: springs carried by the body's acceleration - the antennae
+## lag back when it surges forward, swing out on a sideways dash and wobble
+## back; the wings droop as it climbs, lift as it drops, sweep back as it
+## speeds up and flex with the bank - each overshooting and settling a
+## little (spring + damping). RobotSentinel feeds `accel` (m/s^2, in the
+## model's frame) and `bank` every tick.
+##
+## Dying: the eye's plasma bone is held at full size (the death clip shrinks
+## it, and the electric arcs hang off it) so the model's own branching
+## discharges can crackle out of the smashed socket - flickering, spinning,
+## jumping in size - dying away over `arc_time` (RobotSentinel hides the
+## plasma gas itself).
+
+## Antenna lean (rad) per m/s^2, and the most.
+@export var antenna_gain := 0.045
+@export var antenna_max := 0.55
+@export var antenna_stiffness := 70.0
+@export var antenna_damping := 5.5
+## Wing droop / sweep (rad) per m/s^2, flex per rad of bank, and the most.
+@export var wing_gain := 0.03
+@export var wing_bank := 0.35
+@export var wing_max := 0.4
+@export var wing_stiffness := 55.0
+@export var wing_damping := 6.0
+@export var arc_time := 3.2
+
+var accel := Vector3.ZERO
+var bank := 0.0
+var dying := false
+var die_t := 0.0
+## Arcs shown this frame after death (tests).
+var arcs_lit := 0
+
+var _ant: Array[int] = []
+var _wing: Array[int] = []
+var _plasma := -1
+var _arcs: Array[int] = []
+## Spring state per bone: [angle about X, about Z (or Y for wings), velocities].
+var _s := {}
+
+
+func setup(skel: Skeleton3D) -> void:
+	_ant = [skel.find_bone(&"Antenna_L"), skel.find_bone(&"Antenna_R")]
+	_wing = [skel.find_bone(&"Wing_L"), skel.find_bone(&"Wing_R")]
+	_plasma = skel.find_bone(&"Eye_Plasma")
+	_arcs.clear()
+	for n in [&"Eye_Electric_Arc_A", &"Eye_Electric_Arc_B", &"Eye_Electric_Arc_2", &"Eye_Electric_Arc_3", &"Eye_Electric_Arc_4", &"Eye_Electric_Arc_5"]:
+		var b := skel.find_bone(n)
+		if b >= 0:
+			_arcs.append(b)
+	for b in _ant + _wing:
+		_s[b] = Vector4.ZERO
+
+
+func _spring(b: int, target: Vector2, k: float, d: float, lim: float, dt: float) -> Vector2:
+	var s: Vector4 = _s.get(b, Vector4.ZERO)
+	var steps := 2
+	var h := dt / steps
+	for i in steps:
+		s.z += (k * (target.x - s.x) - d * s.z) * h
+		s.w += (k * (target.y - s.y) - d * s.w) * h
+		s.x = clampf(s.x + s.z * h, -lim, lim)
+		s.y = clampf(s.y + s.w * h, -lim, lim)
+	_s[b] = s
+	return Vector2(s.x, s.y)
+
+
+func _process_modification() -> void:
+	var skel := get_skeleton()
+	if skel == null:
+		return
+	var dt := clampf(get_process_delta_time() if is_inside_tree() else 0.016, 0.0, 0.05)
+	if dying:
+		_discharge(skel, dt)
+		return
+	# Antennae: the tips lag behind the acceleration (forward surge -> lean
+	# back about X; sideways -> lean out about Z).
+	var a := Vector2(-accel.z, accel.x) * antenna_gain
+	for i in _ant.size():
+		var b := _ant[i]
+		if b < 0:
+			continue
+		var t := a.limit_length(antenna_max) + Vector2(0.0, 0.08 * (1.0 if i == 0 else -1.0) * absf(bank))
+		var r := _spring(b, t, antenna_stiffness, antenna_damping, antenna_max * 1.3, dt)
+		skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion.from_euler(Vector3(r.x, 0.0, r.y)))
+	# Wings: droop / lift against vertical acceleration and flex with the bank
+	# (about Z), sweep back as it surges forward (about Y).
+	for i in _wing.size():
+		var b := _wing[i]
+		if b < 0:
+			continue
+		var side := 1.0 if i == 0 else -1.0  # Wing_L is at -X
+		var droop := clampf(accel.y * wing_gain + bank * wing_bank, -wing_max, wing_max) * side
+		var sweep := clampf(-accel.z * wing_gain, -wing_max, wing_max) * side
+		var r := _spring(b, Vector2(droop, sweep), wing_stiffness, wing_damping, wing_max * 1.3, dt)
+		skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion.from_euler(Vector3(0.0, r.y, r.x)))
+
+
+## After death: the branching discharges crackle out of the empty socket.
+func _discharge(skel: Skeleton3D, dt: float) -> void:
+	die_t += dt
+	arcs_lit = 0
+	if _plasma < 0:
+		return
+	var k := 1.0 - clampf(die_t / arc_time, 0.0, 1.0)
+	if k <= 0.0:
+		for b in _arcs:
+			skel.set_bone_pose_scale(b, Vector3.ONE * 0.0001)
+		return
+	skel.set_bone_pose_scale(_plasma, Vector3.ONE)
+	for b in _arcs:
+		# Flicker: each arc is on in random flashes, more often early on.
+		if randf() < 0.35 + 0.5 * k:
+			var s := randf_range(0.9, 1.25 + 0.6 * k)
+			skel.set_bone_pose_scale(b, Vector3(s, s, s * randf_range(1.0, 1.8)))
+			skel.set_bone_pose_rotation(b, Quaternion.from_euler(Vector3(randf_range(-0.5, 0.5), randf_range(-0.5, 0.5), randf() * TAU)))
+			skel.set_bone_pose_position(b, Vector3(randf_range(-0.03, 0.03), randf_range(-0.03, 0.03), randf_range(0.0, 0.09)))
+			arcs_lit += 1
+		else:
+			skel.set_bone_pose_scale(b, Vector3.ONE * 0.0001)
