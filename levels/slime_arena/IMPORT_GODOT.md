@@ -102,3 +102,30 @@ The browser preview approximates all of these with three.js. It is close to Godo
 - collision.json `terminals` (apply_mobile.gd): an Area3D per terminal in group `terminal` (meta `terminal_id`); call
   `activate_terminal(id)` from your interact action: the listed gates open (`open_gate`), then `terminal_activated(id)`.
   `Exit_Hall_Laser` (gates, `opens_on: terminal`) closes the exit doorway until then.
+
+## Shotgun platform, pickups (Stage 89)
+- `Shotgun_Platform` is a riser with one pad (same `emerge` effect, `raise_pads(id)` works): it surges up out of the pool
+  when a CharacterBody3D reaches Pipe_Junction_A. Its pad has `drips` (world points on the rim): once it is up a
+  CPUParticles3D drops green goo from them into the pool (`<id>_J1_Drips`). Stage 91: `goo` - `hold` s after it is up
+  the goo drains away over `fade` s (bones `<id>_GD` / `<id>_GS` scaled down) and the drops stop.
+- collision.json `pickups` (apply_mobile.gd): an Area3D per pickup (`<id>_Pickup`, group `pickup`, metas `pickup_id`,
+  `item`); a CharacterBody3D entering it emits `pickup_reached(pickup_id, item)` once - give the player the item there
+  (`Shotgun_Pickup`, item `shotgun`, over the pedestal). A pickup with `riser` stays off (monitoring false) until its
+  platform is up. The level has no weapon mesh: spawn your own shotgun model at `center`.
+
+## Drone swarm (Stage 95)
+- effects.json `flyby_ships` `Drone_Swarm`: same MultiMesh flyers as before; ships may carry `cx` / `cz` (route centre),
+  `recede` and `loop` (circle for good), and vertex glow flag 2 takes the effect's `accent` colour.
+
+## Specimen bob (Stage 92)
+- effects.json `bob` (apply_effects.gd `_bobs`): the group's nodes (`Gir_Specimen_Float__*`) keep their rest transform
+  and are turned / lifted about `pivot` every frame (amp, period, sway) - GIR drifting in Core_Vat.
+
+## Turbine wind (Stage 82)
+- effects.json `wind` (apply_effects.gd `_wind`): an Area3D over the cone; in `_physics_process` every overlapping
+  CharacterBody3D inside the cone gets `move_and_collide(dir * push * strength)` and, while not on the floor,
+  `velocity.y += lift * strength * delta`. If your player script overwrites `velocity` each frame that is fine (the
+  push is a move, not a velocity); if it zeroes `velocity.y` in the air, apply `lift` in your own gravity code instead.
+  The rotor node `<id>_Rotor` turns with the cycle; streaks are a CPUParticles3D. collision.json `winds` has the data.
+- Stage 85: a wind with `trigger` blows at full force until a CharacterBody3D enters that sphere (Turbine_East: at
+  West_Landing_S, after the rising pads), then spins down for good; `stop_wind(id)` does the same from code.

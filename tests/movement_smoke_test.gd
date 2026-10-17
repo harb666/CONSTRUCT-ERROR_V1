@@ -4618,7 +4618,8 @@ func _toxic_works_tests() -> void:
 				skinned += 1
 	_check(fx.get("_lines").size() == 2 and skinned == 4 and tw._belts.size() > 0,
 		"works: two working assembly lines, their 4 robot arms rigged, belts running (%d arms)" % skinned)
-	_check(fx.get("_crushers").size() == 1 and fx.get("_risers").size() == 1, "works: the crusher and the pads in the slime are in")
+	_check(fx.get("_crushers").size() == 1 and fx.get("_risers").size() == 2 and (fx.get("_risers") as Array).all(func(r: Array) -> bool: return (r[3] as Array).all(func(cs: Array) -> bool: return not cs.is_empty() or r[0]["id"] == "Shotgun_Platform")),
+		"works: the crusher, the pads in the slime and the shotgun platform are in, their colliders found (off until they rise)")
 	var crush: Area3D = null
 	for a in main.get_tree().get_nodes_in_group(&"hazard"):
 		if a is Area3D and String(a.name).ends_with("_Kill"):
@@ -4626,6 +4627,17 @@ func _toxic_works_tests() -> void:
 	_check(crush != null and crush.body_entered.is_connected(tw._on_fell), "works: the crusher's pad is deadly")
 	var blockers := main.get_tree().get_nodes_in_group(&"laser_gate").map(func(n: Node) -> String: return String(n.name))
 	_check(blockers.has("Gate_Works_Laser_Blocker") and blockers.has("Exit_Hall_Laser_Blocker"), "works: the Works gate and the exit are closed by laser gates %s" % [blockers])
+	var gfx: Dictionary = tw.gate_fx
+	_check(gfx.size() == 2 and gfx.values().all(func(f: LaserGateFX) -> bool: return f.beams.size() == 7 and f.find_child("Field", false, false) != null and f.find_child("Flares", false, false) != null and f.find_child("Beams", false, false) != null),
+		"works: both laser gates get the new look - 7 glowing beams, end flares, sparks and a force field each (owner asked)")
+	# The shotgun platform (owner asked): its centre post gone, the shotgun
+	# spawn pad there, riding the platform up out of the slime.
+	_check(tw.post_flattened > 50 and tw.shotgun_pad != null and tw.shotgun_pad.weapon == ToxicWorks.SHOTGUN and tw.shotgun_pad.global_position.y < 2.0,
+		"works: the shotgun platform's centre post is flattened, the shotgun pad sits on it under the slime (%.1f m)" % (tw.shotgun_pad.global_position.y if tw.shotgun_pad else 0.0))
+	var posts: Array = []
+	for b in tw.collision.find_children("Shotgun_Platform_Pedestal*", "StaticBody3D", true, false):
+		posts.append_array(b.find_children("*", "CollisionShape3D", false, false))
+	_check(not posts.is_empty() and posts.all(func(c: CollisionShape3D) -> bool: return c.disabled), "works: and the post's colliders are gone")
 	var lift: ElevatorLift = main.get_node("ElevatorLift")
 	var p: PlayerController = main.players[1]
 	var cam := main.get_viewport().get_camera_3d()
@@ -4669,6 +4681,8 @@ func _toxic_works_tests() -> void:
 	var gates := main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).map(func(n: Node) -> String: return String(n.name))
 	_check(not gates.has("Gate_Works_Laser_Blocker") and gates.has("Exit_Hall_Laser_Blocker") and tw.gates_open.has("Gate_Works_Laser"),
 		"works: the hall cleared, the laser gate into the Works opens (exit still closed)")
+	_check(not is_instance_valid(gfx.get("Gate_Works_Laser")) or (gfx["Gate_Works_Laser"] as LaserGateFX).opened,
+		"works: its beams overload and collapse as it opens")
 	# The pads surge up out of the slime as a player comes near.
 	var riser: Array = fx.get("_risers")[0]
 	var trig: Vector3 = Vector3(riser[0]["trigger"]["center"][0], riser[0]["trigger"]["center"][1], riser[0]["trigger"]["center"][2])
@@ -4676,6 +4690,13 @@ func _toxic_works_tests() -> void:
 	p.velocity = Vector3.ZERO
 	await _ticks(10)
 	_check(float(riser[4]) >= 0.0, "works: walking up to the pool makes the pads rise")
+	tw.effects.call(&"raise_pads", "Shotgun_Platform")
+	await _ticks(260)
+	_check(tw.shotgun_pad.global_position.distance_to(Vector3(-1.5, 7.5, -114.0)) < 0.05 and posts.all(func(c: CollisionShape3D) -> bool: return c.disabled),
+		"works: the shotgun platform rises with the pad at its centre (%s)" % tw.shotgun_pad.global_position)
+	var sp := tw.shotgun_pad.get_node("WeaponSpawner") as WeaponSpawner
+	_check(sp.display != null and absf(sp.display.global_position.x - (-1.5)) < 0.1 and sp.display.global_position.y > 8.3,
+		"works: the shotgun spins over the pad's centre")
 	# The terminal at the end of the pads opens the exit.
 	var term: Area3D = main.get_tree().get_nodes_in_group(&"terminal")[0]
 	p.global_position = term.global_position

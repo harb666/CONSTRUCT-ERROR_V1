@@ -56,6 +56,8 @@ var car_hidden := 0
 ## The hall's waves (WaveDirector), gates opened and terminals used so far.
 var director: WaveDirector
 var gates_open: PackedStringArray = []
+## Each laser gate's look (LaserGateFX), by gate id.
+var gate_fx := {}
 var terminals_used: PackedStringArray = []
 ## The laser gate the hall's waves open (into the Works).
 const WORKS_GATE := "Gate_Works_Laser"
@@ -85,6 +87,7 @@ func _ready() -> void:
 	add_child(mobile)
 	mobile.connect(&"level_exit_entered", _on_level_exit)
 	mobile.connect(&"gate_opened", _on_gate_opened)
+	_build_gate_fx()
 	_setup_environment()
 	effects = APPLY_EFFECTS.new()
 	effects.name = "ApplyEffects"
@@ -116,6 +119,7 @@ func _ready() -> void:
 	_connect_hazards.call_deferred()
 	_connect_terminals.call_deferred()
 	_connect_flow.call_deferred()
+	_shotgun_pad.call_deferred()
 	var ui := get_parent().get_node_or_null(^"UI") if get_parent() else null
 	if ui:
 		hud = LevelFlowHud.new()
@@ -220,7 +224,116 @@ func open_gate(gate_id: String) -> void:
 	if gates_open.has(gate_id):
 		return
 	gates_open.append(gate_id)
+	if gate_fx.has(gate_id) and is_instance_valid(gate_fx[gate_id]):
+		(gate_fx[gate_id] as LaserGateFX).open()
 	mobile.call(&"open_gate", gate_id)
+
+
+## The shotgun platform (owner asked: "sort out the centre of that platform
+## and have the spawn pad for the shotgun with the gun on it"): the map
+## maker left a post with a red cap at its centre for a pickup ("spawn your
+## own shotgun model at center"). The post is flattened into the deck (its
+## vertices; the platform is one skinned mesh) and its colliders go, and
+## the game's shotgun spawn pad - the gun spinning over it, orange glow as
+## in the battle arena - sits at the centre, riding the platform's bone up
+## out of the slime with it.
+const PAD_SCENE := preload("res://scenes/props/weapon_spawn_pad.tscn")
+const SHOTGUN := preload("res://resources/weapons/shotgun.tres")
+const SHOTGUN_RISER := "Shotgun_Platform"
+var shotgun_pad: WeaponSpawnPad
+## Post vertices flattened (tests).
+var post_flattened := 0
+
+
+func _shotgun_pad() -> void:
+	var rec: Array = []
+	for r in effects.get(&"_risers"):
+		if String(r[0]["id"]) == SHOTGUN_RISER:
+			rec = r
+	if rec.is_empty():
+		return
+	var pad: Dictionary = rec[0]["pads"][0]
+	var pickup := {}
+	for pk in _json(DIR + "/mobile/collision.json").get("pickups", []):
+		if String(pk.get("riser", "")) == SHOTGUN_RISER:
+			pickup = pk
+	var c: Array = pickup.get("center", pad["center"])
+	var deck_y := float(pad["center"][1])  # the deck's top
+	var centre := Vector3(c[0], deck_y, c[2])
+	# The post: everything above the deck within its cap's radius, flattened.
+	for mi: MeshInstance3D in level.find_children(String(rec[0]["group"]) + "__*", "MeshInstance3D", true, false):
+		post_flattened += _flatten(mi, centre, 0.8)
+	# Its colliders (named after the post) go for good.
+	for cols in rec[3]:
+		for cs in (cols as Array).duplicate():
+			if String((cs as Node).name).begins_with(SHOTGUN_RISER + "_Pedestal") or String((cs as Node).get_parent().name).begins_with(SHOTGUN_RISER + "_Pedestal"):
+				(cols as Array).erase(cs)
+				(cs as CollisionShape3D).disabled = true
+	# The pad on the platform's bone, at the centre when the platform is up.
+	var sk := rec[1] as Skeleton3D
+	var bi: int = rec[2].get(String(pad["joint"]), -1)
+	if sk == null or bi < 0:
+		return
+	var ba := BoneAttachment3D.new()
+	ba.name = "ShotgunPadMount"
+	ba.bone_name = String(pad["joint"])
+	sk.add_child(ba)
+	shotgun_pad = PAD_SCENE.instantiate() as WeaponSpawnPad
+	shotgun_pad.name = "ShotgunSpawnPad"
+	shotgun_pad.weapon = SHOTGUN
+	shotgun_pad.glow_color = Color(1, 0.42, 0.05, 1)
+	var rest := sk.global_transform * sk.get_bone_global_rest(bi)
+	shotgun_pad.transform = rest.affine_inverse() * Transform3D(Basis.IDENTITY, centre)
+	ba.add_child(shotgun_pad)
+
+
+## Flatten `mi`'s vertices above `centre` (within `radius` across) down onto
+## its height. Returns how many moved.
+func _flatten(mi: MeshInstance3D, centre: Vector3, radius: float) -> int:
+	var src := mi.mesh as ArrayMesh
+	if src == null:
+		return 0
+	var to_local := mi.global_transform.affine_inverse()
+	var lc := to_local * centre
+	var moved := 0
+	var out := ArrayMesh.new()
+	for si in src.get_surface_count():
+		var arrays := src.surface_get_arrays(si)
+		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		for i in v.size():
+			var p := v[i]
+			if Vector2(p.x - lc.x, p.z - lc.z).length() < radius and p.y > lc.y + 0.01:
+				v[i] = Vector3(p.x, lc.y, p.z)
+				moved += 1
+		arrays[Mesh.ARRAY_VERTEX] = v
+		var flags := 0
+		if arrays[Mesh.ARRAY_BONES] != null and arrays[Mesh.ARRAY_BONES].size() == v.size() * 8:
+			flags |= Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS
+		out.add_surface_from_arrays(src.surface_get_primitive_type(si), arrays, [], {}, flags)
+		out.surface_set_material(si, src.surface_get_material(si))
+		out.surface_set_name(si, src.surface_get_name(si))
+	if moved > 0:
+		var overrides: Array = []
+		for si in src.get_surface_count():
+			overrides.append(mi.get_surface_override_material(si))
+		mi.mesh = out
+		for si in overrides.size():
+			mi.set_surface_override_material(si, overrides[si])
+	return moved
+
+
+## The laser gates' look (LaserGateFX; owner asked for them to look
+## amazing): one over each gate's beams.
+func _build_gate_fx() -> void:
+	for g in _json(DIR + "/mobile/collision.json").get("gates", []):
+		var laser := level.find_child(String(g["group"]) + "__laser", true, false) as MeshInstance3D
+		if laser == null:
+			continue
+		var fx := LaserGateFX.new()
+		fx.name = String(g["id"]) + "_FX"
+		add_child(fx)
+		fx.build(laser)
+		gate_fx[String(g["id"])] = fx
 
 
 ## The control terminal(s): walking up to one uses it (the level's own
@@ -242,6 +355,13 @@ func use_terminal(id: String) -> void:
 		return
 	terminals_used.append(id)
 	Net.world_event(self, &"terminal", [id])
+	for t in _json(DIR + "/mobile/collision.json").get("terminals", []):
+		if String(t["id"]) == id:
+			for gid in t.get("activates", []):
+				if gate_fx.has(String(gid)) and is_instance_valid(gate_fx[String(gid)]):
+					(gate_fx[String(gid)] as LaserGateFX).open()
+				if not gates_open.has(String(gid)):
+					gates_open.append(String(gid))
 	mobile.call(&"activate_terminal", id)
 	if hud:
 		hud.banner("TERMINAL ACTIVATED", "EXIT GATE OPEN")

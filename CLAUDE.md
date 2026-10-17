@@ -274,8 +274,23 @@
   pad kills), pads that surge up out of the slime, and the control terminal
   at their end: walking up to it opens the exit's laser gate. The package's
   `apply_effects.gd` needed compile fixes here (typed vars, a transform
-  dropped upstream). Slime / crusher / falling: player back to spawn, robots
-  die. Exit hallway: "PART 3 COMING SOON" banner.
+  dropped upstream; a riser's colliders are looked up under their
+  StaticBody3D too - the import names the body, not the shape, so the
+  platforms were solid before rising). Slime / crusher / falling: player
+  back to spawn, robots die. Exit hallway: "PART 3 COMING SOON" banner.
+  Final rebuild (image-to-level 8bc3117, Stages 86-96, packaged here with
+  `package.py --game`): turbine fan wind (package's `_wind`), rising
+  shotgun platform with dripping goo, GIR in Core_Vat, drone swarm, window
+  barriers. The shotgun platform (owner asked): its centre post is
+  flattened into the deck (`ToxicWorks._shotgun_pad`, its colliders off)
+  and the game's shotgun spawn pad (orange glow, gun spinning over it) rides
+  the platform's bone up out of the slime; the package's own pickup area is
+  unused. Laser gates (owner asked: "look amazingly better";
+  `LaserGateFX`): the map maker's beams made invisible (blockers / frames
+  unchanged) under camera-facing beams with white-hot cores, red glow,
+  energy pulses and flicker, star flares and sparks at the emitters, a hex
+  force field, sparks where a player presses in, and an overload / flash /
+  collapse with a spark burst when they open.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime

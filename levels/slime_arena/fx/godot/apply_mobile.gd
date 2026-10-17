@@ -20,6 +20,9 @@ signal terminal_activated(terminal_id: String)
 
 var _gates := {}  # id -> {"data": gate dict, "blocker": StaticBody3D}
 var _terminals := {}  # id -> terminal dict (Stage 80)
+## Stage 89: emitted once when a player reaches a pickup (collision.json "pickups", e.g. the shotgun on its platform) -
+## the game gives / spawns the item. A pickup on a riser is live only once its platform is up (apply_effects.gd).
+signal pickup_reached(pickup_id: String, item: String)
 
 var _entrances := {}  # id -> {"data": entrance dict, "pivot": Node3D holding the car's merged nodes}
 
@@ -87,6 +90,26 @@ func _ready() -> void:
 		ia.add_to_group(&"terminal")
 		add_child(ia)
 		_terminals[String(tm["id"])] = tm
+	for pk in col.get("pickups", []):  # Stage 89: item pickups - an area (group "pickup", meta "pickup_id" / "item")
+		var pa := Area3D.new()
+		pa.name = String(pk["id"]) + "_Pickup"
+		var pcs := CollisionShape3D.new()
+		var psp := SphereShape3D.new()
+		psp.radius = float(pk.get("radius", 1.4))
+		pcs.shape = psp
+		pa.add_child(pcs)
+		pa.position = Vector3(pk["center"][0], pk["center"][1], pk["center"][2])
+		pa.set_meta("pickup_id", pk["id"])
+		pa.set_meta("item", pk.get("item", ""))
+		pa.add_to_group(&"pickup")
+		pa.monitoring = not pk.has("riser")
+		var pid := String(pk["id"])
+		var item := String(pk.get("item", ""))
+		pa.body_entered.connect(func(b: Node3D) -> void:
+			if b is CharacterBody3D and pa.has_meta("pickup_id"):
+				pa.remove_meta("pickup_id")
+				pickup_reached.emit(pid, item))
+		add_child(pa)
 	for h in col["hazards"]:
 		var area := Area3D.new()
 		area.name = String(h["name"]) + "_Area"
