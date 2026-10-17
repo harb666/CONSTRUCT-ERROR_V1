@@ -153,7 +153,9 @@
   sound isn't moving), a 16-bar
   cycle of clean bars and bars where everything - the arena behind, panels,
   buttons, cards - merges into neon vector lines (edge pass in each
-  source's hue, ragged blocky dissolve front with a glow, band shifts,
+  source's hue, ragged blocky dissolve front with a glow - its moves up /
+  down the screen are fast, a quarter beat then a hold (owner asked,
+  `MenuGlitch.ZIP`), slams on each half bar in the 'beat' bars - band shifts,
   drop-outs, RGB split, magenta / green ghosts; `MenuGlitch`,
   `menu_glitch.gdshader`), and the character preview dissolves into its
   real wire mesh (crease edges, skinned; `WireMesh`, `wire_line` /

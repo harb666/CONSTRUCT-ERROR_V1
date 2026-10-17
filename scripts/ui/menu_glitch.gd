@@ -74,26 +74,33 @@ func beat_position(delta: float) -> float:
 	return (_clock + _offset - FIRST_BEAT) * BPM / 60.0
 
 
-## The schedule at `b` beats: [wire, glitch]. Quantised to 8th notes for
-## a digital feel (the video's merge_amount).
+## How long the blocky front takes to sweep to its next level (beats): it
+## zips there fast, then holds till the next beat (owner asked for the
+## squares' moves up and down the screen to be faster, more glitchy; they
+## used to creep there across the whole beat / bar).
+const ZIP := 0.25
+
+
+## The schedule at `b` beats: [wire, glitch].
 static func schedule(b: float) -> Vector2:
 	var beat := floori(b)
 	var ph := b - beat
-	var q := floorf(ph * 2.0) / 2.0  # 8th notes
+	var zip := minf(ph / ZIP, 1.0)  # this beat's sweep: 0 -> 1 in its first ZIP
 	var bar := posmod(floori(beat / 4.0), CYCLE)
 	var bib := posmod(beat, 4)
 	var hit := exp(-ph * 6.0)  # a kick on every beat, fading
 	match bar:
-		4, 5:  # 'beat': slams in on the downbeat, dissolves away across the bar
-			return Vector2(maxf(0.0, 1.0 - 1.4 * (bib + q) / 4.0), 0.55 * hit)
+		4, 5:  # 'beat': slams in on the downbeat and the half bar, holds an 8th, zips away
+			var h := fmod(bib + ph, 2.0)
+			return Vector2(1.0 - clampf((h - 0.5) / (2.0 * ZIP), 0.0, 1.0), 0.55 * hit)
 		6, 7:  # 'flicker': lines on the off-beat 8ths
 			return Vector2(1.0 if (ph >= 0.5) == (beat % 2 == 0) else 0.0, 0.35 + 0.4 * hit)
-		12, 13:  # 'in': sinks into lines, an 8th at a time
-			return Vector2(minf(1.0, ((bar - 12) * 8 + bib * 2 + q * 2.0) / 14.0), 0.25 * hit)
+		12, 13:  # 'in': sinks into lines, a step on every beat
+			return Vector2(minf(1.0, ((bar - 12) * 4 + bib + zip) / 8.0), 0.25 * hit)
 		14:  # all lines, the line art itself glitching on the beat
 			return Vector2(1.0, 0.3 + 0.7 * hit)
-		15:  # 'out'
-			return Vector2(maxf(0.0, 1.0 - (bib * 2 + q * 2.0) / 7.0), 0.4 * hit)
+		15:  # 'out': a step back on every beat
+			return Vector2(maxf(0.0, 1.0 - (bib + zip) / 4.0), 0.4 * hit)
 	# Clean bars: just a little kick on each bar's downbeat.
 	return Vector2(0.0, 0.3 * hit if bib == 0 else 0.0)
 

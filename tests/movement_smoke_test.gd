@@ -5230,10 +5230,15 @@ func _front_end_tests() -> void:
 	var g: MenuGlitch = fe.glitch
 	var clean := MenuGlitch.schedule(4.0 * 1 + 0.25)  # bar 1: clean
 	var slam := MenuGlitch.schedule(4.0 * 4 + 0.1)  # bar 4: slams into lines on the downbeat
-	var later := MenuGlitch.schedule(4.0 * 4 + 3.6)  # ... dissolving back across the bar
+	var later := MenuGlitch.schedule(4.0 * 4 + 3.6)  # ... gone again
 	var all := MenuGlitch.schedule(4.0 * 14 + 1.2)  # bar 14: all lines
 	_check(clean.x == 0.0 and slam.x > 0.9 and later.x < slam.x and all.x == 1.0 and MenuGlitch.schedule(4.0 * 10 + 2.5) == Vector2.ZERO,
-		"menu glitch: clean bars, slams into lines on the downbeat and dissolves across the bar, whole bars of lines")
+		"menu glitch: clean bars, slams into lines on the downbeat and dissolves back, whole bars of lines")
+	# The blocky front's moves up and down are fast (owner asked): a full
+	# sweep away in half a beat, each step in / out within a quarter beat.
+	_check(MenuGlitch.schedule(16.45).x == 1.0 and MenuGlitch.schedule(17.0).x == 0.0 and MenuGlitch.schedule(18.1).x == 1.0
+		and is_equal_approx(MenuGlitch.schedule(48.0 + 0.26).x, 1.0 / 8.0) and is_equal_approx(MenuGlitch.schedule(60.0 + 1.26).x, 0.5),
+		"menu glitch: the squares sweep up / down the screen fast - in a fraction of a beat, then hold")
 	_check(g != null and g.get_index() == fe.get_child_count() - 1 or fe.get_children().filter(func(c: Node) -> bool: return c is CanvasItem).back() == g,
 		"menu glitch: drawn over the whole menu")
 	_check(not g.texts.is_empty() and HudStyle.defer_for == null and g.texts.any(func(t: Array) -> bool: return t[2] == "DEPLOY"),
