@@ -152,9 +152,9 @@ func apply_damage(info: DamageInfo) -> void:
 		health = maxf(health - (amount - soak), 0.0)
 		vitals_changed.emit()
 	damaged.emit(info)
-	if can_die and health <= 0.0:
+	if can_die and health <= 0.0 and not _respawn_pending:
 		died.emit()
-		respawn()
+		respawn_wiped()
 
 
 ## Pickups: add up to the maximum. Returns how much was actually added.
@@ -448,6 +448,27 @@ func _do_jump(jump_velocity: float, is_air_jump: bool) -> void:
 	_coyote_timer = 0.0
 	is_dodging = false
 	jumped.emit(is_air_jump)
+
+
+## Fell into the slime / off the level, or died: back to the spawn under
+## the death wipe (DeathWipe, on this device's screen) - the screen streaks
+## over, they're put back while it's covered, it streaks away. Straight
+## back with no wipe (a teammate's character, or no wipe in the level).
+func respawn_wiped() -> void:
+	if _respawn_pending:
+		return
+	var wipe := DeathWipe.find(get_tree()) if is_in_group(&"local_player") else null
+	if wipe == null:
+		respawn()
+		return
+	_respawn_pending = true
+	wipe.play(func() -> void:
+		_respawn_pending = false
+		if is_inside_tree():
+			respawn())
+
+
+var _respawn_pending := false
 
 
 func respawn() -> void:

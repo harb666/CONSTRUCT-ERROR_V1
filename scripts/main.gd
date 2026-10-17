@@ -192,6 +192,10 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 				touch_controls.set_action_dim("melee", not player.melee.available()))
 		player.add_child(melee_timer)
 		_add_hit_flash(player)
+		# Falling off / into the slime, or dying: the screen glitches out and
+		# back (DeathWipe) while they're put back at the spawn.
+		if $UI.get_node_or_null(^"DeathWipe") == null:
+			$UI.add_child(DeathWipe.new())
 		# Crash report breadcrumbs: weapon changes.
 		var crumb_holder := player.get_node("WeaponHolder") as WeaponHolder
 		crumb_holder.slot_equipped.connect(func(side: String, def: WeaponDefinition) -> void:

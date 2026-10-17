@@ -172,6 +172,6 @@ func _add_kill_volume(n: String, box: AABB) -> Area3D:
 ## respawns as usual).
 func _on_kill_volume(body: Node3D) -> void:
 	if body is PlayerController:
-		(body as PlayerController).respawn()
+		(body as PlayerController).respawn_wiped()
 	elif (body is RobotEnemy or body is RobotBoss) and body.alive:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))

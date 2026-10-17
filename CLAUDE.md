@@ -162,6 +162,13 @@
   `wire_hide` shaders - one view: this renderer poses a skinned mesh per
   view). All menu text is drawn crisp on top (`HudStyle.defer_for`),
   outlined while lines show, so the menus stay readable.
+- Death wipe (owner asked: the menu glitch's "stream of pixels that run
+  down the screen quickly" when a player falls off / into the slime or
+  dies): `DeathWipe` (menu_glitch.gdshader, `from_top`) streaks the blocky
+  front down over the screen in 0.22 s, the player is put back at spawn
+  under it (`PlayerController.respawn_wiped`), it holds 0.14 s and streaks
+  on down off the screen in 0.3 s. Only on the device of the player it
+  happens to; teammates' characters still go straight back.
 - Lock-on reticles in the owner's sci-fi HUD reference style (owner asked):
   lock-in snap animation, segmented / tick rings, notches, brackets and a
   readout (arm, distance, target health); arm colours unchanged.

@@ -3151,7 +3151,9 @@ func _toxic_arena_tests() -> void:
 		low.y = minf(low.y, p.global_position.y)
 		if p.global_position.distance_to(spawn) < 0.5:
 			break
-	_check(p.global_position.distance_to(spawn) < 0.5 and low.y > 0.5, "toxic: falling into HazardFluid respawns the player (lowest y %.2f)" % low.y)
+	# (Under the death wipe they sink a moment before going back - not
+	# through the level.)
+	_check(p.global_position.distance_to(spawn) < 0.5 and low.y > -1.0, "toxic: falling into HazardFluid respawns the player (lowest y %.2f)" % low.y)
 	# Robots die in it.
 	var r: RobotEnemy = main.get_node("Targets/Robot4")
 	r.global_position = Vector3(-8.0, 3.0, 16.0)
@@ -4080,6 +4082,7 @@ func _recovery_tests(main: Node) -> void:
 	p.armour = 0.0
 	p.health = 3.0
 	p.apply_damage(DamageInfo.make(5.0, DamageInfo.Type.ENERGY, p.global_position, Vector3.FORWARD))
+	await _ticks(25)  # under the death wipe
 	_check(died[0] and p.health == p.max_health and p.global_position.distance_to(p.spawn_transform.origin) < 0.1, "recovery: 0 HP -> respawn at spawn with full health")
 	_check(drops.active_count() == 0, "recovery: respawn clears shards")
 	p.can_die = could_die
@@ -4344,7 +4347,7 @@ func _skyforge_tests() -> void:
 	# Falling off: back to spawn; a robot that falls dies.
 	p.global_position = Vector3(3, 15, 80)
 	p.velocity = Vector3.ZERO
-	await _ticks(10)
+	await _ticks(30)
 	_check(p.global_position.distance_to(Vector3(3, 40, 55.09)) < 2.0, "skyforge: falling off the decks puts the player back at spawn")
 	# Grunts don't walk off ledges (skirmishers already steer round drops).
 	var g: RobotEnemy = main.get_node("Targets/GateGrunt")
@@ -4677,10 +4680,21 @@ func _toxic_works_tests() -> void:
 	_check(slime != null and slime.body_entered.is_connected(tw._on_fell), "works: the slime volumes are live")
 	if slime:
 		var shape := slime.find_children("*", "CollisionShape3D", true, false)[0] as CollisionShape3D
+		var wipe := DeathWipe.find(main.get_tree())
+		var plays := wipe.plays if wipe else 0
 		p.global_position = shape.global_position
 		p.velocity = Vector3.ZERO
-		await _ticks(6)
-		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0, "works: falling in the slime puts the player back at spawn")
+		await _ticks(4)
+		# The death wipe (owner asked): the screen streaks over in the menu's
+		# glitch lines, the player is put back under it, it streaks away.
+		_check(wipe != null and wipe.plays == plays + 1 and wipe.visible and wipe.wire > 0.0 and wipe.wire < 1.0
+			and p.global_position.distance_to(p.spawn_transform.origin) > 5.0,
+			"works: falling in the slime, the screen streaks over with the glitch's blocky pixels (%.2f)" % (wipe.wire if wipe else 0.0))
+		await _ticks(14)
+		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0 and wipe.wire == 1.0, "works: under it the player is put back at spawn")
+		await _ticks(30)
+		_check(not wipe.visible and not wipe.playing() and p.global_position.distance_to(p.spawn_transform.origin) < 1.0,
+			"works: and it streaks away off the screen to show them there")
 	# The hall's waves (they started as the lift landed), cleared: the
 	# Works gate opens.
 	_check(wd.wave >= 1 and main.get_node("HallTargets").get_child_count() > 0, "works: the waves start once the lift has landed (wave %d)" % wd.wave)

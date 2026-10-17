@@ -19,6 +19,9 @@ uniform float front_w = 0.07;
 // A screen-UV rect left out of the line pass (the character preview, which
 // dissolves into its own real wire mesh).
 uniform vec4 keep_rect = vec4(0.0);
+// The front comes down from the top instead of up from the bottom (the
+// death wipe, DeathWipe; the menu's rises).
+uniform bool from_top = false;
 // Line thickness in screen pixels (the phone draws at 2x).
 uniform float line_px = 1.5;
 uniform float gain = 5.0;
@@ -81,9 +84,10 @@ void fragment() {
 	// RGB split on the picture.
 	vec2 split = vec2(0.004 * glitch, 0.0);
 	vec3 col = vec3(texture(screen_tex, uv + split).r, texture(screen_tex, uv).g, texture(screen_tex, uv - split).b);
-	// Dissolve key: rising from the bottom with a ragged, blocky edge.
+	// Dissolve key: rising from the bottom (or coming down from the top)
+	// with a ragged, blocky edge.
 	vec2 cell = floor(uv * res / 22.0);
-	float key = (1.0 - uv.y) * 0.62 + hash(cell + floor(seed * 0.125)) * 0.38;
+	float key = (from_top ? uv.y : 1.0 - uv.y) * 0.62 + hash(cell + floor(seed * 0.125)) * 0.38;
 	// wire 0: no lines; 1: all lines; the front band runs just ahead.
 	float w2 = wire * (1.0 + front_w);
 	float lines_on = keep ? 0.0 : step(key, w2 - front_w);
