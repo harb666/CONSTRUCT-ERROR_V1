@@ -3235,6 +3235,67 @@ func _skinned_points(mi: MeshInstance3D, stride: int, bones: Array = []) -> Pack
 ## Robot boss: asset, chaingun, missile + marker, chest core loop, death.
 ## Boss melee (owner asked): a player too close gets a foot stomp - a mini
 ## shockwave that knocks them way back onto their back; they kip up.
+## The boss's missiles knock players flying (owner asked): close to the
+## blast, a backward somersault before they land on their back; then they
+## kip up.
+func _boss_missile_knock_tests(main: Node, boss: RobotBoss) -> void:
+	if boss == null:
+		return
+	var p: PlayerController = main.players[1]
+	var kd := p.knockdown
+	await _ticks(120)  # (any stomp knockdown over)
+	# Open floor, away from the boss (it stays put meanwhile).
+	boss.set_physics_process(false)
+	p.global_position = boss.global_position + Vector3(0.0, 0.1, 0.0) + (p.global_position - boss.global_position) * Vector3(1, 0, 1)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	for i in 60:
+		await _ticks(1)
+		if p.is_on_floor():
+			break
+	var floor0 := p.global_position.y
+	var m := BossMissile.new()
+	main.add_child(m)
+	m.shooter = boss
+	var k0 := BossMissile.knocks
+	var g0 := kd.getups
+	var to_boss := boss.global_position - p.global_position
+	to_boss.y = 0.0
+	var at := p.global_position + Vector3.UP * 0.1 + to_boss.normalized() * 0.9
+	m._blast(at)
+	await _ticks(2)
+	_check(kd.active and kd.somersaults == 1 and BossMissile.knocks == k0 + 1, "boss missile: a player caught close is knocked flying, turning a backward somersault")
+	var top := 0.0
+	var turned := 0.0
+	for i in 150:
+		await _ticks(1)
+		top = maxf(top, p.global_position.y)
+		turned = minf(turned, kd.pitch)
+		if kd.getups > g0:
+			break
+	var away := p.global_position - at
+	away.y = 0.0
+	_check(kd.getups == g0 + 1 and top - floor0 > 1.5 and away.length() > 5.0 and rad_to_deg(turned) < -360.0,
+		"boss missile: thrown %.1f m back and %.1f m up, head over heels (%.0f deg), lands on their back and kips up" % [away.length(), top - floor0, rad_to_deg(turned)])
+	m.queue_free()
+	# Further out: knocked down without the somersault.
+	await _ticks(10)
+	var m2 := BossMissile.new()
+	main.add_child(m2)
+	m2.shooter = boss
+	to_boss = boss.global_position - p.global_position
+	to_boss.y = 0.0
+	m2._blast(p.global_position + Vector3.UP * 0.1 + to_boss.normalized() * 2.9)
+	await _ticks(2)
+	_check(kd.active and kd.somersaults == 0, "boss missile: at the edge of the blast, knocked down without the somersault")
+	for i in 150:
+		await _ticks(1)
+		if not kd.active:
+			break
+	m2.queue_free()
+	boss.set_physics_process(true)
+
+
 func _boss_stomp_tests(main: Node, boss: RobotBoss) -> void:
 	if boss == null or not boss.alive:
 		return
@@ -3333,8 +3394,12 @@ func _robot_boss_tests(main: Node) -> void:
 		and boss.core.get_active_material(0) != body.get_active_material(0), "boss: Reactor_Core is its own light node with its own emissive material")
 	_check(boss.missile_socket != null and boss.model.find_child("Chest_Plate_Carriage", true, false).get_class() == "Node3D"
 		and boss.loaded_missile != null and boss.loaded_missile.get_parent() == boss.missile_socket, "boss: Missile_Spawn socket with a missile loaded in it, slide rails gone")
-	var bm := body.get_active_material(0) as StandardMaterial3D
+	var bm := body.mesh.surface_get_material(0) as StandardMaterial3D
 	_check(bm.albedo_texture != null and bm.normal_texture != null and bm.metallic_texture != null, "boss: body keeps its own colour / normal / metal-roughness textures")
+	var am := body.get_active_material(0) as ShaderMaterial
+	_check(am != null and am == boss.armour_material and am.shader == RobotBoss.ARMOUR_SHADER and am.get_shader_parameter("albedo_tex") == bm.albedo_texture
+		and am.get_shader_parameter("normal_tex") == bm.normal_texture,
+		"boss: its body armour is drawn on both sides, in its own textures (no see-through gaps at the neck / hips)")
 	var draws := 0
 	var tris := 0
 	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
@@ -3494,6 +3559,7 @@ func _robot_boss_tests(main: Node) -> void:
 	await _robot_boss_v3_tests(main, boss)
 	await _robot_boss_v4_tests(main, boss)
 	await _boss_stomp_tests(main, boss)
+	await _boss_missile_knock_tests(main, boss)
 
 	# Death: collapses and lies flat, feet not planted, weapons attached.
 	var foot := sk.find_bone("mixamorig_LeftFoot")
@@ -4297,6 +4363,23 @@ func _battle_arena_tests() -> void:
 	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
 	_check(main.get("level_music") == null, "battle: no music on the test map (owner asked: silence to hear the sounds)")
+	# Every character's opaque body materials draw both sides (owner asked:
+	# no open meshes anywhere).
+	var one_sided := []
+	var checked := 0
+	for who: Node in [p] + t.get_children():
+		if who is RobotBoss:
+			continue  # (its own two-sided armour shader)
+		for mi: MeshInstance3D in who.find_children("*", "MeshInstance3D", true, false):
+			if mi.skin == null or mi.mesh == null or not mi.visible:
+				continue
+			for si in mi.mesh.get_surface_count():
+				var bm := mi.get_active_material(si) as BaseMaterial3D
+				if bm and bm.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+					checked += 1
+					if bm.cull_mode != BaseMaterial3D.CULL_DISABLED:
+						one_sided.append("%s/%s" % [who.name, mi.name])
+	_check(checked > 5 and one_sided.is_empty(), "battle: every character's body draws both sides - no see-through gaps (%d materials; one-sided: %s)" % [checked, one_sided])
 	main.queue_free()
 	await _ticks(5)
 
@@ -4513,6 +4596,15 @@ func _sentinel_tests() -> void:
 	_check(s.expression == &"flinch" and s.eye_energy > e0, "sentinel: hit, it flinches (covers slam shut) and its eye flashes")
 	_check(s.shots_fired > shots0 and s.shots_fired - shots0 <= 8, "sentinel: in 10 s it fires %d green bolts from its cannons (a grunt fires ~15-25)" % (s.shots_fired - shots0))
 	_check(s.global_position.y - floor_y > 2.0, "sentinel: still flying while it fights (%.1f m up)" % (s.global_position.y - floor_y))
+	# Frozen in the air (Frost Byte): the frost on the ground spreads on the
+	# floor below it, not floating where it froze (owner asked).
+	s.frost_freeze(20.0)
+	await _ticks(3)
+	var frost_floor: MeshInstance3D = s._frost._floor if s._frost else null
+	_check(frost_floor != null and absf(frost_floor.global_position.y - floor_y) < 0.2 and s.global_position.y - floor_y > 1.5,
+		"sentinel: frozen in the air, the ground frost lies on the floor below it (at %.2f m; it's %.1f m up), not floating" % [frost_floor.global_position.y if frost_floor else -1.0, s.global_position.y])
+	s._frost.thaw()
+	await _ticks(90)
 	# Dies: the eye bursts, smoke, electric discharge; the wings break apart
 	# and the antennae snap off; it drops out of the air.
 	var bursts := SentinelEyeBurst.spawned

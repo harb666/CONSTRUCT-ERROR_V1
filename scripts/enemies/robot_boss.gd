@@ -42,6 +42,7 @@ const TURN_LEFT := &"Heavy_Turn_L"
 const TURN_RIGHT := &"Heavy_Turn_R"
 const TURN_STEP_DEG := 45.0
 const WORN_SHADER := preload("res://scripts/vfx/worn_armour.gdshader")
+const ARMOUR_SHADER := preload("res://scripts/vfx/boss_armour.gdshader")
 ## Where each clip's feet land (s into the clip; tools: foot heights back
 ## at the floor after lifting). Heavy_Walk / Heavy_Step: left 0.70, right
 ## 1.60; turn steps: the leading foot 0.47, the other 0.90.
@@ -483,6 +484,7 @@ func _build_model() -> void:
 	launch_fx.name = "LaunchFx"
 	add_child(launch_fx)
 	_worn_materials()
+	_two_sided_armour()
 	# Core power cables (in the core socket's space).
 	var socket := core.get_parent() as Node3D
 	cables = BossCoreCables.new()
@@ -522,6 +524,30 @@ func _build_model() -> void:
 	gun_cel_flash.glow_size = 2.4
 	chaingun_muzzle.add_child(gun_cel_flash)
 	gun_cel_flash.setup(BULLET_COLOR, BULLET_HOT)
+
+
+## The body armour drawn on both sides (boss_armour.gdshader; owner asked
+## to fix the open-looking gaps at the neck and hips). Shared by every boss.
+static var _armour_mat: ShaderMaterial
+var armour_material: ShaderMaterial
+
+
+func _two_sided_armour() -> void:
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mi.skin == null:
+			continue  # (the body is the skinned mesh)
+		for si in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(si) as StandardMaterial3D
+			if m == null or m.resource_name != "BakedMaterial" or m.albedo_texture == null:
+				continue
+			if _armour_mat == null:
+				_armour_mat = ShaderMaterial.new()
+				_armour_mat.shader = ARMOUR_SHADER
+				_armour_mat.set_shader_parameter("albedo_tex", m.albedo_texture)
+				_armour_mat.set_shader_parameter("normal_tex", m.normal_texture)
+				_armour_mat.set_shader_parameter("orm_tex", m.roughness_texture if m.roughness_texture else m.metallic_texture)
+			mi.set_surface_override_material(si, _armour_mat)
+			armour_material = _armour_mat
 
 
 ## Worn, chipped armour (robot's own atlas + procedural wear) on the

@@ -22,6 +22,30 @@ are. Changes (all reproducible from here):
     chest clips are replaced by a downward-hinging flap:
     Chest_Open / Chest_Close (motion) and Chest_Open_Hold / Chest_Closed
     (poses). Only the flap node is animated.
+  * Inside-out armour turned round (owner asked: "open meshes on the neck
+    and on the hip area"): ~6,400 of the body's triangles (17% of its
+    surface, most round the hips, waist and neck) were wound - and their
+    normals pointed - inwards, so the renderer culled them and those
+    patches showed as jagged see-through gaps. Every armour piece is now
+    wound consistently (each connected piece made consistent across its
+    shared edges, keeping the way most of it already faced); the
+    turned triangles get their own copies of their vertices with the
+    normals flipped.
+  * Neck and hips sealed: the body is ~4,000 separate armour pieces, and at
+    the neck and the hips they don't quite meet - from below or behind you
+    could see straight through the slits between them. Hidden inside each part,
+    a closed dark-gunmetal core (the convex hull of that part's own
+    vertices, shrunk towards its middle) now fills the view through every
+    slit; each of its vertices takes the skin weights of the nearest body
+    vertex, so it moves with the armour round it. Part of the body mesh
+    (same material, no extra draw).
+  * Chaingun barrel sleeve (owner asked): round the spinning barrel rotor
+    the body kept static, chopped pieces of the barrels, so whenever the
+    rotor stopped at another angle the barrels didn't line up. Those static
+    pieces (inside the barrel cluster's radius, along the rotor) are removed
+    and one plain round gunmetal sleeve takes their place, open at the
+    front: the barrels spin inside it and their tips show past its lip, and
+    it looks the same whatever angle they stop at. Skinned like the gun.
   * Optional: an authored death clip (from tools/author_boss_death.gd) is
     added.
   * Storage: tangents dropped (Godot regenerates them on import), weights
@@ -75,6 +99,27 @@ MISSILE_SPAWN_FORWARD = HOUSING_Z[1] - PORT_DEPTH * 0.5
 # Chaingun muzzle: on the rotor's spin axis, at the barrel tips.
 ROTOR_AXIS = np.array([-0.0200661844, 0.9543148349, 0.2981284935])
 MUZZLE_ALONG = 0.285
+
+# Inner cores sealing the slits between the armour pieces: (name, the bones
+# whose vertices they're built round, shrink towards the middle).
+FILLERS = [
+    ("pelvis", ["mixamorig:Hips"], 0.86),
+    ("neck", ["mixamorig:Neck", "mixamorig:Head"], 0.86),
+]
+
+# Chaingun barrel sleeve, along the rotor's spin axis from its centre (m):
+# the static barrel pieces inside STUB_R between STUB_T go; the sleeve
+# wraps SLEEVE_T at SLEEVE_R, its front lip open to BORE_R so the barrels'
+# spinning tips (to 0.273) show through and past it.
+STUB_T = (-0.005, 0.26)
+STUB_R = 0.155
+SLEEVE_T = (0.0, 0.225)
+SLEEVE_R = 0.152
+BORE_R = 0.136     # just clear of the barrels (they reach 0.131)
+BORE_DEPTH = 0.03  # the lip's inner wall
+SLEEVE_BANDS = ((0.025, 0.05), (0.18, 0.21))
+BAND_R = 0.162
+SLEEVE_SEGMENTS = 28
 
 # Chest (model/bind space, metres). The recess back wall is flat at z 0.015.
 CHAMBER_BACK_Z = 0.015
@@ -204,6 +249,130 @@ def micro_uv(pos, nor, centre):
 
 
 # ---------------------------------------------------------------- geometry
+def outward_flips(P, T, weld=1e-5):
+    """Which triangles to turn round so every connected piece is wound
+    consistently, the way most of it already faces."""
+    from collections import defaultdict, deque
+    key = np.round(np.asarray(P, float) / weld).astype(np.int64)
+    _, inv = np.unique(key, axis=0, return_inverse=True)
+    inv = inv.reshape(-1)
+    Wv = inv[T]
+    nf = len(Wv)
+    edges = defaultdict(list)
+    for f, (a, b, c) in enumerate(Wv):
+        for u, v in ((a, b), (b, c), (c, a)):
+            if u != v:
+                edges[(min(u, v), max(u, v))].append((f, u < v))
+    adj = defaultdict(list)
+    for lst in edges.values():
+        if len(lst) == 2:
+            (f1, d1), (f2, d2) = lst
+            adj[f1].append((f2, d1 == d2))  # same direction: one of them is inside-out
+            adj[f2].append((f1, d1 == d2))
+    flip = np.zeros(nf, bool)
+    seen = np.zeros(nf, bool)
+    shell = np.full(nf, -1)
+    sid = 0
+    for s0 in range(nf):
+        if seen[s0]:
+            continue
+        q = deque([s0])
+        seen[s0] = True
+        shell[s0] = sid
+        while q:
+            f = q.popleft()
+            for g2, need in adj[f]:
+                if not seen[g2]:
+                    seen[g2] = True
+                    shell[g2] = sid
+                    flip[g2] = flip[f] ^ need
+                    q.append(g2)
+        sid += 1
+    # Each piece keeps the way most of its surface faces (the pieces are
+    # mostly open shells, so their volume can't say which way is out):
+    # only the inside-out patches in it are turned.
+    a, b, c = (np.asarray(P, float)[T[:, k]] for k in range(3))
+    area = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    turned = np.zeros(sid)
+    total = np.zeros(sid)
+    np.add.at(turned, shell, area * flip)
+    np.add.at(total, shell, area)
+    return flip ^ (turned[shell] > total[shell] * 0.5)
+
+
+def muzzle_sleeve(c, ax):
+    """The round static sleeve round the chaingun's rotor: side wall, front
+    lip (annulus) and the lip's inner wall. Returns positions, normals,
+    uvs, triangles."""
+    ax = ax / np.linalg.norm(ax)
+    u = np.cross(ax, [0.0, 0.0, 1.0])
+    u /= np.linalg.norm(u)
+    v = np.cross(ax, u)
+    ang = np.linspace(0, 2 * np.pi, SLEEVE_SEGMENTS, endpoint=False)
+    ring = np.outer(np.cos(ang), u) + np.outer(np.sin(ang), v)
+    pos, nor, uvs, tris = [], [], [], []
+
+    def band(r0, t0, r1, t1, normals, centre):
+        base = len(pos)
+        for k in range(SLEEVE_SEGMENTS):
+            pos.append(c + ax * t0 + ring[k] * r0)
+            pos.append(c + ax * t1 + ring[k] * r1)
+            nor.extend([normals[k], normals[k]])
+        n = SLEEVE_SEGMENTS
+        for k in range(n):
+            a0, a1 = base + 2 * k, base + 2 * k + 1
+            b0, b1 = base + 2 * ((k + 1) % n), base + 2 * ((k + 1) % n) + 1
+            tris.extend([[a0, b0, a1], [a1, b0, b1]])
+        P = np.array(pos[base:])
+        uvs.extend(micro_uv(P, np.array(nor[base:]), centre))
+
+    t0, t1 = SLEEVE_T
+    band(SLEEVE_R, t0, SLEEVE_R, t1, ring, GUNMETAL_LIGHT)                    # side
+    band(SLEEVE_R, t1, BORE_R, t1, [ax] * SLEEVE_SEGMENTS, GUNMETAL_LIGHT)     # front face
+    band(BORE_R, t1, BORE_R, t1 - BORE_DEPTH, -ring, GUNMETAL_DARK)          # lip's inner wall
+    # Two raised red bands round it (the boss's red armour).
+    for b0, b1 in SLEEVE_BANDS:
+        band(SLEEVE_R, b0, BAND_R, b0, [-ax] * SLEEVE_SEGMENTS, RED_ARMOUR)
+        band(BAND_R, b0, BAND_R, b1, ring, RED_ARMOUR)
+        band(BAND_R, b1, SLEEVE_R, b1, [ax] * SLEEVE_SEGMENTS, RED_ARMOUR)
+    P = np.array(pos, np.float32)
+    T = np.array(tris, np.uint32)
+    # Wind every triangle to face along its normal.
+    a, b, cc = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
+    wrong = (np.cross(b - a, cc - a) * np.array(nor)[T[:, 0]]).sum(1) < 0
+    T[wrong] = T[wrong][:, [0, 2, 1]]
+    return P, np.array(nor, np.float32), np.array(uvs, np.float32), T
+
+
+def inner_filler(P, J, Wt, joint_names, bones, shrink):
+    """A closed core inside the body part skinned (mostly) to `bones`: the
+    convex hull of its vertices shrunk towards its middle, flat-shaded,
+    each vertex skinned like the nearest of those vertices. Returns
+    positions, normals, joints, weights, triangle indices."""
+    from scipy.spatial import ConvexHull, cKDTree
+    jset = [joint_names.index(b) for b in bones]
+    dom = J[np.arange(len(J)), Wt.argmax(1)]
+    sel = np.isin(dom, jset) & (Wt.max(1) > 0.6)
+    Q = P[sel].astype(float)
+    hull = ConvexHull(Q)
+    c = Q[hull.vertices].mean(0)
+    tree = cKDTree(Q)
+    fp, fn, fi = [], [], []
+    for simplex, eq in zip(hull.simplices, hull.equations):
+        a, b, cc = Q[simplex]
+        if np.dot(np.cross(b - a, cc - a), eq[:3]) < 0:
+            b, cc = cc, b
+        base = len(fp)
+        for v in (a, b, cc):
+            fp.append(c + (v - c) * shrink)
+            fn.append(eq[:3])
+        fi.append([base, base + 1, base + 2])
+    fp = np.array(fp, np.float32)
+    near = tree.query(fp)[1]
+    ids = np.nonzero(sel)[0][near]
+    return fp, np.array(fn, np.float32), J[ids], Wt[ids], np.array(fi, np.uint32)
+
+
 def clip_poly(poly, axis, value, keep_greater):
     """Sutherland-Hodgman clip of a convex polygon (list of 2D points)."""
     out = []
@@ -554,6 +723,9 @@ def main():
     visor_prim = None
     remapped = 0
     back_xy = np.zeros((0, 3, 2))
+    filler_tris = {}
+    stubs_removed = 0
+    turned = 0
     for mi, m in enumerate(g["meshes"]):
         if m["name"] == "Chest_Plate_Carriage":
             continue  # slide rails: removed
@@ -583,13 +755,65 @@ def main():
             hidden = inside_housing(P)[idx].all(1)
             housing_hidden = int(hidden.sum())
             idx = idx[~hidden]
+            # The static barrel pieces round the chaingun's spinning rotor.
+            rc = G[names["Chaingun_Barrel_Rotor"]][:3, 3]
+            rax = G[names["mixamorig:LeftForeArm"]][:3, :3] @ ROTOR_AXIS  # (forearm-local)
+            rax /= np.linalg.norm(rax)
+            pc = P[idx].mean(1) - rc
+            ta = pc @ rax
+            ra = np.linalg.norm(pc - np.outer(ta, rax), axis=1)
+            stub = (ta > STUB_T[0]) & (ta < STUB_T[1]) & (ra < STUB_R)
+            stub_vertices = np.unique(idx[stub])
+            stubs_removed = int(stub.sum())
+            idx = idx[~stub]
         prim = {"attributes": {}, "material": pr.get("material", 0)}
-        prim["attributes"]["POSITION"] = keep(at["POSITION"], 34962)
-        prim["attributes"]["NORMAL"] = keep(at["NORMAL"], 34962)
+        fill = None
+        if m["name"] == "Robot_Body":
+            # Inner cores at the neck and hips, appended to the body.
+            P0 = read_acc(g, B, at["POSITION"])
+            J0 = read_acc(g, B, at["JOINTS_0"])
+            W0 = read_acc(g, B, at["WEIGHTS_0"]).astype(np.float64)
+            body_node = next(n for n in g["nodes"] if n.get("mesh") == mi)
+            jn = [g["nodes"][j]["name"] for j in g["skins"][body_node["skin"]]["joints"]]
+            fill = [P0, read_acc(g, B, at["NORMAL"]), uv, J0, W0]
+            # Inside-out triangles turned round, on their own vertex copies.
+            fl = outward_flips(P0, idx.astype(np.int64))
+            turned = int(fl.sum())
+            src = idx[fl].reshape(-1)
+            base = len(P0)
+            copies = [P0[src], -fill[1][src], uv[src], J0[src], W0[src]]
+            for k in range(5):
+                fill[k] = np.concatenate([fill[k], copies[k].astype(fill[k].dtype)])
+            new = (base + np.arange(len(src))).reshape(-1, 3)
+            idx = idx.copy()
+            idx[fl] = new[:, [0, 2, 1]]
+            # The round muzzle sleeve, skinned like the barrel tips it replaces.
+            from scipy.spatial import cKDTree
+            sp_, sn_, su_, st_ = muzzle_sleeve(rc, rax)
+            near = stub_vertices[cKDTree(P0[stub_vertices]).query(sp_)[1]]
+            idx = np.vstack([idx, st_ + len(fill[0])])
+            for k, arr in enumerate([sp_, sn_, su_, J0[near], W0[near]]):
+                fill[k] = np.concatenate([fill[k], arr.astype(fill[k].dtype)])
+            for fname, bones, shrink in FILLERS:
+                fp, fnn, fj, fw, fidx = inner_filler(P0, J0, W0, jn, bones, shrink)
+                idx = np.vstack([idx, fidx + len(fill[0])])
+                for k, arr in enumerate([fp, fnn, micro_uv(fp, fnn, GUNMETAL_DARK), fj, fw]):
+                    fill[k] = np.concatenate([fill[k], arr.astype(fill[k].dtype)])
+                filler_tris[fname] = len(fidx)
+            uv = fill[2]
+            prim["attributes"]["POSITION"] = W.acc(fill[0], 5126, "VEC3", target=34962, minmax=True)
+            prim["attributes"]["NORMAL"] = W.acc(fill[1], 5126, "VEC3", target=34962)
+        else:
+            prim["attributes"]["POSITION"] = keep(at["POSITION"], 34962)
+            prim["attributes"]["NORMAL"] = keep(at["NORMAL"], 34962)
         prim["attributes"]["TEXCOORD_0"] = W.acc(uv, 5126, "VEC2", target=34962)
         if "JOINTS_0" in at:
-            prim["attributes"]["JOINTS_0"] = keep(at["JOINTS_0"], 34962)
-            w = read_acc(g, B, at["WEIGHTS_0"]).astype(np.float64)
+            if fill is not None:
+                ja = g["accessors"][at["JOINTS_0"]]
+                prim["attributes"]["JOINTS_0"] = W.acc(fill[3], ja["componentType"], "VEC4", target=34962)
+            else:
+                prim["attributes"]["JOINTS_0"] = keep(at["JOINTS_0"], 34962)
+            w = (fill[4] if fill is not None else read_acc(g, B, at["WEIGHTS_0"])).astype(np.float64)
             w /= w.sum(1, keepdims=True)
             wb = np.floor(w * 255 + 0.5).astype(np.int32)
             # Exact sum of 255 per vertex: fix the rounding on the largest weight.
@@ -599,7 +823,7 @@ def main():
         prims = [prim]
         if m["name"] == "Robot_Body":
             # Visor slit: its own (red emissive) primitive, same vertices.
-            P = read_acc(g, B, at["POSITION"])
+            P = fill[0]
             c = P[idx].mean(1)
             col = sample_base(g, B, uv[idx].mean(1))
             lo, hi = np.array(VISOR_BOX[0]), np.array(VISOR_BOX[1])
@@ -786,7 +1010,8 @@ def main():
     print(f"{OUT}: {total:,} bytes (source {os.path.getsize(SRC):,}); "
           f"{remapped} void-texel vertices remapped, {removed_tris} recess-back triangles replaced, "
           f"{housing_hidden} enclosed tube triangles removed, {visor_tris} visor triangles, "
-          f"{len(anims)} clips")
+          f"{len(anims)} clips, {turned} inside-out triangles turned, inner cores {filler_tris}, "
+          f"{stubs_removed} static barrel-piece triangles replaced by the barrel sleeve")
 
 
 if __name__ == "__main__":

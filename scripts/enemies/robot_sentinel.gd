@@ -238,6 +238,7 @@ func _build_model() -> void:
 	for a in [&"Hover", &"Fly_Forward", &"Steer_Left", &"Steer_Right", &"Brake"]:
 		_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_merge_body()
+	TwoSided.apply(_model)
 	_make_eye()
 	_make_tree()
 	flex = SentinelFlex.new()

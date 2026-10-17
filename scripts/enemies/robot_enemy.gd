@@ -256,6 +256,7 @@ func _build_model() -> void:
 	if caps:
 		caps.apply(_model)
 	_use_whole_mesh()
+	TwoSided.apply(_model)
 	for a in [&"Walking", &"Running"]:
 		if _anim.has_animation(a):
 			_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR

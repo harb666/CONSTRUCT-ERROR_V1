@@ -229,6 +229,25 @@
   little and back by 0.62 s (impact zoom, no shake). The right arm then goes
   back to its previous weapon. `PlayerMelee`, `MeleePoseModifier`.
 
+- Boss missiles knock players down (owner asked): a player in the blast is
+  thrown back and up (`BossMissile.knock_speed` / `knock_up`, edge ->
+  centre); within `flip_within` of the centre they turn a balled-up
+  backward somersault first, then land on their back, skid and kip up
+  (the stomp's `PlayerKnockdown` / `KnockdownPoseModifier`, `somersaults`).
+- Boss model fixes (owner asked; `tools/build_robot_boss.py`): its ~4,000
+  single-sided armour pieces showed see-through jagged gaps from below /
+  behind (neck, hips): 252 inside-out triangles turned round, hidden dark
+  cores sealing the neck and pelvis, and the body armour drawn on both
+  sides (`boss_armour.gdshader`: backs as the plates' shadowed inside).
+  Chaingun: the static, chopped barrel pieces round the spinning rotor are
+  replaced by one round gunmetal sleeve with two red bands, open at the
+  front (barrels spin inside, their tips show past the lip), so nothing
+  misaligns when the spin stops.
+- Every other character's opaque body materials draw both sides too
+  (`TwoSided`: Grinch / Harbinger, grunts, skirmishers, Sentinel) - no
+  see-through gaps at joints or coat hems.
+- Frost Byte ground frost sits on the floor below the frozen robot
+  (raycast), so a frozen flying robot leaves no frost floating in the air.
 - Boss foot stomp (owner asked): a player within 5.5 m gets stomped (4 s
   cooldown): knee up, foot slammed down, a mini toon shockwave (7.5 m) and
   the owner's stomp sound louder; players it reaches (not jumping it) take

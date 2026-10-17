@@ -322,7 +322,15 @@ static func crystal_material(is_heavy: bool) -> StandardMaterial3D:
 
 
 ## A patch of frosted ice on the floor round its feet.
+## The frost spreading on the ground under it - on the floor below, not at
+## the robot (a flying one froze in the air would leave it floating there);
+## none if there's no floor below.
 func _make_floor_frost() -> void:
+	var from := robot.global_position + Vector3.UP * 0.5
+	var q0 := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 40.0, 1, [robot.get_rid()] if robot is CollisionObject3D else [])
+	var hit := robot.get_world_3d().direct_space_state.intersect_ray(q0)
+	if hit.is_empty():
+		return
 	_floor = MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.orientation = PlaneMesh.FACE_Y
@@ -336,7 +344,11 @@ func _make_floor_frost() -> void:
 	_floor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_floor.top_level = true
 	add_child(_floor)
-	_floor.global_transform = Transform3D(Basis(Vector3.UP, randf() * TAU), robot.global_position + Vector3.UP * 0.03)
+	var n: Vector3 = hit.normal
+	var basis := Basis(Vector3.UP, randf() * TAU)
+	if n.dot(Vector3.UP) < 0.999:
+		basis = Basis(Quaternion(Vector3.UP, n.normalized())) * basis
+	_floor.global_transform = Transform3D(basis, (hit.position as Vector3) + n * 0.03)
 
 
 const FROST_FLOOR := preload("res://scripts/vfx/frost_floor.gdshader")

@@ -43,6 +43,7 @@ func instantiate_player() -> PlayerController:
 			c.free()
 		var v := (load(visual_scene_path) as PackedScene).instantiate()
 		root.add_child(v)
+		TwoSided.apply(v)
 		var holder := p.get_node_or_null("WeaponHolder") as WeaponHolder
 		if holder:
 			holder.visual_path = NodePath("../Visual/" + String(v.name))

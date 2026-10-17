@@ -33,6 +33,14 @@ const PATH_SAMPLES := 48
 @export var blast_radius := 2.6
 @export var blast_force := 9.0
 @export var max_life := 10.0
+## Players caught in the blast are knocked flying: level / upward speed
+## (m/s) at the edge -> the centre, and a backward somersault when this
+## close (0 edge .. 1 centre).
+@export var knock_speed := Vector2(8.0, 14.0)
+@export var knock_up := Vector2(8.0, 12.5)
+@export var flip_within := 0.45
+## Players knocked down by missiles (tests).
+static var knocks := 0
 
 static var _pool: Array[BossMissile] = []
 
@@ -342,7 +350,15 @@ func _blast(at: Vector3) -> void:
 		if col.has_method("apply_damage"):
 			col.apply_damage(DamageInfo.make(damage * k, DamageInfo.Type.EXPLOSION, at, push_dir, 0.0, blast_force * k, shooter))
 		if col is PlayerController:
-			(col as PlayerController).apply_external_impulse(push_dir * blast_force * k)
+			var pc := col as PlayerController
+			if pc.knockdown and not pc.is_remote:
+				# Blown off their feet (owner asked): thrown back and up, a
+				# close one head over heels, slammed down on their back,
+				# then a kip-up.
+				pc.knockdown.knock(at, lerpf(knock_speed.x, knock_speed.y, k), lerpf(knock_up.x, knock_up.y, k), 1 if k >= flip_within else 0)
+				knocks += 1
+			else:
+				pc.apply_external_impulse(push_dir * blast_force * k)
 		elif col is RigidBody3D and not (col as RigidBody3D).freeze:
 			var rb := col as RigidBody3D
 			rb.apply_central_impulse(push_dir * blast_force * k * minf(rb.mass, 20.0) * 0.5)

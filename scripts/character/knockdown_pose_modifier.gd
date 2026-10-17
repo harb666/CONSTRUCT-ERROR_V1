@@ -3,7 +3,9 @@ extends SkeletonModifier3D
 ## Full-body pose for being knocked flying (PlayerKnockdown), procedural, on
 ## top of everything (clips and rig unchanged):
 ##  - FLYING: the body tips over backwards about the hips, legs swinging up
-##    (hips and knees bent), arms flung up and out, flailing;
+##    (hips and knees bent), arms flung up and out, flailing; blasted by a
+##    missile it turns a backward somersault first, balled up (knees to the
+##    chest, arms in), opening out to land;
 ##  - DOWN: flat on the back on the floor (a bounce as it lands), knees up a
 ##    little, arms out;
 ##  - GETUP: a kip-up - rolls back with the knees tucked to the chest, then
@@ -56,6 +58,15 @@ func _process_modification_with_delta(_delta: float) -> void:
 			w = smoothstep(0.0, 0.08, t)
 			flex = deg_to_rad(50.0)
 			knee = deg_to_rad(70.0)
+			if knockdown.somersaults > 0:
+				# Head over heels: balled up (knees to the chest, arms in)
+				# through the turn, opening out to land on the back.
+				var left := pitch - (-deg_to_rad(80.0) - TAU * knockdown.somersaults)
+				var ball := smoothstep(0.35, 1.2, left) * smoothstep(0.0, 0.1, t)
+				flex = lerpf(flex, deg_to_rad(110.0), ball)
+				knee = lerpf(knee, deg_to_rad(130.0), ball)
+				if ball > 0.5:
+					arm_mode = 2
 		PlayerKnockdown.Phase.DOWN:
 			lie = smoothstep(0.0, 0.07, t)
 			bounce = sin(clampf(t / 0.16, 0.0, 1.0) * PI) * L * 0.06
