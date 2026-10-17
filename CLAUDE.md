@@ -83,6 +83,17 @@
   after the other, never the same twice running, until it thaws or
   shatters (`FrostFreeze._next_sound`).
 
+- `assets/audio/enemies/source/electric_impact.mp3` (sha256
+  b51ae641a7c31dbc5e18132082bc38c5f35a2a6ef2c3e9d5490bb180c8c747df) and
+  `assets/audio/enemies/source/distorted_explosion.mp3` (sha256
+  085a050f435fafcabdd38fa2cff29f44d3c7d54658711e8f8dd15abf3854802e) - the
+  owner's sounds for the Neon Sentinel's death (owner asked: "combine these
+  ... at least 3 different ones", each a mini explosion then clear electric
+  sounds, as long as the death). `tools/make_sentinel_death_sfx.py` makes
+  `sentinel_death_1/2/3.ogg` (3.3 s: the explosion's first punch, its tail
+  faded by ~0.8 s, then the electric impact - 1: as recorded; 2: higher
+  blast, electric re-struck in bursts; 3: deeper blast, electric flickering
+  out faster and faster); `Sfx.SENTINEL_DEATH_*`.
 - `assets/audio/music/source/Main_menu_music.mp3` (sha256
   a1a935ad9d8b13c0c7021147ded1bf5972a8b3517d655f6fd96598bccd5fff37) and
   `assets/audio/music/source/Level_1_music.mp3` (sha256
@@ -274,8 +285,8 @@
   the model's arcs crackle from the socket, both wings break apart into
   their 3 pieces each and the antennae snap off (`DEATH_BREAKS`,
   BreakApart), the wreck drops out of the air tumbling. Frozen (Frost Byte)
-  it drops as ice and flies again when it thaws. No death sound yet (none
-  supplied).
+  it drops as ice and flies again when it thaws. Death sound: one of three
+  (below), never the same twice running, following the wreck down.
 - Skyforge Arena (owner asked) is the first part of the first level
   (`?level=skyforge` for Skyforge): image-to-level's game-ready package, 4 grunts + 2
   skirmishers (no respawn), no weapon pads, player on the south tower deck.

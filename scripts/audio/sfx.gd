@@ -37,6 +37,14 @@ const SMALL_ROBOT_DEATH_3 := preload("res://assets/audio/enemies/small_robot_dea
 ## The owner's two skirmisher death sounds: each death picks one at random.
 const SKIRMISHER_DEATH_1 := preload("res://assets/audio/enemies/skirmisher_death_1.mp3")
 const SKIRMISHER_DEATH_2 := preload("res://assets/audio/enemies/skirmisher_death_2.mp3")
+## The Neon Sentinel's three death sounds, made from the owner's electric
+## impact and distorted explosion (assets/audio/enemies/source/ - keep those
+## exact files) by tools/make_sentinel_death_sfx.py: a mini explosion as
+## its eye bursts, then electric crackle dying away with the discharge.
+## Each death picks one at random, never the same twice running.
+const SENTINEL_DEATH_1 := preload("res://assets/audio/enemies/sentinel_death_1.ogg")
+const SENTINEL_DEATH_2 := preload("res://assets/audio/enemies/sentinel_death_2.ogg")
+const SENTINEL_DEATH_3 := preload("res://assets/audio/enemies/sentinel_death_3.ogg")
 const MINI_BOSS_MG := preload("res://assets/audio/enemies/mini_boss_machine_gun_firing.mp3")
 ## MINI_BOSS_MISSILE: the robot boss launching a missile (the launch blast
 ## starts ~1.04 s into the file; RobotBoss plays it from there).

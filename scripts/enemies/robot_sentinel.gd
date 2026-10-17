@@ -19,7 +19,10 @@ extends RobotEnemy
 ## glass flies out, a flash, a puff of smoke, electric discharge crackling
 ## out of the socket), the wings break apart into their pieces and the
 ## antennae snap off (BreakApart), and the wreck drops out of the air,
-## tumbling, trailing smoke.
+## tumbling, trailing smoke. Its death sound: one of three made from the
+## owner's explosion and electric sounds (Sfx.SENTINEL_DEATH_*), a mini
+## blast as the eye bursts then electric crackle dying away with the
+## discharge, following the wreck down.
 
 const SENTINEL_MODEL := preload("res://assets/enemies/sentinel/sentinel.glb")
 ## The grunt's cannon muzzle in each hand bone's space (RobotEnemy.MUZZLES).
@@ -105,6 +108,8 @@ var _eye_bone := -1
 static var _section_res: BreakSectionSet
 static var _merged := {}
 static var _grunt_cannon := {}
+## The death sound picked last by any sentinel (the next one differs).
+static var _last_sentinel_pick := -1
 
 
 func _init() -> void:
@@ -810,6 +815,7 @@ func die(info: DamageInfo) -> void:
 		trail.emitting = false
 	if tree:
 		tree.active = false
+	_death_sound()
 	if shattering:
 		_anim.speed_scale = 0.0
 		_shatter_now(info)
@@ -839,6 +845,21 @@ func die(info: DamageInfo) -> void:
 	if drops_recovery:
 		RecoveryDrops.on_enemy_killed(self, info)
 	died.emit(info)
+
+
+## One of its three death sounds, not the one heard last; it follows the
+## falling wreck.
+func _death_sound() -> void:
+	var sounds: Array[AudioStream] = [Sfx.SENTINEL_DEATH_1, Sfx.SENTINEL_DEATH_2, Sfx.SENTINEL_DEATH_3]
+	var pick := randi() % sounds.size()
+	if pick == _last_sentinel_pick:
+		pick = (pick + 1 + randi() % (sounds.size() - 1)) % sounds.size()
+	_last_sentinel_pick = pick
+	last_death_sound = sounds[pick]
+	var snd := Sfx.emitter(self, sounds[pick], death_sound_db, death_sound_near, death_sound_far)
+	snd.finished.connect(snd.queue_free)
+	snd.play()
+	death_sounds += 1
 
 
 ## The wings break apart into all their pieces and the antennae snap off,

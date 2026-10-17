@@ -4391,6 +4391,9 @@ func _sentinel_tests() -> void:
 			if n is SentinelEyeBurst:
 				fx = n
 	_check(not s.alive and SentinelEyeBurst.spawned == bursts + 1, "sentinel: dies with its eye bursting")
+	var deaths: Array = [Sfx.SENTINEL_DEATH_1, Sfx.SENTINEL_DEATH_2, Sfx.SENTINEL_DEATH_3]
+	_check(s.death_sounds == 1 and deaths.has(s.last_death_sound) and deaths.all(func(a: AudioStream) -> bool: return a.get_length() > 3.0 and a.get_length() < 3.6),
+		"sentinel: plays one of its 3 death sounds (owner's explosion + electric, ~3.3 s, the length of the death)")
 	_check(s.get_breaker().detached_count() == RobotSentinel.DEATH_BREAKS.size(), "sentinel: its wings break apart and its antennae snap off (%d pieces)" % s.get_breaker().detached_count())
 	_check(s.flex.dying and fx != null and fx.bolts_lit + s.flex.arcs_lit > 0, "sentinel: electric discharge crackles out of the socket (%d bolts, %d arcs)" % [fx.bolts_lit if fx else 0, s.flex.arcs_lit])
 	var shard := s.get_skeleton().get_bone_pose_scale(s.get_skeleton().find_bone(&"Eye_Glass_Shard_05"))
