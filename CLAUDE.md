@@ -239,10 +239,11 @@
   behind (neck, hips): 252 inside-out triangles turned round, hidden dark
   cores sealing the neck and pelvis, and the body armour drawn on both
   sides (`boss_armour.gdshader`: backs as the plates' shadowed inside).
-  Chaingun: the static, chopped barrel pieces round the spinning rotor are
-  replaced by one round gunmetal sleeve with two red bands, open at the
-  front (barrels spin inside, their tips show past the lip), so nothing
-  misaligns when the spin stops.
+  Chaingun (owner asked: wants to see it spin, without the static part's
+  barrels lining up wrong after firing): the static, chopped barrel pieces
+  within the barrels' spin are removed (and a loose fragment in front), so
+  only the spinning barrels show - nothing static to misalign; no sleeve
+  (owner: not bulkier, textures untouched).
 - Every other character's opaque body materials draw both sides too
   (`TwoSided`: Grinch / Harbinger, grunts, skirmishers, Sentinel) - no
   see-through gaps at joints or coat hems.
