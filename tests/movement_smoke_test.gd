@@ -4638,6 +4638,14 @@ func _toxic_works_tests() -> void:
 	for b in tw.collision.find_children("Shotgun_Platform_Pedestal*", "StaticBody3D", true, false):
 		posts.append_array(b.find_children("*", "CollisionShape3D", false, false))
 	_check(not posts.is_empty() and posts.all(func(c: CollisionShape3D) -> bool: return c.disabled), "works: and the post's colliders are gone")
+	# GIR in the Core_Vat tank (owner asked): smaller, floating clear of the
+	# tank's plinth band so the player sees all of him through the glass.
+	var gir_box := AABB()
+	for gm: MeshInstance3D in tw.level.find_children("Gir_Specimen_Float__*", "MeshInstance3D", true, false):
+		var bb := gm.global_transform * gm.get_aabb()
+		gir_box = bb if gir_box.size == Vector3.ZERO else gir_box.merge(bb)
+	_check(tw.gir_shrunk == 3 and gir_box.size.y > 2.0 and gir_box.size.y < 2.4 and gir_box.position.y > 18.7 and gir_box.end.y < 21.7,
+		"works: GIR in the tank is smaller (%.1f m) and floats clear of the band, in view (%.1f - %.1f m)" % [gir_box.size.y, gir_box.position.y, gir_box.end.y])
 	var lift: ElevatorLift = main.get_node("ElevatorLift")
 	var p: PlayerController = main.players[1]
 	var cam := main.get_viewport().get_camera_3d()

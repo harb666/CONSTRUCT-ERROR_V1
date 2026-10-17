@@ -300,6 +300,11 @@
   they drop into the slime, not onto the column base (`ToxicWorks.in_wind`,
   `_physics_process`). It still stops for good at the control terminal
   (package trigger). Robots keep the package's push.
+  GIR in the Core_Vat tank (owner asked: "smaller but viewable by the
+  player"): scaled to 0.6 (3.6 -> 2.2 m) about his middle and lifted 0.7 m
+  (`ToxicWorks._shrink_gir`, `gir_scale` / `gir_lift`), so he floats clear
+  of the tank's plinth band - whole body seen through the glass even from
+  right up against it, head under the hood grate. Still drifts (the bob).
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime

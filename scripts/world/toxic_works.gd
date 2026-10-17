@@ -122,6 +122,7 @@ func _ready() -> void:
 	_connect_terminals.call_deferred()
 	_connect_flow.call_deferred()
 	_shotgun_pad.call_deferred()
+	_shrink_gir.call_deferred()
 	_wind_streaks.call_deferred()
 	var ui := get_parent().get_node_or_null(^"UI") if get_parent() else null
 	if ui:
@@ -560,6 +561,36 @@ func in_wind(w: Dictionary, pos: Vector3) -> bool:
 	if rel.y > wind_catch_above or rel.y < -wind_catch_below:
 		return false
 	return (rh - d * along).length() < float(w["radius"]) + float(w["spread"]) * maxf(along, 0.0) + 0.4
+
+
+## GIR in the Core_Vat tank (owner asked: "smaller but viewable by the
+## player"): at the map maker's 3.6 m his feet hung low behind the tank's
+## plinth band, so from the floor round it only his head showed. Scaled
+## about his middle (the bob's pivot) he's 2.2 m, and lifted a little he
+## floats clear of the band (seen even from right up against the tank),
+## his whole body in view through the glass, his head under the hood
+## grate; he still drifts.
+const GIR_BOB := "Gir_Specimen"
+@export var gir_scale := 0.6
+@export var gir_lift := 0.7
+var gir_shrunk := 0
+
+
+func _shrink_gir() -> void:
+	var bobs = effects.get("_bobs") if effects else null
+	if not bobs is Array:
+		return
+	for br in bobs:
+		var b: Dictionary = br[0]
+		if String(b["id"]) != GIR_BOB:
+			continue
+		var pv := Vector3(b["pivot"][0], b["pivot"][1], b["pivot"][2])
+		var shrink := Transform3D(Basis.from_scale(Vector3.ONE * gir_scale), pv - pv * gir_scale + Vector3.UP * gir_lift)
+		b["pivot"] = [pv.x, pv.y + gir_lift, pv.z]  # still drifting round his middle
+		for nr in br[1]:
+			nr[1] = shrink * (nr[1] as Transform3D)
+			(nr[0] as Node3D).transform = nr[1]
+			gir_shrunk += 1
 
 
 ## The fan's streaks as lines along the wind (wind_streak.gdshader).
