@@ -13,9 +13,16 @@ extends SkeletonModifier3D
 ## Life: both arms spring towards their pose (a little overshoot), lag
 ## behind the body's acceleration (swing back on a surge, out on a dash),
 ## sway gently out of step with each other, and kick back and up when their
-## cannon fires (`recoil`). Startled: it hands the arms to the startle clip
-## (they fling out). Dying: they go limp and dangle towards the ground as
-## the wreck tumbles. Frozen: they hold still.
+## cannon fires (`recoil`). Startled: they fling out wide and down.
+## Dying: they go limp and dangle towards the ground as the wreck tumbles.
+## Frozen: they hold still.
+##
+## Clear of the wings (owner asked: the arms mustn't merge into the wings):
+## when a red wing cover swings down over the shoulder (`flex.hinge_down`),
+## that arm tucks down and a little back under it, and its forearm keeps
+## below it - it moves out of the way before the cover gets there. (The
+## startle clip's own arm fling went up through the wing backs, so the
+## arms no longer follow it.)
 
 ## Upper arm and forearm directions at rest (left arm; mirrored for the
 ## right; model space: +Z forward, +Y up, the left arm out along -X).
@@ -26,6 +33,17 @@ extends SkeletonModifier3D
 @export var lag := 0.012
 @export var sway := 0.07
 @export var recoil_kick := 0.75
+## Startled: upper arm / forearm flung out wide and down (left arm).
+@export var startle_upper := Vector3(-0.75, -0.6, 0.1)
+@export var startle_fore := Vector3(-0.6, -0.25, 0.75)
+## Tucked under a lowered wing cover (left arm), and the cover's swing
+## (deg, all told) where it starts / finishes tucking.
+@export var tuck_upper := Vector3(-0.25, -0.8, -0.25)
+@export var tuck_from := 30.0
+@export var tuck_to := 62.0
+## The highest the upper arm ever lifts (its direction's height): the wing
+## sits right over the shoulder, so a raised arm would go into it.
+@export var max_raise := -0.25
 
 ## World point to aim the forearms at (INF: no target).
 var aim := Vector3.INF
@@ -34,6 +52,8 @@ var accel := Vector3.ZERO
 var startled := false
 var dying := false
 var frozen := false
+## Its wings (where their covers are; RobotSentinel).
+var flex: SentinelFlex
 
 var _sh: Array[int] = []
 var _el: Array[int] = []
@@ -76,8 +96,6 @@ func _process_modification() -> void:
 	if skel == null or _sh.size() < 2 or _sh[0] < 0:
 		return
 	var dt := clampf(get_process_delta_time() if is_inside_tree() else 0.016, 0.0, 0.05)
-	# Startled: the clip's flung-out arms take over, then hand back.
-	influence = move_toward(influence, 0.0 if startled and not dying else 1.0, dt * 4.0)
 	if not frozen:
 		_t += dt
 	var inv := skel.global_basis.inverse()
@@ -98,7 +116,10 @@ func _process_modification() -> void:
 		else:
 			want_u = _side(relaxed_upper, i).normalized()
 			want_f = _side(relaxed_fore, i).normalized()
-			if aim != Vector3.INF:
+			if startled:
+				want_u = _side(startle_upper, i).normalized()
+				want_f = _side(startle_fore, i).normalized()
+			elif aim != Vector3.INF:
 				var elbow_at := shoulder + _u[i] * 0.24
 				var to := skel.global_transform.affine_inverse() * aim - elbow_at
 				if to.length_squared() > 0.01:
@@ -111,13 +132,24 @@ func _process_modification() -> void:
 					want_u = (want_u + want_f * 0.35).normalized()
 			# Gentle sway, out of step; lag behind the body's acceleration.
 			var ph := _t * 1.3 + i * 2.1
-			want_u += Vector3(0.0, sin(ph) * sway, cos(ph * 0.8) * sway * 0.6) - accel * lag
-			want_f += Vector3(0.0, sin(ph + 0.9) * sway, 0.0) - accel * lag * 0.8
+			var drag := (accel * lag).limit_length(0.35)
+			want_u += Vector3(0.0, sin(ph) * sway, cos(ph * 0.8) * sway * 0.6) - drag
+			want_f += Vector3(0.0, sin(ph + 0.9) * sway, 0.0) - drag * 0.8
 			# Recoil: the forearm kicks up and the arm back.
 			if _kick[i] > 0.0:
 				want_f += Vector3(0.0, 1.0, -0.4) * _kick[i] * recoil_kick
 				want_u += Vector3(0.0, 0.3, -0.5) * _kick[i] * recoil_kick
 				_kick[i] = move_toward(_kick[i], 0.0, dt * 6.0)
+			# Out of the way of that side's wing cover swinging down.
+			var w := smoothstep(tuck_from, tuck_to, flex.hinge_down(i)) if flex else 0.0
+			if w > 0.0:
+				want_u = want_u.normalized().lerp(_side(tuck_upper, i).normalized(), w)
+				want_f = want_f.normalized()
+				want_f.y = minf(want_f.y, lerpf(1.0, -0.1, w))
+				var out_max := lerpf(1.0, 0.35, w)  # (outwards is -X for the left arm)
+				if -want_f.x * s > out_max:
+					want_f.x = -out_max * s
+				want_f.z = maxf(want_f.z, 0.3 * w)
 		if not frozen:
 			for n in 2:
 				var h := dt * 0.5
@@ -125,6 +157,10 @@ func _process_modification() -> void:
 				_u[i] = (_u[i] + _uv[i] * h).normalized()
 				_fv[i] += ((want_f.normalized() - _f[i]) * k - _fv[i] * d) * h
 				_f[i] = (_f[i] + _fv[i] * h).normalized()
+			if not dying and _u[i].y > max_raise:
+				_u[i].y = max_raise
+				_u[i] = _u[i].normalized()
+				_uv[i].y = minf(_uv[i].y, 0.0)
 		_pose(skel, i, s, shoulder)
 
 

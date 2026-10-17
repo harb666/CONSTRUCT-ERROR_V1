@@ -282,7 +282,16 @@
   every 2.2-4.2 s on patrol, 1.1-2.4 s in a fight; tip with its flight;
   flared out when startled; up with the back plates flared and the eye
   brighter before / during a volley (each shot kicks that side's cover);
-  split up / down on a dodge; slam shut and shudder when hit (eye flash). Flying: hovers 2.6-5 m
+  split up / down on a dodge; slam shut and shudder when hit (eye flash).
+  Middle antenna (the fixed one) has a glowing lime green ball tip (owner
+  asked; `Neon_Lime_Antenna_Tip`, split off the body paint in
+  `build_sentinel.py`). Arms never merge into the wings (owner asked):
+  clip + plate + cover + wing droop together never take a red cover past
+  75 deg down (`SentinelFlex.hinge_down`); under a lowered cover that arm
+  tucks down / back (`SentinelArms.tuck_upper`), the upper arm never lifts
+  above `max_raise`, and the startle flings the arms out wide and down
+  (`startle_upper/_fore`; the clip's own arm fling went up through the
+  wing backs). Flying: hovers 2.6-5 m
   up, circles its target 7-13 m out changing height / side, banks into
   turns, steers round walls; dodges often (player bolts coming its way 75%,
   after hits 55%, unprompted jukes every 1.4-3.2 s: banking side-dashes).
@@ -373,6 +382,13 @@
   (`ToxicWorks._shrink_gir`, `gir_scale` / `gir_lift`), so he floats clear
   of the tank's plinth band - whole body seen through the glass even from
   right up against it, head under the hood grate. Still drifts (the bob).
+- Grunt cannons straightened (owner asked: "the weapons mesh is bent"):
+  `tools/straighten_grunt_cannons.py` unbent Left_ / Right_Forearm_Weapon
+  in `robot_enemy.glb` and `robot_enemy_far.glb` (housing was ~4 deg and
+  the muzzle ~13 deg off the forearm, sideways; the elbow joint ring is
+  untouched) so each is one straight piece along the forearm; the muzzles
+  (`RobotEnemy.MUZZLES`, also the sentinel's) moved to the new green tips.
+  Originals in git history before that commit.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime

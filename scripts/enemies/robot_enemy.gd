@@ -178,7 +178,7 @@ var _path_t := 0.0
 @export var cel_flash_distance := 35.0
 var cel_flashes := 0
 ## Cannon muzzles (the green tips) in each hand bone's space.
-const MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(0.017, 0.146, 0.009)}
+const MUZZLES := {"Left": Vector3(-0.027, 0.179, 0.006), "Right": Vector3(0.013, 0.136, 0.0)}
 ## Current combat target (a player) or null.
 var target: Node3D
 var shots_fired := 0

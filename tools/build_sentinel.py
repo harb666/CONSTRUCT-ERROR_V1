@@ -31,6 +31,10 @@ ready on their own bones. All of that is kept as it is. What changes:
     to the glass (owner asked: "move the ball more to the center or back of
     the eye ... more yellowish plasma gas inside the glass"). Both stay on
     their bone (Eye_Plasma), so the death clip still pops them.
+  * Middle antenna: the ball on the tip of the fixed antenna between the
+    two moving ones was painted pink; it gets its own glowing lime neon
+    material (owner asked: lime green, so it looks lit), like the model's
+    other lime neon.
   * Neon: the two neon materials (the body's selective neon and the wing
     backings') glowed at 3.5x, which renders blown-out white. They now glow
     at NEON_STRENGTH, so the neon reads as lime.
@@ -68,6 +72,15 @@ WING_BACK = {
     "emissiveFactor": [0.85, 1.0, 0.08],
     "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 0.75}},
 }
+# The fixed middle antenna's ball tip (in the body shell's paint): its
+# triangles go to their own glowing lime material.
+ANTENNA_TIP = {
+    "name": "Neon_Lime_Antenna_Tip",
+    "pbrMetallicRoughness": {"baseColorFactor": [0.25, 1.0, 0.02, 1.0], "metallicFactor": 0.05, "roughnessFactor": 0.25},
+    "emissiveFactor": [0.28, 1.0, 0.02],
+    "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 0.8}},
+}
+TIP_BOX = ((-0.05, 0.435, -0.13), (0.05, 0.54, -0.01))  # model space, round the ball
 REPAINT = {"Moving_Wing_Backing_2": WING_BACK["name"], "Moving_Wing_Backing_3": WING_BACK["name"]}
 REPAINT_FROM = ("Original_Paint_With_Selective_Neon", "Wing_Backing_Tip_Matched_Neon")
 # The eye: (mesh, centre it's moved to (None: stays), scale about it).
@@ -181,6 +194,22 @@ def simplify(attrs, idx, keep):
     return new_attrs, remap[out].astype(np.uint32).reshape(-1, 1)
 
 
+def split_tip(m, p, idx, pos, out, js=None):
+    """The body shell's paint primitive: the middle antenna's ball tip
+    triangles taken out (into `out`, for their own primitive); returns the
+    rest. Other primitives are returned as they are."""
+    if m["name"] != "Original_Body" or "material" not in p or p["material"] != PAINT_INDEX[0]:
+        return idx
+    lo, hi = np.array(TIP_BOX[0]), np.array(TIP_BOX[1])
+    tri = idx.reshape(-1, 3)
+    inside = np.all((pos[tri] >= lo) & (pos[tri] <= hi), axis=(1, 2))
+    out.append((m, p, tri[inside].reshape(-1, 1)))
+    return tri[~inside].reshape(-1, 1)
+
+
+PAINT_INDEX = [None]
+
+
 def main():
     js, b = read_glb(SRC)
     w = Writer()
@@ -198,7 +227,10 @@ def main():
 
     before = after = 0
     js["materials"].append(WING_BACK)
+    js["materials"].append(ANTENNA_TIP)
+    tip_prims = []
     mat_index = {mt["name"]: i for i, mt in enumerate(js["materials"])}
+    PAINT_INDEX[0] = mat_index["Original_Paint_With_Selective_Neon"]
     for m in js["meshes"]:
         for p in m["primitives"]:
             moved = None
@@ -218,14 +250,23 @@ def main():
                 n0 = idx.size // 3
                 attrs, idx = simplify(attrs, idx, keep)
                 print("  %s: %d -> %d" % (m["name"], n0, idx.size // 3))
+                idx = split_tip(m, p, idx, attrs["POSITION"], tip_prims)
                 for k in list(p["attributes"]):
                     p["attributes"][k] = copy(p["attributes"][k], attrs[k], 34962)
                 p["indices"] = w.acc(idx.astype(np.uint32), None, 34963)
             else:
+                pos = accessor(js, b, p["attributes"]["POSITION"])
+                split = split_tip(m, p, idx, pos, tip_prims)
                 for k in list(p["attributes"]):
                     p["attributes"][k] = copy(p["attributes"][k], moved if k == "POSITION" and moved is not None else None, 34962)
-                p["indices"] = copy(p["indices"], None, 34963)
+                p["indices"] = copy(p["indices"], None, 34963) if split is idx else w.acc(split.astype(np.uint32), None, 34963)
             after += idx.size // 3
+    for m, p, tip in tip_prims:
+        q = {k: v for k, v in p.items() if k not in ("indices", "material")}
+        q["indices"] = w.acc(tip.astype(np.uint32), None, 34963)
+        q["material"] = mat_index[ANTENNA_TIP["name"]]
+        m["primitives"].append(q)
+        print("  antenna tip: %d triangles -> lime neon" % (tip.size // 3))
     for s in js.get("skins", []):
         if "inverseBindMatrices" in s:
             s["inverseBindMatrices"] = copy(s["inverseBindMatrices"])

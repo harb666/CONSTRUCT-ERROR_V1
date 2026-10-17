@@ -40,8 +40,8 @@ const GLOW_SHADER := preload("res://scripts/vfx/sentinel_eye_glow.gdshader")
 ## The energy ball's centre in the model (tools/build_sentinel.py puts it
 ## in the middle of the eye, behind the pupil).
 const EYE_CORE := Vector3(0.0, -0.035, 0.33)
-## The grunt's cannon muzzle in each hand bone's space (RobotEnemy.MUZZLES).
-const GRUNT_MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(0.017, 0.146, 0.009)}
+## The grunt's cannon muzzle in each hand bone's space.
+const GRUNT_MUZZLES := RobotEnemy.MUZZLES
 
 @export_group("Size")
 @export var model_scale := 1.3
@@ -248,6 +248,7 @@ func _build_model() -> void:
 	arms.name = "Arms"
 	_skeleton.add_child(arms)
 	arms.setup(_skeleton)
+	arms.flex = flex
 	_mount_cannons()
 	if hit_fx:
 		hit_fx.queue_free()

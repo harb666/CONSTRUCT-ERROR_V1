@@ -59,6 +59,7 @@ var _plasma := -1
 var _arcs: Array[int] = []
 var _cover_b: Array[int] = []
 var _plate_b: Array[int] = []
+var _hinge: Array[float] = [0.0, 0.0]
 ## Spring state per bone: [angle about X, about Z (or Y for wings), velocities].
 var _s := {}
 
@@ -140,20 +141,44 @@ func _process_modification() -> void:
 		var r := _spring(b, Vector2(droop, sweep), wing_stiffness, wing_damping, wing_max * 1.3, dt)
 		skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion.from_euler(Vector3(0.0, r.y, r.x)))
 	# Expressions: the red covers swing about their hinge (local Z; the right
-	# side mirrored), the back plates flare out about theirs.
+	# side mirrored), the back plates flare out about theirs - the same
+	# hinge line, so the clip's swing, the plate's and the cover's add up
+	# (and the wing's droop);
+	# together they never take the cover down past `cover_down_deg` (any
+	# further and it swings into the arm).
 	var edt := 0.0 if hold else dt
 	for i in _cover_b.size():
 		var side := 1.0 if i == 0 else -1.0
-		var b := _cover_b[i]
-		if b >= 0:
-			var c := clampf(cover[i], -1.0, 1.0)
-			var want := deg_to_rad(c * (cover_down_deg if c > 0.0 else cover_up_deg))
-			var r := _spring(b, Vector2(want, 0.0), cover_stiffness, cover_damping, deg_to_rad(cover_down_deg + 12.0), edt)
-			skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion(Vector3.BACK, r.x * side))
-		b = _plate_b[i]
-		if b >= 0:
-			var r := _spring(b, Vector2(deg_to_rad(clampf(plate[i], -0.5, 1.0) * plate_flare_deg), 0.0), cover_stiffness * 0.7, cover_damping, deg_to_rad(plate_flare_deg + 10.0), edt)
-			skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion(Vector3.BACK, r.x * side))
+		var cb := _cover_b[i]
+		var pb := _plate_b[i]
+		if cb < 0 or pb < 0:
+			continue
+		# (The whole wing's droop at its root swings them down too.)
+		var clip := (_twist(skel.get_bone_pose_rotation(cb)) + _twist(skel.get_bone_pose_rotation(pb))) * side
+		if i < _wing.size() and _wing[i] >= 0:
+			clip += maxf(0.0, _twist(skel.get_bone_pose_rotation(_wing[i])) * side)
+		var pw := deg_to_rad(clampf(plate[i], -0.5, 1.0) * plate_flare_deg)
+		var pr := _spring(pb, Vector2(pw, 0.0), cover_stiffness * 0.7, cover_damping, deg_to_rad(plate_flare_deg + 10.0), edt).x
+		var c := clampf(cover[i], -1.0, 1.0)
+		var cap := deg_to_rad(cover_down_deg)
+		var want := minf(deg_to_rad(c * (cover_down_deg if c > 0.0 else cover_up_deg)), cap - clip - pw)
+		var r := _spring(cb, Vector2(want, 0.0), cover_stiffness, cover_damping, deg_to_rad(cover_down_deg + 12.0), edt).x
+		r = minf(r, cap + deg_to_rad(4.0) - clip - pr)
+		_hinge[i] = rad_to_deg(maxf(clip + pr + r, clip + pw + want))
+		skel.set_bone_pose_rotation(pb, skel.get_bone_pose_rotation(pb) * Quaternion(Vector3.BACK, pr * side))
+		skel.set_bone_pose_rotation(cb, skel.get_bone_pose_rotation(cb) * Quaternion(Vector3.BACK, r * side))
+
+
+## A rotation's twist about Z (rad; the plates' hinge axis).
+static func _twist(q: Quaternion) -> float:
+	return 2.0 * atan2(q.z, q.w)
+
+
+## How far down wing `i`'s red cover hangs, all told (deg; the clip, the
+## back plate's flare and the cover's own swing - where it's going if
+## that's further): SentinelArms keeps that side's arm clear of it.
+func hinge_down(i: int) -> float:
+	return _hinge[i] if not dying else 0.0
 
 
 ## After death: the branching discharges crackle out of the empty socket.

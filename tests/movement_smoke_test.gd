@@ -4325,7 +4325,48 @@ func _sentinel_tests() -> void:
 	var pupil := (model.find_child("Preserved_Rectangle_Pupil", true, false) as MeshInstance3D).mesh.get_aabb()
 	_check(ball.get_center().z < 0.4 and absf(ball.get_center().x) < 0.01 and ball.size.x > 0.1 and pupil.position.z > ball.end.z + 0.1,
 		"sentinel: the energy ball is in the middle of the eye, behind the pupil (z %.2f; it was at the front, 0.55), and bigger (%.2f m)" % [ball.get_center().z, ball.size.x])
+	var tip_mat: BaseMaterial3D = null
+	var body_mesh := (model.find_child("Original_Body", true, false) as MeshInstance3D).mesh
+	for k in body_mesh.get_surface_count():
+		if body_mesh.surface_get_material(k).resource_name == "Neon_Lime_Antenna_Tip":
+			tip_mat = body_mesh.surface_get_material(k) as BaseMaterial3D
+	_check(tip_mat != null and tip_mat.emission_enabled and tip_mat.albedo_color.g > 0.9 and tip_mat.albedo_color.r < 0.7 and tip_mat.albedo_color.b < 0.3,
+		"sentinel: the fixed middle antenna's tip is glowing lime green (owner asked)")
 	model.free()
+	# The grunt cannons (on the grunts and the sentinel) are straight (owner
+	# asked: they were bent): the muzzle's face is square to the forearm.
+	var grunt: Node3D = RobotEnemy.MODEL.instantiate()
+	var gsk := grunt.find_child("Skeleton3D", true, false) as Skeleton3D
+	var faces := []
+	for side in ["Left", "Right"]:
+		var mi := gsk.get_node(side + "_Forearm_Weapon") as MeshInstance3D
+		var fa := Vector3.INF
+		var hd := Vector3.INF
+		for i in mi.skin.get_bind_count():
+			var bn := String(mi.skin.get_bind_name(i))
+			if bn == "mixamorig_%sForeArm" % side:
+				fa = mi.skin.get_bind_pose(i).affine_inverse().origin
+			elif bn == "mixamorig_%sHand" % side:
+				hd = mi.skin.get_bind_pose(i).affine_inverse().origin
+		if fa == Vector3.INF or hd == Vector3.INF:
+			faces.append(0.0)
+			continue
+		var ax := (hd - fa).normalized()
+		var upv := (Vector3.UP - ax * ax.y).normalized()
+		var sdv := ax.cross(upv)
+		var verts: PackedVector3Array = mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var tmax := -INF
+		for v in verts:
+			tmax = maxf(tmax, (v - fa).dot(ax))
+		var lo := INF
+		var hi := -INF
+		for v in verts:
+			if (v - fa).dot(ax) > tmax - 0.015:
+				lo = minf(lo, v.dot(sdv))
+				hi = maxf(hi, v.dot(sdv))
+		faces.append(hi - lo)
+	grunt.free()
+	_check(faces[0] > 0.09 and faces[1] > 0.09, "grunt: its cannons are straight, the muzzle square to the forearm (face %.3f / %.3f m across; bent it was ~0.07)" % [faces[0], faces[1]])
 	var ai_was := RobotEnemy.ai_enabled
 	RobotEnemy.ai_enabled = true
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
@@ -4391,10 +4432,15 @@ func _sentinel_tests() -> void:
 	await _ticks(25)
 	wing_now = s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
 	_check(rad_to_deg(rest_wing.angle_to(wing_now)) > 10.0, "sentinel: its wings flare out with it (%.0f deg)" % rad_to_deg(rest_wing.angle_to(wing_now)))
-	_check(s.expression == &"startled" and s.eye_energy > 1.5 and s.flex.cover_angle(0) > deg_to_rad(25.0),
-		"sentinel: startled face - red covers flared out (%.0f deg), eye flaring (%.1f)" % [rad_to_deg(s.flex.cover_angle(0)), s.eye_energy])
+	_check(s.expression == &"startled" and s.eye_energy > 1.5 and s.flex.hinge_down(0) > 50.0,
+		"sentinel: startled face - red covers flared out (%.0f deg), eye flaring (%.1f)" % [s.flex.hinge_down(0), s.eye_energy])
 	var cov_lo := 0.0
 	var cov_hi := 0.0
+	var hinge_max := 0.0
+	var tucked := true
+	var raised := -1.0
+	var low_for := [0, 0]
+	var worst_tuck := -1.0
 	var seen := {}
 	var flicks0 := s.flicks
 	for i in 180:
@@ -4422,10 +4468,18 @@ func _sentinel_tests() -> void:
 		sway = maxf(sway, Vector2(st.x, st.y).length())
 	_check(dodged, "sentinel: it dodges a player's shot coming its way (banking side-dash)")
 	_check(split, "sentinel: dodging, its covers split - one up, one down")
-	var f0: Vector3 = s.arms.arm_dirs(0)[1]
-	s.arms.recoil(0)
+	# (on a side whose wing cover is up: under a lowered one the arm stays
+	# tucked)
+	var ri := 0
+	for i in 90:
+		if s.flex.hinge_down(0) < 20.0 or s.flex.hinge_down(1) < 20.0:
+			break
+		await _ticks(1)
+	ri = 0 if s.flex.hinge_down(0) < s.flex.hinge_down(1) else 1
+	var f0: Vector3 = s.arms.arm_dirs(ri)[1]
+	s.arms.recoil(ri)
 	await _ticks(6)
-	_check((s.arms.arm_dirs(0)[1] as Vector3).y > f0.y + 0.05, "sentinel: a cannon's arm kicks back and up when it fires")
+	_check((s.arms.arm_dirs(ri)[1] as Vector3).y > f0.y + 0.05, "sentinel: a cannon's arm kicks back and up when it fires")
 	_check(rad_to_deg(sway) > 3.0, "sentinel: its antennae swing with the dash (%.0f deg) - wings / antennae move with its flight" % rad_to_deg(sway))
 	s.evade_chance = 0.75
 	var shots0 := s.shots_fired
@@ -4434,10 +4488,22 @@ func _sentinel_tests() -> void:
 		await _ticks(1)
 		seen[s.expression] = true
 		peak_eye = maxf(peak_eye, s.eye_energy)
+		for k in 2:
+			hinge_max = maxf(hinge_max, s.flex.hinge_down(k))
+			var ua: Vector3 = s.arms.arm_dirs(k)[0]
+			raised = maxf(raised, ua.y)
+			# (once a cover has been right down a moment: the arm springs there)
+			low_for[k] = low_for[k] + 1 if s.flex.hinge_down(k) > s.arms.tuck_to + 8.0 else 0
+			if low_for[k] > 12:
+				worst_tuck = maxf(worst_tuck, ua.y)
+				if ua.y > -0.55:
+					tucked = false
 		cov_lo = minf(cov_lo, minf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
 		cov_hi = maxf(cov_hi, maxf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
 	_check(s.flicks - flicks0 >= 4 and rad_to_deg(cov_lo) < -45.0 and rad_to_deg(cov_hi) > 55.0,
 		"sentinel: its red wing covers often swing right up (%.0f deg) and right down (%.0f deg), uncovering the yellow back plates (%d flicks in 14 s)" % [rad_to_deg(cov_lo), rad_to_deg(cov_hi), s.flicks - flicks0])
+	_check(hinge_max <= s.flex.cover_down_deg + 6.0, "sentinel: its red covers never swing down past %.0f deg all told (max %.0f) - any further and they'd go into its arms" % [s.flex.cover_down_deg, hinge_max])
+	_check(tucked and raised <= s.arms.max_raise + 0.02, "sentinel: its arms keep clear of its wings - tucked under a lowered cover, never raised into the wing (highest %.2f; tucked %.2f)" % [raised, worst_tuck])
 	_check(seen.has(&"windup") and seen.has(&"firing") and peak_eye > 1.6,
 		"sentinel: before a volley it bristles - covers up, back plates flared, eye burning brighter (%.1f) %s" % [peak_eye, seen.keys()])
 	s._flinch_t = 0.0
