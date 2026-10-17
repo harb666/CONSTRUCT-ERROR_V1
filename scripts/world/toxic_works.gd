@@ -20,6 +20,8 @@ extends Node3D
 ##     pads that surge up out of the slime run in apply_effects.gd;
 ##   - the control terminal at the end of the pads opens the exit's laser
 ##     gate (walking up to it uses it);
+##   - the turbine fan by the exit blows a player who comes into its air
+##     stream straight off the walkway into the slime (owner asked);
 ##   - slime, the crusher or falling off sends a player back to the spawn
 ##     and kills a robot; the exit leads to part 3, not made yet.
 
@@ -120,6 +122,7 @@ func _ready() -> void:
 	_connect_terminals.call_deferred()
 	_connect_flow.call_deferred()
 	_shotgun_pad.call_deferred()
+	_wind_streaks.call_deferred()
 	var ui := get_parent().get_node_or_null(^"UI") if get_parent() else null
 	if ui:
 		hud = LevelFlowHud.new()
@@ -485,6 +488,96 @@ func _process(delta: float) -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam and cam.far < _camera_far:
 		cam.far = _camera_far
+
+
+## The turbine fan by the exit (owner asked: "make the wind instantly blow
+## the character off the edge, no jumping over"): while it blows, a player
+## who comes into its air stream - at any height up to well over a double
+## jump, so jumping doesn't clear it - is knocked flying backwards
+## (PlayerKnockdown: no moving, jumping or dodging against it) and carried
+## on the wind until they're past the walkway's edge; where the stream ends
+## the wind lets go and they drop into the slime (not on out onto the
+## column base further across). Each
+## device does its own character. Robots keep the package's push.
+@export var wind_blow_speed := 22.0
+@export var wind_blow_up := 5.0
+## While carried, the wind holds them up: rising at least this fast (m/s).
+@export var wind_carry_lift := 1.5
+## How far above / below the fan's centre the stream catches a player (m;
+## the walkway is 3.8 m below it).
+@export var wind_catch_above := 9.0
+@export var wind_catch_below := 6.0
+## How much of the blow speed is left as the stream lets go of a player.
+@export var wind_release := 0.35
+const WIND_STREAK := preload("res://scripts/vfx/wind_streak.gdshader")
+## Players blown away (tests).
+var winds_blown := 0
+var _carried := {}  # players on the wind (PlayerController -> true)
+
+
+func _physics_process(_delta: float) -> void:
+	if effects == null:
+		return
+	var winds = effects.get("_winds")
+	if not winds is Array or (winds as Array).is_empty():
+		return
+	var t: float = effects.get("_t")
+	var carried := {}
+	for wr in winds:
+		if float(effects.call("_wind_strength", wr, t)) < 0.25:
+			continue
+		var w: Dictionary = wr[0]
+		for n in get_tree().get_nodes_in_group(&"players"):
+			var p := n as PlayerController
+			if p == null or p.is_remote or p.knockdown == null or not in_wind(w, p.global_position):
+				continue
+			var d := Vector3(w["dir"][0], 0.0, w["dir"][2]).normalized()
+			var kd := p.knockdown
+			carried[p] = true
+			if kd.phase != PlayerKnockdown.Phase.FLYING:
+				kd.knock(p.global_position - d, wind_blow_speed, wind_blow_up)
+				winds_blown += 1
+			else:
+				kd.horiz = Vector2(d.x, d.z) * wind_blow_speed
+				p.velocity.y = maxf(p.velocity.y, wind_carry_lift)
+	for p in _carried:
+		if not carried.has(p) and is_instance_valid(p) and (p as PlayerController).knockdown.phase == PlayerKnockdown.Phase.FLYING:
+			(p as PlayerController).knockdown.horiz *= wind_release
+	_carried = carried
+
+
+## `pos` (a player's feet) is in the fan `w`'s air stream: along its cone,
+## within its widening radius across, and anywhere from the walkway to well
+## above a jump.
+func in_wind(w: Dictionary, pos: Vector3) -> bool:
+	var o := Vector3(w["origin"][0], w["origin"][1], w["origin"][2])
+	var d := Vector2(w["dir"][0], w["dir"][2]).normalized()
+	var rel := pos - o
+	var rh := Vector2(rel.x, rel.z)
+	var along := rh.dot(d)
+	if along < -0.5 or along > float(w["length"]):
+		return false
+	if rel.y > wind_catch_above or rel.y < -wind_catch_below:
+		return false
+	return (rh - d * along).length() < float(w["radius"]) + float(w["spread"]) * maxf(along, 0.0) + 0.4
+
+
+## The fan's streaks as lines along the wind (wind_streak.gdshader).
+func _wind_streaks() -> void:
+	var winds = effects.get("_winds") if effects else null
+	if not winds is Array:
+		return
+	for wr in winds:
+		var pr := wr[3] as CPUParticles3D
+		var qm := pr.mesh as QuadMesh if pr else null
+		if qm == null:
+			continue
+		var old := qm.material as StandardMaterial3D
+		var sm := ShaderMaterial.new()
+		sm.shader = WIND_STREAK
+		if old:
+			sm.set_shader_parameter("color", old.albedo_color)
+		qm.material = sm
 
 
 ## In the slime or off the level: a player back to their spawn, a robot dies.

@@ -291,6 +291,15 @@
   energy pulses and flicker, star flares and sparks at the emitters, a hex
   force field, sparks where a player presses in, and an overload / flash /
   collapse with a spark burst when they open.
+  Turbine fan by the exit (owner asked: wind "facing wrong way", "instantly
+  blow character off the edge no jumping over"): its streaks are drawn as
+  lines along the wind (`wind_streak.gdshader`; the package's billboards
+  stood them upright like rain). A player in its stream, from the walkway up
+  to 9 m above the fan's centre, is knocked flying (`PlayerKnockdown`) and
+  carried west off the Conduit Walk; the wind lets go at the stream's end so
+  they drop into the slime, not onto the column base (`ToxicWorks.in_wind`,
+  `_physics_process`). It still stops for good at the control terminal
+  (package trigger). Robots keep the package's push.
 - Toxic barrels (owner's model, `assets/props/toxic_barrel`, original in
   `source/`; owner asked): two on Skyforge; shot, they explode (green
   cartoon blast, chain to barrels within 5 m) and leave burning green slime

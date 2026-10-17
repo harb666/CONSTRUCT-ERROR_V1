@@ -4697,11 +4697,39 @@ func _toxic_works_tests() -> void:
 	var sp := tw.shotgun_pad.get_node("WeaponSpawner") as WeaponSpawner
 	_check(sp.display != null and absf(sp.display.global_position.x - (-1.5)) < 0.1 and sp.display.global_position.y > 8.3,
 		"works: the shotgun spins over the pad's centre")
+	# The turbine fan by the exit (owner asked): its streaks are drawn along
+	# the wind, and anyone in its stream - standing, walking past or
+	# mid-jump - is blown straight off the walkway into the slime.
+	var wind: Array = (fx.get("_winds") as Array)[0]
+	_check(((wind[3] as CPUParticles3D).mesh as QuadMesh).material is ShaderMaterial and (((wind[3] as CPUParticles3D).mesh as QuadMesh).material as ShaderMaterial).shader == ToxicWorks.WIND_STREAK,
+		"works: the fan's streaks are drawn as lines along the wind, out of the fan")
+	var spawned := [0]
+	var on_respawn := func() -> void: spawned[0] += 1
+	p.respawned.connect(on_respawn)
+	for start: Vector3 in [Vector3(52, 8.3, -125.5), Vector3(48, 11.4, -129.0)]:
+		spawned[0] = 0
+		var blown := tw.winds_blown
+		p.global_position = start
+		p.velocity = Vector3.ZERO
+		var off_at := -1
+		for i in 120:
+			await _ticks(1)
+			if off_at < 0 and spawned[0] == 0 and p.global_position.x < 40.0:
+				off_at = i
+		_check(tw.winds_blown > blown and off_at >= 0 and off_at < 36 and spawned[0] == 1,
+			"works: in the fan's stream (%s) the player is blown off the walkway's edge at once (%.2f s) and into the slime" % [start, off_at / 60.0])
+	var blown_before := tw.winds_blown
+	p.global_position = Vector3(50, 8.3, -118.0)
+	p.velocity = Vector3.ZERO
+	await _ticks(30)
+	_check(tw.winds_blown == blown_before and p.global_position.distance_to(Vector3(50, 8.0, -118.0)) < 0.5, "works: out of the stream the walkway is calm")
+	p.respawned.disconnect(on_respawn)
 	# The terminal at the end of the pads opens the exit.
 	var term: Area3D = main.get_tree().get_nodes_in_group(&"terminal")[0]
 	p.global_position = term.global_position
 	p.velocity = Vector3.ZERO
 	await _ticks(60)
+	_check(float(wind[4]) >= 0.0, "works: reaching the terminal stops the fan (it spins down for good)")
 	gates = main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).map(func(n: Node) -> String: return String(n.name))
 	_check(tw.terminals_used.has("Works_Terminal") and not gates.has("Exit_Hall_Laser_Blocker"), "works: using the control terminal opens the exit's laser gate")
 	main.queue_free()
