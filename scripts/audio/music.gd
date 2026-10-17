@@ -10,8 +10,10 @@ const MAIN_MENU := preload("res://assets/audio/music/main_menu_music.ogg")
 const LEVEL_1 := preload("res://assets/audio/music/level_1_music.ogg")
 ## Title / character select.
 const MENU_DB := -9.0
-## In game: under the guns and robots, enough to make the map feel alive.
-const LEVEL_DB := -17.0
+## In game: louder than it was (owner asked; was -17) but still under the
+## guns and robots - the main menu track (the levels play it now, owner
+## asked) averages ~-22 dB here, the weapons -12 to -18.
+const LEVEL_DB := -10.0
 const SILENT_DB := -60.0
 
 static var _player: AudioStreamPlayer

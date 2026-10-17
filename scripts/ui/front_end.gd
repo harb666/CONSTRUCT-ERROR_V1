@@ -13,7 +13,9 @@ extends Control
 ##    ?join=<code>). The squad rows fill with whoever is in. DEPLOY starts
 ##    (players can drop in while the host plays).
 ## Drawn in the owner's cyan HUD style (HudStyle). Emits `deployed`, then
-## fades out and frees itself.
+## fades out and frees itself. On the music's beat it goes glitchy and
+## merges in and out of neon vector lines and wire meshes (MenuGlitch; owner
+## asked), its text kept crisp on top.
 
 signal started
 signal deployed(character: CharacterDefinition)
@@ -50,6 +52,15 @@ var _build := ""
 var _preview_vp: SubViewport
 var _preview_pivot: Node3D
 var _preview_def: CharacterDefinition
+## The glitch: the line pass over everything + the crisp text (last child).
+var glitch: MenuGlitch
+## The control drawing the preview (glitching with the menu); the preview's
+## wire dissolve materials (WireMesh: platform's, then the character's).
+var _preview_view: Control
+var _preview_mat: ShaderMaterial
+var _preview_rect := Rect2()
+## The wire copies' materials (platform, character).
+var _wire_mats: Array = []
 var _buttons := {}  # id -> Rect2 (this frame's layout)
 ## Backdrop (tint + scrolling grid) and the title emblem's turning rings, as
 ## layers drawn under this control's own drawing: the emblem is drawn once
@@ -87,10 +98,15 @@ func _ready() -> void:
 	_backdrop.painter = func(ci: CanvasItem) -> void:
 		var a := _fade
 		var r := Rect2(Vector2.ZERO, size)
-		ci.draw_rect(r, Color(HudStyle.BG, (0.86 if screen == Screen.TITLE else 0.9) * a))
+		# (Thinner while the menu is lines: the arena's lines show through.)
+		var thin := 0.35 * glitch.wire if glitch else 0.0
+		ci.draw_rect(r, Color(HudStyle.BG, (0.86 if screen == Screen.TITLE else 0.9) * a * (1.0 - thin)))
 		HudStyle.grid(ci, r, 48.0, Color(HudStyle.CYAN, 0.05 * a), Vector2(_t * 6.0, _t * 3.0))
 	add_child(_backdrop)
 	move_child(_backdrop, 0)
+	glitch = MenuGlitch.new()
+	glitch.name = "Glitch"
+	add_child(glitch)
 
 
 ## The title emblem's layers at `ec` (radius `er`), faded by `a`.
@@ -131,6 +147,8 @@ func _process(delta: float) -> void:
 			queue_free()
 			return
 	_backdrop.queue_redraw()
+	glitch.active = screen != Screen.OUT
+	_update_preview_view()
 	if screen == Screen.TITLE:
 		_show_emblem(Vector2(size.x * 0.5, size.y * 0.6), minf(size.y * 0.13, 96.0), _fade)
 	else:
@@ -301,6 +319,32 @@ func press_character(id: StringName) -> void:
 
 # --- 3D preview of the picked character ---
 
+var _preview_alpha := 1.0
+
+
+## The preview (textured + wire, merged) where _draw_select laid it out, and
+## the glitch's line pass told to leave it be.
+func _update_preview_view() -> void:
+	if _preview_view == null:
+		return
+	var on := _preview_rect.size.x > 2.0 and screen != Screen.TITLE
+	_preview_view.visible = on
+	if not on:
+		glitch.keep_rect = Rect2()
+		return
+	_preview_view.position = _preview_rect.position
+	_preview_view.size = _preview_rect.size
+	_preview_mat.set_shader_parameter("alpha", _preview_alpha)
+	var vs := get_viewport_rect().size
+	glitch.keep_rect = Rect2(_preview_rect.position / vs, _preview_rect.size / vs)
+	_preview_mat.set_shader_parameter("glitch", glitch.glitch)
+	_preview_mat.set_shader_parameter("seed", glitch.seed)
+	WireMesh.set_all(_wire_mats, &"wire", glitch.wire)
+	WireMesh.set_all(_wire_mats, &"seed", glitch.seed)
+	WireMesh.set_all(_wire_mats, &"cell_px", 7.0 * float(_preview_vp.size.x) / maxf(_preview_rect.size.x, 1.0) * 2.0)
+	_preview_view.queue_redraw()
+
+
 func _make_preview() -> void:
 	if selected == null or selected == _preview_def or selected.preview_model_path == "":
 		return
@@ -328,11 +372,24 @@ func _make_preview() -> void:
 		rim.light_color = HudStyle.CYAN
 		rim.light_energy = 1.4
 		_preview_vp.add_child(rim)
-		_preview_vp.add_child(_make_platform())
+		var plat := _make_platform()
+		_preview_vp.add_child(plat)
+		_wire_mats.append_array(WireMesh.add_to(plat, HudStyle.CYAN))
 		var cam := Camera3D.new()
 		cam.name = "Camera"
 		cam.fov = 30.0
 		_preview_vp.add_child(cam)
+		_preview_mat = ShaderMaterial.new()
+		_preview_mat.shader = PREVIEW_GLITCH
+		_preview_view = Control.new()
+		_preview_view.name = "PreviewView"
+		_preview_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_preview_view.material = _preview_mat
+		_preview_view.visible = false
+		_preview_view.draw.connect(func() -> void:
+			_preview_view.draw_texture_rect(_preview_vp.get_texture(), Rect2(Vector2.ZERO, _preview_view.size), false))
+		add_child(_preview_view)
+		move_child(_preview_view, glitch.get_index())  # under the glitch's line pass
 	if _preview_pivot:
 		_preview_pivot.queue_free()
 	_preview_pivot = Node3D.new()
@@ -340,6 +397,11 @@ func _make_preview() -> void:
 	var model: Node3D = (load(selected.preview_model_path) as PackedScene).instantiate()
 	model.rotation_degrees.y = selected.preview_yaw_degrees
 	_preview_pivot.add_child(model)
+	# Its wire mesh, for the glitch (in the character's colour, as neon).
+	var ac := selected.accent_color
+	var wc := Color.from_hsv(ac.h, minf(ac.s, 0.75), 1.0)
+	_wire_mats.resize(mini(_wire_mats.size(), 2))  # (the platform's two)
+	_wire_mats.append_array(WireMesh.add_to(model, wc))
 	if selected.preview_caps:
 		selected.preview_caps.apply(model)
 	if selected.preview_extra_path != "":
@@ -359,6 +421,8 @@ func _make_preview() -> void:
 		var head := s.find_bone("mixamorig_Head")
 		if head >= 0:
 			h = (s.transform * s.get_bone_global_rest(head)).origin.y * model.scale.y + 0.5
+	# The wire dissolve rises from the feet to the top of the head.
+	WireMesh.set_all(_wire_mats, &"y1", h * 1.05)
 	var dist := h * 0.7 / tan(deg_to_rad(cam.fov * 0.5))
 	cam.position = Vector3(0, h * 0.62, dist)
 	cam.look_at(Vector3(0, h * 0.5, 0))
@@ -397,6 +461,7 @@ func _make_platform() -> Node3D:
 ## Character card: the owner's banner art (tools/build_character_art.py)
 ## in the game's cyan frame, with scan lines and a name plate in the same
 ## slant. Dimmed unless picked.
+const PREVIEW_GLITCH := preload("res://scripts/ui/menu_preview_glitch.gdshader")
 const BANNER_ASPECT := 1024.0 / 291.0
 ## The art's slanted sides move this share of its width from top to bottom.
 const BANNER_SLANT := 0.1889
@@ -455,6 +520,10 @@ func _draw_card(def: CharacterDefinition, cr: Rect2, sel: bool, a: float) -> voi
 func _draw() -> void:
 	_buttons.clear()
 	var a := _fade
+	# The text is collected and drawn crisp over the glitch (MenuGlitch).
+	HudStyle.defer_for = self
+	HudStyle.deferred = []
+	_preview_rect = Rect2()
 	# (Backdrop and title emblem: the layers underneath, see _process.)
 	if screen == Screen.TITLE:
 		_draw_title(a)
@@ -462,6 +531,10 @@ func _draw() -> void:
 		_draw_select(a)
 	if NetBadge.show_log():
 		NetBadge.draw_log(self, Vector2(12, size.y - 12))
+	HudStyle.defer_for = null
+	glitch.texts = HudStyle.deferred
+	HudStyle.deferred = []
+	glitch.queue_redraw()
 
 
 func _margin() -> float:
@@ -536,7 +609,8 @@ func _draw_select(a: float) -> void:
 		var want := Vector2i(maxi(int(inner.size.x * scale), 2), maxi(int(inner.size.y * scale), 2))
 		if _preview_vp.size != want:
 			_preview_vp.size = want
-		draw_texture_rect(_preview_vp.get_texture(), inner, false, Color(1, 1, 1, a))
+		_preview_rect = inner
+		_preview_alpha = a
 	var plate := Rect2(Vector2(pr.position.x + 16, pr.end.y - 54), Vector2(pr.size.x - 32, 40))
 	HudStyle.panel(self, plate, HudStyle.CYAN, HudStyle.FILL, 10.0, a)
 	var nm := selected.display_name if selected else "-"

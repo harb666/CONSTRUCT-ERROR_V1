@@ -11,7 +11,7 @@
 [ext_resource type="Script" path="res://scripts/camera/arrival_camera.gd" id="arrcam"]
 [ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
 [ext_resource type="NavigationMesh" path="res://levels/slime_arena/gameplay/navmesh.res" id="navmesh"]
-[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/main_menu_music.ogg" id="music1"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1

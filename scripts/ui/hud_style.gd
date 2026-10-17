@@ -229,7 +229,17 @@ static func spin_layers(layers: Array[HudSpinLayer], t: float) -> void:
 
 
 ## Text helpers. `x_align`: 0 left, 0.5 centre, 1 right of `pos.x`.
+## Text drawn for this canvas item is collected in `deferred` instead of
+## drawn: the glitchy main menu (MenuGlitch) draws it crisp on top of its
+## vector-line effect, so the menus stay readable.
+static var defer_for: CanvasItem = null
+static var deferred: Array = []
+
+
 static func text(ci: CanvasItem, font: Font, pos: Vector2, s: String, size: int, col: Color, x_align := 0.0, outline := 0) -> void:
+	if defer_for != null and ci == defer_for:
+		deferred.append([font, pos, s, size, col, x_align, outline])
+		return
 	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var p := Vector2(pos.x - w * x_align, pos.y)
 	if outline > 0:

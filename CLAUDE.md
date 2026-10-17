@@ -90,8 +90,10 @@
   owner's music, kept untouched; the game plays 112 kbps OGG copies
   (`main_menu_music.ogg`, `level_1_music.ogg`; the 320 kbps originals would
   add ~29 MB to the download). `Music`: menu music on the title (once
-  loaded) and character select; Level 1's as players arrive in Skyforge,
-  at -17 dB (menu -9), carrying on down the lift into the next part.
+  loaded) and character select, and (owner asked) it's also the in-game
+  music now: it carries straight on into the level at -10 dB (owner asked
+  for it louder, was -17; menu -9; still under the weapons) and on down the
+  lift. Level 1's track is kept, unused.
 
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
@@ -142,6 +144,18 @@
   4-player co-op squad shown with open slots until online play exists) ->
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
+- Glitchy main menu (owner asked; ideas from the owner's `glitch-video`
+  repo, branch `glitch-music-video`): locked to the menu music's beat (140
+  BPM, first beat 0.28 s; own clock when the sound isn't moving), a 16-bar
+  cycle of clean bars and bars where everything - the arena behind, panels,
+  buttons, cards - merges into neon vector lines (edge pass in each
+  source's hue, ragged blocky dissolve front with a glow, band shifts,
+  drop-outs, RGB split, magenta / green ghosts; `MenuGlitch`,
+  `menu_glitch.gdshader`), and the character preview dissolves into its
+  real wire mesh (crease edges, skinned; `WireMesh`, `wire_line` /
+  `wire_hide` shaders - one view: this renderer poses a skinned mesh per
+  view). All menu text is drawn crisp on top (`HudStyle.defer_for`),
+  outlined while lines show, so the menus stay readable.
 - Lock-on reticles in the owner's sci-fi HUD reference style (owner asked):
   lock-in snap animation, segmented / tick rings, notches, brackets and a
   readout (arm, distance, target health); arm colours unchanged.

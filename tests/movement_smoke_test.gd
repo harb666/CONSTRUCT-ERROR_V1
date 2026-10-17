@@ -4852,10 +4852,14 @@ func _music_tests() -> void:
 	fe.press_start()
 	await _ticks(3)
 	_check(Music.current() == Music.MAIN_MENU, "music: it carries on into character select")
+	var plays := Music.plays
 	fe.press_deploy()
-	await _wall_wait(func() -> bool: return Music.current() == Music.LEVEL_1 and absf(Music._player.volume_db - Music.LEVEL_DB) < 0.5, 5.0)
-	_check(Music.current() == Music.LEVEL_1 and Music._player.volume_db < Music.MENU_DB - 4.0 and Music._player.volume_db > -25.0,
-		"music: Level 1's music as the player lands in Skyforge, quieter than the menu (%.1f dB)" % Music._player.volume_db)
+	await _wall_wait(func() -> bool: return absf(Music._player.volume_db - Music.LEVEL_DB) < 0.5, 5.0)
+	_check(Music.current() == Music.MAIN_MENU and Music.plays == plays and Music._player.volume_db < Music.MENU_DB and Music._player.volume_db > -12.0,
+		"music: the main menu track carries straight on into the level (owner asked), louder than before, a little under the menu (%.1f dB)" % Music._player.volume_db)
+	var tw: Node = load("res://scenes/toxic_works.tscn").instantiate()
+	_check(tw.get(&"level_music") == Music.MAIN_MENU, "music: the Toxic Works plays the main menu track too")
+	tw.free()
 	main.queue_free()
 	await _ticks(3)
 	var b: Node = load("res://scenes/battle_arena.tscn").instantiate()
@@ -5164,6 +5168,33 @@ func _front_end_tests() -> void:
 	var ap := fe._preview_vp.find_child("AnimationPlayer", true, false) as AnimationPlayer if fe._preview_vp else null
 	_check(fe.selected == roster.characters[0] and ap != null and ap.is_playing() and ap.current_animation == "Idle 9", "front end: the Grinch is picked, 3D preview plays its idle")
 	_check(fe._buttons.has("char:grinch") and fe._buttons.has("deploy"), "front end: character card and DEPLOY button laid out")
+	# The glitchy menu (owner asked): locked to the menu music's beat it
+	# merges in and out of vector lines; the text stays crisp on top.
+	var g: MenuGlitch = fe.glitch
+	var clean := MenuGlitch.schedule(4.0 * 1 + 0.25)  # bar 1: clean
+	var slam := MenuGlitch.schedule(4.0 * 4 + 0.1)  # bar 4: slams into lines on the downbeat
+	var later := MenuGlitch.schedule(4.0 * 4 + 3.6)  # ... dissolving back across the bar
+	var all := MenuGlitch.schedule(4.0 * 14 + 1.2)  # bar 14: all lines
+	_check(clean.x == 0.0 and slam.x > 0.9 and later.x < slam.x and all.x == 1.0 and MenuGlitch.schedule(4.0 * 10 + 2.5) == Vector2.ZERO,
+		"menu glitch: clean bars, slams into lines on the downbeat and dissolves across the bar, whole bars of lines")
+	_check(g != null and g.get_index() == fe.get_child_count() - 1 or fe.get_children().filter(func(c: Node) -> bool: return c is CanvasItem).back() == g,
+		"menu glitch: drawn over the whole menu")
+	_check(not g.texts.is_empty() and HudStyle.defer_for == null and g.texts.any(func(t: Array) -> bool: return t[2] == "DEPLOY"),
+		"menu glitch: the menu's text is drawn crisp on top of the lines (%d strings)" % g.texts.size())
+	var wires := fe._preview_vp.find_children("*_Wire", "MeshInstance3D", true, false)
+	var posed := wires.filter(func(w: Node) -> bool: return (w as MeshInstance3D).skin != null and (w as MeshInstance3D).get_node_or_null((w as MeshInstance3D).skeleton) is Skeleton3D)
+	_check(wires.size() >= 2 and posed.size() >= 1 and fe._wire_mats.size() == 4,
+		"menu glitch: the preview character and its pad have wire mesh copies, the character's on its skeleton (%d)" % wires.size())
+	g.set_process(false)
+	g.wire = 0.0
+	g.glitch = 0.0
+	g._rect.visible = false
+	await process_frame
+	_check(not g._rect.visible, "menu glitch: off between glitches (nothing extra drawn)")
+	g.set_process(true)
+	await process_frame
+	await process_frame
+	_check(g.keep_rect.size.x > 0.05 and g.keep_rect.size.y > 0.2, "menu glitch: the line pass leaves the preview to its own wire dissolve")
 	# Tap DEPLOY.
 	var dep: Rect2 = fe._buttons["deploy"]
 	for pressed in [true, false]:
