@@ -14,7 +14,6 @@
 [ext_resource type="Resource" path="res://resources/weapons/machine_gun.tres" id="mg"]
 [ext_resource type="Resource" path="res://resources/weapons/rocket_launcher.tres" id="rl"]
 [ext_resource type="Resource" path="res://resources/weapons/frost_byte.tres" id="fb"]
-[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -30,7 +29,6 @@ outline_color = Color(0, 0, 0, 0.7)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
-level_music = ExtResource("music")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")

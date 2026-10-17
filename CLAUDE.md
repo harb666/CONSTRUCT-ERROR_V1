@@ -260,7 +260,8 @@
 
 - Test map = start level (owner asked: "load up the test map and put one
   of each enemy down"): the game starts in the battle arena
-  (`battle_arena.tscn`, every weapon pad; Level 1's music) with one boss,
+  (`battle_arena.tscn`, every weapon pad; no music - owner asked, silence
+  to hear the sounds while testing) with one boss,
   one Neon Sentinel, one grunt and one skirmisher (`BattleSpawner`
   `total = 4`, `sentinels = 1`). `?level=works` / `skyforge` for the levels.
 - Neon Sentinel (owner's model, owner asked; `RobotSentinel`, a

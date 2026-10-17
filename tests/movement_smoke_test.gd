@@ -4296,7 +4296,7 @@ func _battle_arena_tests() -> void:
 	_check(low > -0.1 and high < 0.1, "battle: the walkers stand on the arena floor (y %.2f..%.2f)" % [low, high])
 	_check(nearest > 15.0, "battle: none spawn on top of the player (nearest %.1f m)" % nearest)
 	_check(main.get_node_or_null("TestArena") != null and main.get_node_or_null("WeaponSpawnPad") != null, "battle: test arena geometry and weapon pads present")
-	_check(main.get("level_music") == load("res://assets/audio/music/level_1_music.ogg"), "battle: Level 1 music plays there")
+	_check(main.get("level_music") == null, "battle: no music on the test map (owner asked: silence to hear the sounds)")
 	main.queue_free()
 	await _ticks(5)
 
