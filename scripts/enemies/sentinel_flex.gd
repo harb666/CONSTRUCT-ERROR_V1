@@ -9,6 +9,14 @@ extends SkeletonModifier3D
 ## little (spring + damping). RobotSentinel feeds `accel` (m/s^2, in the
 ## model's frame) and `bank` every tick.
 ##
+## Expressions (owner asked: "often rotate up/down the red wing plates
+## exposing the back plate fully ... tie into movements and the enemies
+## expressions"): RobotSentinel says where each red cover plate should be
+## (`cover`: -1 swung right up, 0 shut, 1 swung right down - either way the
+## whole yellow back plate shows) and how far each back plate flares out
+## (`plate`: 0 at rest, 1 flared, below 0 tucked in); they spring there,
+## snapping over with a little overshoot. Held still while frozen (`hold`).
+##
 ## Dying: the eye's plasma bone is held at full size (the death clip shrinks
 ## it, and the electric arcs hang off it) so the model's own branching
 ## discharges can crackle out of the smashed socket - flickering, spinning,
@@ -27,6 +35,12 @@ extends SkeletonModifier3D
 @export var wing_stiffness := 55.0
 @export var wing_damping := 6.0
 @export var arc_time := 3.2
+## The red covers' swing (deg) fully up / fully down, the back plates' flare.
+@export var cover_up_deg := 55.0
+@export var cover_down_deg := 75.0
+@export var plate_flare_deg := 28.0
+@export var cover_stiffness := 95.0
+@export var cover_damping := 9.0
 
 var accel := Vector3.ZERO
 var bank := 0.0
@@ -34,11 +48,17 @@ var dying := false
 var die_t := 0.0
 ## Arcs shown this frame after death (tests).
 var arcs_lit := 0
+## Where the red covers / back plates go ([left, right]; see above).
+var cover := Vector2.ZERO
+var plate := Vector2.ZERO
+var hold := false
 
 var _ant: Array[int] = []
 var _wing: Array[int] = []
 var _plasma := -1
 var _arcs: Array[int] = []
+var _cover_b: Array[int] = []
+var _plate_b: Array[int] = []
 ## Spring state per bone: [angle about X, about Z (or Y for wings), velocities].
 var _s := {}
 
@@ -52,8 +72,29 @@ func setup(skel: Skeleton3D) -> void:
 		var b := skel.find_bone(n)
 		if b >= 0:
 			_arcs.append(b)
-	for b in _ant + _wing:
+	_cover_b = [skel.find_bone(&"Wing_Red_Cover_L"), skel.find_bone(&"Wing_Red_Cover_R")]
+	_plate_b = [skel.find_bone(&"Wing_Plate_L"), skel.find_bone(&"Wing_Plate_R")]
+	for b in _ant + _wing + _cover_b + _plate_b:
 		_s[b] = Vector4.ZERO
+
+
+## Knocks red cover `i` about (rad/s; + swings it down): a shot's kick, a
+## flinch.
+func kick_cover(i: int, speed: float) -> void:
+	if i >= 0 and i < _cover_b.size() and _s.has(_cover_b[i]):
+		var v: Vector4 = _s[_cover_b[i]]
+		v.z += speed
+		_s[_cover_b[i]] = v
+
+
+## Red cover `i`'s swing now (rad; + down; tests).
+func cover_angle(i: int) -> float:
+	return (_s.get(_cover_b[i], Vector4.ZERO) as Vector4).x if i < _cover_b.size() else 0.0
+
+
+## Back plate `i`'s flare now (rad; tests).
+func plate_angle(i: int) -> float:
+	return (_s.get(_plate_b[i], Vector4.ZERO) as Vector4).x if i < _plate_b.size() else 0.0
 
 
 func _spring(b: int, target: Vector2, k: float, d: float, lim: float, dt: float) -> Vector2:
@@ -98,6 +139,21 @@ func _process_modification() -> void:
 		var sweep := clampf(-accel.z * wing_gain, -wing_max, wing_max) * side
 		var r := _spring(b, Vector2(droop, sweep), wing_stiffness, wing_damping, wing_max * 1.3, dt)
 		skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion.from_euler(Vector3(0.0, r.y, r.x)))
+	# Expressions: the red covers swing about their hinge (local Z; the right
+	# side mirrored), the back plates flare out about theirs.
+	var edt := 0.0 if hold else dt
+	for i in _cover_b.size():
+		var side := 1.0 if i == 0 else -1.0
+		var b := _cover_b[i]
+		if b >= 0:
+			var c := clampf(cover[i], -1.0, 1.0)
+			var want := deg_to_rad(c * (cover_down_deg if c > 0.0 else cover_up_deg))
+			var r := _spring(b, Vector2(want, 0.0), cover_stiffness, cover_damping, deg_to_rad(cover_down_deg + 12.0), edt)
+			skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion(Vector3.BACK, r.x * side))
+		b = _plate_b[i]
+		if b >= 0:
+			var r := _spring(b, Vector2(deg_to_rad(clampf(plate[i], -0.5, 1.0) * plate_flare_deg), 0.0), cover_stiffness * 0.7, cover_damping, deg_to_rad(plate_flare_deg + 10.0), edt)
+			skel.set_bone_pose_rotation(b, skel.get_bone_pose_rotation(b) * Quaternion(Vector3.BACK, r.x * side))
 
 
 ## After death: the branching discharges crackle out of the empty socket.

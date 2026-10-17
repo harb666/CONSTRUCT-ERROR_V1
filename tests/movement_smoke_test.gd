@@ -4315,7 +4315,16 @@ func _sentinel_tests() -> void:
 	var paint := (model.find_child("Original_Body", true, false) as MeshInstance3D).mesh.surface_get_material(0) as BaseMaterial3D
 	_check(tris < 70000 and paint.emission_energy_multiplier < 2.0 and paint.albedo_texture.get_width() <= 1024,
 		"sentinel: model ready for the phone - %d triangles (was 161k), neon x%.1f (was 3.5, blown out), 1024 textures" % [tris, paint.emission_energy_multiplier])
-	_check(mats.keys() == ["Graphite_Mechanical_Housing"], "sentinel: the wing backs are the clean graphite housing (no torn paint, no saw-tooth neon) %s" % [mats.keys()])
+	var back_ok := mats.keys() == ["Neon_Yellow_Wing_Back"]
+	if back_ok:
+		for mi: MeshInstance3D in model.find_children("Moving_Wing_Backing*", "MeshInstance3D", true, false):
+			var bm := mi.mesh.surface_get_material(0) as BaseMaterial3D
+			back_ok = back_ok and bm.albedo_color.r > 0.8 and bm.albedo_color.g > 0.9 and bm.albedo_color.b < bm.albedo_color.g * 0.5 and bm.emission_enabled
+	_check(back_ok, "sentinel: the wing back plates are neon yellow (owner asked; clean, no torn paint or saw-tooth) %s" % [mats.keys()])
+	var ball := (model.find_child("Tiny_Electric_Energy_Ball", true, false) as MeshInstance3D).mesh.get_aabb()
+	var pupil := (model.find_child("Preserved_Rectangle_Pupil", true, false) as MeshInstance3D).mesh.get_aabb()
+	_check(ball.get_center().z < 0.4 and absf(ball.get_center().x) < 0.01 and ball.size.x > 0.1 and pupil.position.z > ball.end.z + 0.1,
+		"sentinel: the energy ball is in the middle of the eye, behind the pupil (z %.2f; it was at the front, 0.55), and bigger (%.2f m)" % [ball.get_center().z, ball.size.x])
 	model.free()
 	var ai_was := RobotEnemy.ai_enabled
 	RobotEnemy.ai_enabled = true
@@ -4364,6 +4373,13 @@ func _sentinel_tests() -> void:
 	await _ticks(30)
 	var after: Array = s.arms.arm_dirs(0)
 	_check((before[0] as Vector3).distance_to(after[0]) > 0.001, "sentinel: its arms sway (alive)")
+	var eye_shaders := {}
+	for k in s._whole.mesh.get_surface_count():
+		var om := s._whole.get_surface_override_material(k) as ShaderMaterial
+		if om:
+			eye_shaders[om.shader] = true
+	_check(eye_shaders.has(RobotSentinel.GAS_SHADER) and eye_shaders.has(RobotSentinel.CORE_SHADER) and s.eye_glow != null and s.eye_glow.visible,
+		"sentinel: its eye - swirling yellow plasma gas, a plasma ball and its glow inside the glass")
 	_check(s.trail != null and s.trail.point_count() >= 4 and s.trail.flare.visible, "sentinel: its booster streams a plasma trail (%d points) with a flare at the booster" % s.trail.point_count())
 	# First sight of a player: startled - wings, antennae and arms flare.
 	var rest_wing := s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
@@ -4375,7 +4391,17 @@ func _sentinel_tests() -> void:
 	await _ticks(25)
 	wing_now = s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
 	_check(rad_to_deg(rest_wing.angle_to(wing_now)) > 10.0, "sentinel: its wings flare out with it (%.0f deg)" % rad_to_deg(rest_wing.angle_to(wing_now)))
-	await _ticks(180)
+	_check(s.expression == &"startled" and s.eye_energy > 1.5 and s.flex.cover_angle(0) > deg_to_rad(25.0),
+		"sentinel: startled face - red covers flared out (%.0f deg), eye flaring (%.1f)" % [rad_to_deg(s.flex.cover_angle(0)), s.eye_energy])
+	var cov_lo := 0.0
+	var cov_hi := 0.0
+	var seen := {}
+	var flicks0 := s.flicks
+	for i in 180:
+		await _ticks(1)
+		cov_lo = minf(cov_lo, minf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
+		cov_hi = maxf(cov_hi, maxf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
+		seen[s.expression] = true
 	_check(s.engaged and s.target == p, "sentinel: then it engages")
 	# Dodges a shot coming its way.
 	s.evade_chance = 1.0
@@ -4384,14 +4410,18 @@ func _sentinel_tests() -> void:
 	var from := p.global_position + Vector3.UP * 1.2
 	PlasmaBolt.fire(self, from, (s.global_position - from).normalized(), p, 14.0, 0.0, PlasmaBolt.GREEN, PlasmaBolt.HOT, &"players")
 	var dodged := false
+	var split := false
 	var sway := 0.0
 	for i in 40:
 		await _ticks(1)
 		if s.dashes > d0:
 			dodged = true
+		if dodged and s.expression == &"dodge" and signf(s.flex.cover[0]) == -signf(s.flex.cover[1]):
+			split = true
 		var st: Vector4 = s.flex._s.get(s.get_skeleton().find_bone(&"Antenna_L"), Vector4.ZERO)
 		sway = maxf(sway, Vector2(st.x, st.y).length())
 	_check(dodged, "sentinel: it dodges a player's shot coming its way (banking side-dash)")
+	_check(split, "sentinel: dodging, its covers split - one up, one down")
 	var f0: Vector3 = s.arms.arm_dirs(0)[1]
 	s.arms.recoil(0)
 	await _ticks(6)
@@ -4399,7 +4429,22 @@ func _sentinel_tests() -> void:
 	_check(rad_to_deg(sway) > 3.0, "sentinel: its antennae swing with the dash (%.0f deg) - wings / antennae move with its flight" % rad_to_deg(sway))
 	s.evade_chance = 0.75
 	var shots0 := s.shots_fired
-	await _ticks(600)
+	var peak_eye := 0.0
+	for i in 600:
+		await _ticks(1)
+		seen[s.expression] = true
+		peak_eye = maxf(peak_eye, s.eye_energy)
+		cov_lo = minf(cov_lo, minf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
+		cov_hi = maxf(cov_hi, maxf(s.flex.cover_angle(0), s.flex.cover_angle(1)))
+	_check(s.flicks - flicks0 >= 4 and rad_to_deg(cov_lo) < -45.0 and rad_to_deg(cov_hi) > 55.0,
+		"sentinel: its red wing covers often swing right up (%.0f deg) and right down (%.0f deg), uncovering the yellow back plates (%d flicks in 14 s)" % [rad_to_deg(cov_lo), rad_to_deg(cov_hi), s.flicks - flicks0])
+	_check(seen.has(&"windup") and seen.has(&"firing") and peak_eye > 1.6,
+		"sentinel: before a volley it bristles - covers up, back plates flared, eye burning brighter (%.1f) %s" % [peak_eye, seen.keys()])
+	s._flinch_t = 0.0
+	var e0 := s.eye_energy
+	s.apply_damage(DamageInfo.make(0.01, DamageInfo.Type.ENERGY, s.global_position, Vector3.FORWARD))
+	await _ticks(4)
+	_check(s.expression == &"flinch" and s.eye_energy > e0, "sentinel: hit, it flinches (covers slam shut) and its eye flashes")
 	_check(s.shots_fired > shots0 and s.shots_fired - shots0 <= 8, "sentinel: in 10 s it fires %d green bolts from its cannons (a grunt fires ~15-25)" % (s.shots_fired - shots0))
 	_check(s.global_position.y - floor_y > 2.0, "sentinel: still flying while it fights (%.1f m up)" % (s.global_position.y - floor_y))
 	# Dies: the eye bursts, smoke, electric discharge; the wings break apart
@@ -4416,6 +4461,7 @@ func _sentinel_tests() -> void:
 			if n is SentinelEyeBurst:
 				fx = n
 	_check(not s.alive and SentinelEyeBurst.spawned == bursts + 1, "sentinel: dies with its eye bursting")
+	_check(fx != null and fx._gas != null and fx._wisps != null and not s.eye_glow.visible, "sentinel: the yellow plasma gas bursts out of the eye")
 	var deaths: Array = [Sfx.SENTINEL_DEATH_1, Sfx.SENTINEL_DEATH_2, Sfx.SENTINEL_DEATH_3]
 	_check(s.death_sounds == 1 and deaths.has(s.last_death_sound) and deaths.all(func(a: AudioStream) -> bool: return a.get_length() > 3.0 and a.get_length() < 3.6),
 		"sentinel: plays one of its 3 death sounds (owner's explosion + electric, ~3.3 s, the length of the death)")

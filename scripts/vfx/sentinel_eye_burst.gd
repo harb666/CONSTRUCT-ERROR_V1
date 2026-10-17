@@ -7,6 +7,10 @@ extends Node3D
 ## collapsing) and its branching arcs (SentinelFlex):
 ##   - a big cel flash, white-hot to plasma yellow, blasting out of the eye;
 ##   - a spray of glinting glass splinters;
+##   - the yellow plasma gas inside the glass bursting out in glowing yellow
+##     clouds (owner asked: "more yellowish plasma gas inside the glass that
+##     bursts out when it's killed"), then wisps of it seeping out of the
+##     socket for a moment;
 ##   - a puff of cartoon smoke rolling out of the socket, then a smoke trail
 ##     streaming from it as the wreck falls;
 ##   - electric discharge from the socket: lightning bolts lashing out of it
@@ -29,6 +33,8 @@ var _t := 0.0
 var _light: OmniLight3D
 var _sparks: CPUParticles3D
 var _glass: CPUParticles3D
+var _gas: CPUParticles3D
+var _wisps: CPUParticles3D
 var _smoke: SmokeTrail
 var _puffs: Array[ToonPuff] = []
 var _bolts: Array[MeshInstance3D] = []
@@ -81,6 +87,15 @@ func _ready() -> void:
 	_glass.one_shot = true
 	_glass.explosiveness = 0.95
 	_glass.emitting = true
+	# The plasma gas bursting out of the broken glass, then seeping out.
+	_gas = _gas_cloud(30, 1.2, 0.65, Vector2(1.8, 5.0), 60.0)
+	_gas.transform = Transform3D(basis_out, Vector3.ZERO)
+	_gas.one_shot = true
+	_gas.explosiveness = 0.9
+	_gas.emitting = true
+	_wisps = _gas_cloud(18, 1.0, 0.38, Vector2(0.5, 1.5), 35.0)
+	_wisps.transform = Transform3D(basis_out, Vector3.ZERO)
+	_wisps.emitting = true
 	# Electric sparks spitting out of the socket for a while.
 	_sparks = _particles(34, 0.45, Vector2(2.0, 6.5), 70.0, Vector3(0, -4.0, 0), Vector2(0.03, 0.05),
 		Color(1.0, 1.0, 0.7), Color(1.0, 0.7, 0.05, 0.0))
@@ -130,6 +145,29 @@ func _ready() -> void:
 		JointSparks.play_on_bone(skeleton, bone, 1.6)
 
 
+## Glowing yellow plasma gas clouds (soft puffs, swelling as they thin out).
+func _gas_cloud(n: int, life: float, size: float, speed: Vector2, spread: float) -> CPUParticles3D:
+	var p := Vfx.particles("smoke", size * scale_m, n, life)
+	p.local_coords = false
+	p.direction = Vector3(0, 0, -1)
+	p.spread = spread
+	p.initial_velocity_min = speed.x * scale_m
+	p.initial_velocity_max = speed.y * scale_m
+	p.damping_min = 2.5
+	p.damping_max = 4.5
+	p.gravity = Vector3(0, 0.8, 0)
+	p.angle_min = 0.0
+	p.angle_max = 360.0
+	p.angular_velocity_min = -90.0
+	p.angular_velocity_max = 90.0
+	p.scale_amount_min = 0.7
+	p.scale_amount_max = 1.2
+	p.scale_amount_curve = Vfx.curve([Vector2(0.0, 0.45), Vector2(0.3, 1.0), Vector2(1.0, 1.8)])
+	p.color_ramp = Vfx.ramp([Color(1.0, 1.0, 0.7, 1.0), Color(1.0, 0.92, 0.08, 1.0), Color(1.0, 0.72, 0.0, 0.7), Color(0.7, 0.35, 0.0, 0.0)], [0.0, 0.25, 0.6, 1.0])
+	add_child(p)
+	return p
+
+
 func _particles(n: int, life: float, speed: Vector2, spread: float, grav: Vector3, size: Vector2, c0: Color, c1: Color) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.amount = n
@@ -172,6 +210,8 @@ func _process(delta: float) -> void:
 			_smoke.emitting = false
 	if _sparks:
 		_sparks.emitting = _t < duration * 0.8 and randf() < 0.3 + 0.7 * k
+	if _wisps:
+		_wisps.emitting = _t < 1.3
 	if _light and not _light.has_meta(&"tamed"):
 		# Flickering discharge, strongest at first.
 		_light.light_energy = (2.0 + 6.0 * k) * (randf() if randf() < 0.6 else 0.15) * k

@@ -22,8 +22,15 @@ ready on their own bones. All of that is kept as it is. What changes:
     half. The glass shards, arcs and small details are left as modelled.
   * Wing backs: the backing shells' paint mapping is broken (a black sheet
     with a torn pink rim) and the lime panel over it has a torn, saw-tooth
-    edge; the backings are drawn in the model's own graphite housing
-    material instead (clean dark backs, like the wings' frames).
+    edge; the backings are drawn in one clean glowing neon yellow instead
+    (owner asked: "make the back plates of the wings yellow instead of
+    black", like the concept art's yellow panels behind the red plates).
+  * Eye: the little energy ball sat right at the front of the glass, by the
+    pupil; it's moved back into the middle of the eye (behind the slit) and
+    made bigger, and the plasma gas round it is filled out a little closer
+    to the glass (owner asked: "move the ball more to the center or back of
+    the eye ... more yellowish plasma gas inside the glass"). Both stay on
+    their bone (Eye_Plasma), so the death clip still pops them.
   * Neon: the two neon materials (the body's selective neon and the wing
     backings') glowed at 3.5x, which renders blown-out white. They now glow
     at NEON_STRENGTH, so the neon reads as lime.
@@ -53,10 +60,22 @@ SIMPLIFY = {
 }
 # The wing backings: their painted shell's texture mapping is broken (black
 # with a torn pink rim) and the lime panel over it has a torn, saw-tooth
-# edge; both are drawn in the model's own graphite housing material
-# instead - clean glossy backs like the wings' dark frames.
-REPAINT = {"Moving_Wing_Backing_2": "Graphite_Mechanical_Housing", "Moving_Wing_Backing_3": "Graphite_Mechanical_Housing"}
+# edge; both are drawn in one new neon yellow material instead (owner asked
+# for yellow backs).
+WING_BACK = {
+    "name": "Neon_Yellow_Wing_Back",
+    "pbrMetallicRoughness": {"baseColorFactor": [0.9, 1.0, 0.12, 1.0], "metallicFactor": 0.15, "roughnessFactor": 0.32},
+    "emissiveFactor": [0.85, 1.0, 0.08],
+    "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 0.75}},
+}
+REPAINT = {"Moving_Wing_Backing_2": WING_BACK["name"], "Moving_Wing_Backing_3": WING_BACK["name"]}
 REPAINT_FROM = ("Original_Paint_With_Selective_Neon", "Wing_Backing_Tip_Matched_Neon")
+# The eye: (mesh, centre it's moved to (None: stays), scale about it).
+EYE_CENTRE = (0.0, -0.035, 0.37)  # the glass bulb's centre
+RESHAPE = {
+    "Tiny_Electric_Energy_Ball": ((0.0, -0.035, 0.33), 2.5),
+    "Yellow_Plasma_Gas_Volume": (None, 1.1),
+}
 NEON = ("Original_Paint_With_Selective_Neon", "Wing_Backing_Tip_Matched_Neon")
 NEON_STRENGTH = 1.3
 MAX_TEX = 1024
@@ -178,9 +197,16 @@ def main():
         return k
 
     before = after = 0
+    js["materials"].append(WING_BACK)
     mat_index = {mt["name"]: i for i, mt in enumerate(js["materials"])}
     for m in js["meshes"]:
         for p in m["primitives"]:
+            moved = None
+            if m["name"] in RESHAPE:
+                to, k = RESHAPE[m["name"]]
+                pos = accessor(js, b, p["attributes"]["POSITION"])
+                c = (pos.min(0) + pos.max(0)) * 0.5 if to else np.array(EYE_CENTRE, np.float32)
+                moved = ((pos - c) * k + (np.array(to, np.float32) if to else c)).astype(np.float32)
             if m["name"] in REPAINT and js["materials"][p.get("material", 0)]["name"] in REPAINT_FROM:
                 p["material"] = mat_index[REPAINT[m["name"]]]
             idx = accessor(js, b, p["indices"])
@@ -197,7 +223,7 @@ def main():
                 p["indices"] = w.acc(idx.astype(np.uint32), None, 34963)
             else:
                 for k in list(p["attributes"]):
-                    p["attributes"][k] = copy(p["attributes"][k], None, 34962)
+                    p["attributes"][k] = copy(p["attributes"][k], moved if k == "POSITION" and moved is not None else None, 34962)
                 p["indices"] = copy(p["indices"], None, 34963)
             after += idx.size // 3
     for s in js.get("skins", []):

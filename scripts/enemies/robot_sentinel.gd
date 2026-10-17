@@ -25,8 +25,21 @@ extends RobotEnemy
 ## owner's explosion and electric sounds (Sfx.SENTINEL_DEATH_*), a mini
 ## blast as the eye bursts then electric crackle dying away with the
 ## discharge, following the wreck down.
+##
+## Expressions (owner asked): its red wing covers flick right up or down
+## every few seconds, uncovering the yellow back plates, and tie into what
+## it's doing - tipping with its flight, flaring when startled, bristling
+## up before a volley, splitting up / down as it dodges, slamming about
+## when hit - and its eye (a plasma ball in the middle of the eye, swirling
+## yellow gas round it) burns brighter as it gets worked up (`_express`).
 
 const SENTINEL_MODEL := preload("res://assets/enemies/sentinel/sentinel.glb")
+const GAS_SHADER := preload("res://scripts/vfx/sentinel_plasma_gas.gdshader")
+const CORE_SHADER := preload("res://scripts/vfx/sentinel_plasma_core.gdshader")
+const GLOW_SHADER := preload("res://scripts/vfx/sentinel_eye_glow.gdshader")
+## The energy ball's centre in the model (tools/build_sentinel.py puts it
+## in the middle of the eye, behind the pupil).
+const EYE_CORE := Vector3(0.0, -0.035, 0.33)
 ## The grunt's cannon muzzle in each hand bone's space (RobotEnemy.MUZZLES).
 const GRUNT_MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(0.017, 0.146, 0.009)}
 
@@ -75,6 +88,13 @@ const GRUNT_MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(
 ## Both cannons fire one bolt each per volley (a grunt fires 3-4 every
 ## 1.3-2.3 s).
 @export var volley_cooldown := Vector2(3.2, 4.8)
+@export_group("Expressions")
+## How often the red covers flick up / down: on patrol, in a fight.
+@export var flutter_time := Vector2(2.2, 4.2)
+@export var fight_flutter_time := Vector2(1.1, 2.4)
+## How long before a volley it bristles (covers up, eye brightening).
+@export var windup_time := 0.8
+@export_group("")
 
 ## Seconds left of the startled reaction (tests); engaged = it has seen a
 ## player and finished being startled.
@@ -87,6 +107,13 @@ var flex: SentinelFlex
 var arms: SentinelArms
 var tree: AnimationTree
 var cannons: Array[Node3D] = []
+## What its face is doing now (tests): calm, flick, startled, windup,
+## firing, dodge, flinch.
+var expression := &"calm"
+var flicks := 0
+## How bright its eye plasma burns (1 = calm in a fight).
+var eye_energy := 1.0
+var eye_glow: MeshInstance3D
 
 var _blend := Vector2.ZERO
 var _prev_v := Vector3.ZERO
@@ -109,6 +136,15 @@ var _patrol_t := 0.0
 var _muzzles: Array[Transform3D] = []
 var _tips: Array[Node3D] = []
 var _eye_bone := -1
+var _eye_mats: Array[ShaderMaterial] = []
+var _flick := Vector2.ZERO
+var _flick_t := 0.0
+var _flutter_t := 1.5
+var _flick_up := false
+var _flinch_t := 0.0
+var _dodge_side := 0.0
+var _dodge_t := 0.0
+var _eye_flash := 0.0
 
 static var _section_res: BreakSectionSet
 static var _merged := {}
@@ -202,6 +238,7 @@ func _build_model() -> void:
 	for a in [&"Hover", &"Fly_Forward", &"Steer_Left", &"Steer_Right", &"Brake"]:
 		_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_merge_body()
+	_make_eye()
 	_make_tree()
 	flex = SentinelFlex.new()
 	flex.name = "Flex"
@@ -265,6 +302,49 @@ func _merge_body() -> void:
 		if s.mesh:
 			_section_meshes[s] = s.mesh
 			s.mesh = null
+
+
+## The eye (owner asked to make the plasma ball better, more yellow plasma
+## gas): the merged body's ball and gas surfaces get the plasma shaders
+## (this sentinel's own copies: their brightness follows its mood), and a
+## glow round the ball, inside the glass, on the eye's plasma bone.
+func _make_eye() -> void:
+	_eye_mats.clear()
+	for k in _whole_mesh.get_surface_count():
+		var m := _whole_mesh.surface_get_material(k)
+		var shader: Shader = null
+		if m and m.resource_name == "Yellow_Plasma_Gas":
+			shader = GAS_SHADER
+		elif m and m.resource_name == "Tiny_Yellow_Energy_Core":
+			shader = CORE_SHADER
+		if shader:
+			var sm := ShaderMaterial.new()
+			sm.shader = shader
+			sm.render_priority = -1  # inside the glass: drawn before it
+			_whole.set_surface_override_material(k, sm)
+			_eye_mats.append(sm)
+	var bone := _skeleton.find_bone(&"Eye_Plasma")
+	if bone < 0:
+		return
+	var at := BoneAttachment3D.new()
+	at.name = "EyeCore"
+	_skeleton.add_child(at)
+	at.bone_idx = bone
+	eye_glow = MeshInstance3D.new()
+	eye_glow.name = "EyeGlow"
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE
+	eye_glow.mesh = q
+	var gm := ShaderMaterial.new()
+	gm.shader = GLOW_SHADER
+	gm.set_shader_parameter("size", 0.42 * model_scale)
+	eye_glow.material_override = gm
+	eye_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	eye_glow.custom_aabb = AABB(Vector3.ONE * -0.4, Vector3.ONE * 0.8)
+	at.add_child(eye_glow)
+	eye_glow.position = _skeleton.get_bone_global_rest(bone).affine_inverse() * EYE_CORE
+	_eye_mats.append(gm)
+	eye_energy = 1.0
 
 
 ## Every part mesh under `skel` merged per material and vertex layout
@@ -440,6 +520,7 @@ func _behave(delta: float) -> void:
 	_feed_motion(delta)
 	if target and engaged:
 		_update_fire(delta, global_position.distance_to(target.global_position))
+	_express(delta)
 
 
 ## Periodic decisions: its target, line of sight, spacing, floor / ceiling,
@@ -594,6 +675,84 @@ func _feed_motion(delta: float) -> void:
 		trail.throttle = clampf(0.35 + v.length() / evade_speed, 0.0, 1.0)
 
 
+# --- Expressions ---
+
+## Its face: where the red wing covers and back plates go (SentinelFlex)
+## and how bright the eye burns, from what it's doing.
+##   - Every few seconds the covers flick right up or right down (mostly
+##     taking turns), uncovering the yellow back plates, and hold a moment:
+##     lazily on patrol, often and sharply in a fight; now and then one up
+##     and one down.
+##   - Flight: they tip up as it dives or speeds along, down as it climbs,
+##     and lean with the bank.
+##   - Startled: flared right out, the eye flaring and flickering.
+##   - Winding up a volley: they swing up (bristling), the back plates flare
+##     and the eye brightens; firing, each shot kicks that side's cover.
+##   - Dodging: the cover on the side it darts to snaps up, the other down.
+##   - Hit: both slam shut and shudder (a flinch), the eye flashes.
+func _express(delta: float) -> void:
+	if flex == null:
+		return
+	var fight := engaged and target != null
+	_flutter_t -= delta
+	_flick_t -= delta
+	if _flick_t <= 0.0:
+		_flick = Vector2.ZERO
+	if _flutter_t <= 0.0:
+		var r := fight_flutter_time if fight else flutter_time
+		_flutter_t = randf_range(r.x, r.y)
+		_flick_t = randf_range(0.45, 0.9) if fight else randf_range(0.8, 1.4)
+		if randf() < 0.8:
+			_flick_up = not _flick_up
+		var v := -1.0 if _flick_up else 1.0
+		_flick = Vector2(v, v)
+		if randf() < (0.3 if fight else 0.15):
+			_flick.y = -v
+		flicks += 1
+	var cover := _flick
+	var plate := Vector2.ZERO
+	var energy := 1.0 if fight else 0.85
+	expression = &"flick" if _flick != Vector2.ZERO else &"calm"
+	var speed := clampf(linear_velocity.length() / cruise_speed, 0.0, 1.5)
+	var tilt := clampf(-flex.accel.y * 0.05, -0.35, 0.35) - 0.2 * speed
+	cover += Vector2(tilt + _roll * 0.5, tilt - _roll * 0.5)
+	if startle_left > 0.0:
+		cover = Vector2(0.6, 0.6)
+		energy = 1.8 + randf() * 0.7
+		expression = &"startled"
+	elif fight and _burst_left > 0:
+		cover = Vector2(-1.0, -1.0)
+		plate = Vector2.ONE * 0.6
+		energy = 1.9
+		expression = &"firing"
+	elif fight and _los and _cool_t < windup_time:
+		var w := 1.0 - clampf(_cool_t / windup_time, 0.0, 1.0)
+		cover = cover.lerp(Vector2(-1.0, -1.0), w)
+		plate = Vector2.ONE * 0.6 * w
+		energy += 0.9 * w
+		expression = &"windup"
+	if _dodge_t > 0.0:
+		_dodge_t -= delta
+		cover = Vector2(_dodge_side, -_dodge_side)
+		plate = Vector2.ONE * 0.4
+		expression = &"dodge"
+	if _flinch_t > 0.0:
+		_flinch_t -= delta
+		cover = Vector2.ZERO
+		plate = Vector2(-0.4, -0.4)
+		expression = &"flinch"
+	flex.cover = cover
+	flex.plate = plate
+	_eye_flash = move_toward(_eye_flash, 0.0, delta * 3.0)
+	_set_eye(energy + _eye_flash, delta)
+
+
+func _set_eye(energy: float, delta: float) -> void:
+	eye_energy = move_toward(eye_energy, energy, delta * 6.0)
+	for m in _eye_mats:
+		m.set_shader_parameter(&"energy", eye_energy)
+
+
 # --- Startled ---
 
 func _startle() -> void:
@@ -675,6 +834,8 @@ func _start_dash(dir: Vector3) -> void:
 	_evade_cd = randf_range(evade_cooldown.x, evade_cooldown.y)
 	var side := -_visual.global_basis.x
 	_roll_kick = -signf(dir.dot(side)) * deg_to_rad(55.0)
+	_dodge_side = signf(dir.dot(side))
+	_dodge_t = evade_time + 0.25
 	dashes += 1
 
 
@@ -684,6 +845,8 @@ func net_event(kind: StringName, args: Array) -> void:
 			_dash_t = evade_time
 			_dash_v = (args[0] as Vector3) * evade_speed
 			_roll_kick = deg_to_rad(55.0) * (1.0 if randf() < 0.5 else -1.0)
+			_dodge_side = signf(-_roll_kick)
+			_dodge_t = evade_time + 0.25
 		return
 	super.net_event(kind, args)
 
@@ -738,6 +901,8 @@ func _fire_one() -> void:
 	_next_cannon = 1 - _next_cannon
 	if arms:
 		arms.recoil(i)
+	if flex:
+		flex.kick_cover(i, 7.0)
 	var muzzle := muzzle_position(i)
 	var aim := _aim_point()
 	if target is CharacterBody3D:
@@ -764,7 +929,15 @@ func _fire_one() -> void:
 func apply_damage(info: DamageInfo) -> void:
 	var was := alive
 	super.apply_damage(info)
-	if not was or not alive or net_puppet or is_frozen():
+	if not was or not alive or is_frozen():
+		return
+	# Flinch: the covers slam shut and shudder, the eye flashes.
+	_flinch_t = 0.3
+	_eye_flash = 1.3
+	if flex:
+		flex.kick_cover(0, randf_range(-9.0, 9.0))
+		flex.kick_cover(1, randf_range(-9.0, 9.0))
+	if net_puppet:
 		return
 	if startle_left > 0.0:
 		_finish_startle()  # shot while startled: straight into the fight
@@ -793,6 +966,11 @@ func frost_freeze(seconds: float) -> void:
 	_dash_t = 0.0
 	if arms:
 		arms.frozen = true
+	if flex:
+		flex.hold = true
+	if eye_glow:
+		eye_glow.visible = false
+	_set_eye(0.3, 1.0)
 	if trail:
 		trail.emitting = false
 
@@ -805,6 +983,10 @@ func on_thawed() -> void:
 		gravity_scale = 0.0
 		if arms:
 			arms.frozen = false
+		if flex:
+			flex.hold = false
+		if eye_glow:
+			eye_glow.visible = true
 		if trail:
 			trail.emitting = true
 
@@ -817,6 +999,9 @@ func die(info: DamageInfo) -> void:
 	Net.world_event(self, &"die", [info.to_net() if info else []])
 	var shattering := _shattering
 	_use_section_meshes()
+	if eye_glow:
+		eye_glow.visible = false
+	_eye_mats.clear()
 	target = null
 	_burst_left = 0
 	alive = false

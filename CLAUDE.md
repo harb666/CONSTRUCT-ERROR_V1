@@ -267,9 +267,22 @@
 - Neon Sentinel (owner's model, owner asked; `RobotSentinel`, a
   `RobotEnemy`, `robot_sentinel.tscn`; model `assets/enemies/sentinel/`
   built from the untouched upload in `source/` by `tools/build_sentinel.py`:
-  161k -> 64k triangles, neon glow 3.5 -> 1.3 (it rendered white), wing backs
-  in the model's graphite housing (their paint mapping was broken and the
-  lime panel had a saw-tooth edge), 1024 textures). Flying: hovers 2.6-5 m
+  161k -> 64k triangles, neon glow 3.5 -> 1.3 (it rendered white), wing back
+  plates neon yellow (owner asked; their paint mapping was broken and the
+  lime panel had a saw-tooth edge), the eye's energy ball moved from the
+  front of the glass to the middle of the eye behind the pupil and made
+  2.5x bigger, its gas 1.1x (owner asked), 1024 textures). Eye (owner
+  asked): swirling yellow plasma gas, a plasma ball and its glow inside the
+  glass (`sentinel_plasma_gas` / `_core` / `sentinel_eye_glow` shaders),
+  brighter as it gets worked up; on death the gas bursts out in yellow
+  clouds (`SentinelEyeBurst`). Expressions (owner asked: "often rotate
+  up/down the red wing plates exposing the back plate fully", tied to its
+  movement and expressions; `RobotSentinel._express`, springs in
+  `SentinelFlex`): the red covers flick fully up (55 deg) or down (75 deg)
+  every 2.2-4.2 s on patrol, 1.1-2.4 s in a fight; tip with its flight;
+  flared out when startled; up with the back plates flared and the eye
+  brighter before / during a volley (each shot kicks that side's cover);
+  split up / down on a dodge; slam shut and shudder when hit (eye flash). Flying: hovers 2.6-5 m
   up, circles its target 7-13 m out changing height / side, banks into
   turns, steers round walls; dodges often (player bolts coming its way 75%,
   after hits 55%, unprompted jukes every 1.4-3.2 s: banking side-dashes).
