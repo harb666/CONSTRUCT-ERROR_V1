@@ -11,7 +11,7 @@
 [ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
 [ext_resource type="Script" path="res://scripts/world/elevator_lift.gd" id="lift"]
 [ext_resource type="Script" path="res://scripts/world/level_flow.gd" id="flow"]
-[ext_resource type="AudioStream" path="res://assets/audio/music/main_menu_music.ogg" id="music1"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 [ext_resource type="NavigationMesh" path="res://levels/skyforge_arena/gameplay/navmesh.res" id="navmesh"]
 
 [sub_resource type="Environment" id="env"]

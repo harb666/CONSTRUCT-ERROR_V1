@@ -88,12 +88,15 @@
   `assets/audio/music/source/Level_1_music.mp3` (sha256
   59bc99ce1d6e076dbad43441bfb103fc37f2ee3ae544d5775010f9d5b01dba2e) - the
   owner's music, kept untouched; the game plays 112 kbps OGG copies
-  (`main_menu_music.ogg`, `level_1_music.ogg`; the 320 kbps originals would
-  add ~29 MB to the download). `Music`: menu music on the title (once
-  loaded) and character select, and (owner asked) it's also the in-game
-  music now: it carries straight on into the level at -10 dB (owner asked
-  for it louder, was -17; menu -9; still under the weapons) and on down the
-  lift. Level 1's track is kept, unused.
+  (the 320 kbps originals would add ~29 MB to the download).
+- `assets/audio/music/source/Construct_error_menu_music_2.mp3` (sha256
+  18ea48dadc8b2249c159aaa588b70f60cf52b8c949f4b8d9b86d807adba04405) - the
+  owner's new main menu music (owner asked: it replaces the first one, whose
+  original stays in `source/`, unused; its game copy was removed). The game
+  plays `main_menu_music_2.ogg` (112 kbps). `Music`: menu music on the title
+  (once loaded) and character select; Level 1's (`level_1_music.ogg`) as
+  players arrive in a level, at -12 dB (owner asked for it louder, was -17;
+  still under the weapons; menu -9), carrying on down the lift.
 
 ## Owner's current choices (don't undo without asking)
 - Skirmisher yellow barrel-end glow is off (`barrel_glows_enabled = false`);
@@ -145,8 +148,9 @@
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
 - Glitchy main menu (owner asked; ideas from the owner's `glitch-video`
-  repo, branch `glitch-music-video`): locked to the menu music's beat (140
-  BPM, first beat 0.28 s; own clock when the sound isn't moving), a 16-bar
+  repo, branch `glitch-music-video`): locked to the menu music's beat (133
+  BPM, first beat 0.428 s - measured from the new track; own clock when the
+  sound isn't moving), a 16-bar
   cycle of clean bars and bars where everything - the arena behind, panels,
   buttons, cards - merges into neon vector lines (edge pass in each
   source's hue, ragged blocky dissolve front with a glow, band shifts,

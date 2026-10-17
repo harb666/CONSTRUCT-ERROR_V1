@@ -4833,8 +4833,9 @@ func _optimisation_tests() -> void:
 
 
 func _music_tests() -> void:
-	_check(Music.MAIN_MENU is AudioStreamOggVorbis and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop,
-		"music: the owner's menu and level 1 tracks are in, looping")
+	_check(Music.MAIN_MENU is AudioStreamOggVorbis and (Music.MAIN_MENU as AudioStreamOggVorbis).loop and (Music.LEVEL_1 as AudioStreamOggVorbis).loop
+		and Music.MAIN_MENU.resource_path.ends_with("main_menu_music_2.ogg") and absf(Music.MAIN_MENU.get_length() - 253.3) < 1.0,
+		"music: the owner's new menu track (4:13) and level 1 track are in, looping")
 	if Music._player and is_instance_valid(Music._player):
 		Music._player.stop()  # (earlier tests' menus)
 	var main: Node = load("res://scenes/skyforge_arena.tscn").instantiate()
@@ -4852,13 +4853,12 @@ func _music_tests() -> void:
 	fe.press_start()
 	await _ticks(3)
 	_check(Music.current() == Music.MAIN_MENU, "music: it carries on into character select")
-	var plays := Music.plays
 	fe.press_deploy()
-	await _wall_wait(func() -> bool: return absf(Music._player.volume_db - Music.LEVEL_DB) < 0.5, 5.0)
-	_check(Music.current() == Music.MAIN_MENU and Music.plays == plays and Music._player.volume_db < Music.MENU_DB and Music._player.volume_db > -12.0,
-		"music: the main menu track carries straight on into the level (owner asked), louder than before, a little under the menu (%.1f dB)" % Music._player.volume_db)
+	await _wall_wait(func() -> bool: return Music.current() == Music.LEVEL_1 and absf(Music._player.volume_db - Music.LEVEL_DB) < 0.5, 5.0)
+	_check(Music.current() == Music.LEVEL_1 and Music._player.volume_db < Music.MENU_DB and Music._player.volume_db > -14.0,
+		"music: Level 1's music as the player lands, louder than before (owner asked; was -17), under the menu (%.1f dB)" % Music._player.volume_db)
 	var tw: Node = load("res://scenes/toxic_works.tscn").instantiate()
-	_check(tw.get(&"level_music") == Music.MAIN_MENU, "music: the Toxic Works plays the main menu track too")
+	_check(tw.get(&"level_music") == Music.LEVEL_1, "music: the Toxic Works plays Level 1's music too")
 	tw.free()
 	main.queue_free()
 	await _ticks(3)

@@ -2,7 +2,7 @@ class_name MenuGlitch
 extends Control
 ## The glitchy main menu (owner asked: "make the main menu go glitchy and
 ## turn into vector line wire meshes and frames"; ideas from the owner's
-## glitch-video repo). Locked to the menu music's beat (140 BPM, measured
+## glitch-video repo). Locked to the menu music's beat (133 BPM, measured
 ## from the track), it runs the video's merge schedule: a few clean bars,
 ## then bars where everything - the arena behind the menu, the panels,
 ## buttons and cards - slams into neon line art on the downbeat and
@@ -14,9 +14,10 @@ extends Control
 ## the menus stay readable through it.
 
 const SHADER := preload("res://scripts/ui/menu_glitch.gdshader")
-## The main menu track's beat (measured: 140.0 BPM, first beat 0.28 s in).
-const BPM := 140.0
-const FIRST_BEAT := 0.28
+## The main menu track's beat (measured: 133.0 BPM, first beat 0.428 s
+## in, steady from the end of its intro to the end).
+const BPM := 133.0
+const FIRST_BEAT := 0.428
 ## Bars in one cycle of the schedule.
 const CYCLE := 16
 

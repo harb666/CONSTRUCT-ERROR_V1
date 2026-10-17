@@ -6,14 +6,16 @@ extends RefCounted
 ## lift into the next part); asking for the track already playing keeps it
 ## going, another one cross-fades. Loops.
 
-const MAIN_MENU := preload("res://assets/audio/music/main_menu_music.ogg")
+## The owner's new main menu track (source/Construct_error_menu_music_2.mp3;
+## owner asked: it replaces the first one, kept in source/).
+const MAIN_MENU := preload("res://assets/audio/music/main_menu_music_2.ogg")
 const LEVEL_1 := preload("res://assets/audio/music/level_1_music.ogg")
 ## Title / character select.
 const MENU_DB := -9.0
 ## In game: louder than it was (owner asked; was -17) but still under the
-## guns and robots - the main menu track (the levels play it now, owner
-## asked) averages ~-22 dB here, the weapons -12 to -18.
-const LEVEL_DB := -10.0
+## guns and robots - Level 1's track averages ~-21 dB here, the weapons
+## -12 to -18.
+const LEVEL_DB := -12.0
 const SILENT_DB := -60.0
 
 static var _player: AudioStreamPlayer
