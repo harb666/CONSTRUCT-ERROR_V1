@@ -13,7 +13,9 @@ extends RobotEnemy
 ## antennae on top (SentinelFlex), banking into its turns. The first time it
 ## sees a player it's startled - Startled_See_Player: wings, arms and
 ## antennae flare out - before it attacks. Plasma trail from its booster
-## (PlasmaTrail).
+## (PlasmaTrail). Its arms aren't left straight out: SentinelArms bends
+## them at the shoulders and elbows to aim its cannons, with sway, lag and
+## recoil.
 ##
 ## Dies: the eye smashes and bursts (Death_Eye_Burst + SentinelEyeBurst: the
 ## glass flies out, a flash, a puff of smoke, electric discharge crackling
@@ -30,8 +32,10 @@ const GRUNT_MUZZLES := {"Left": Vector3(-0.035, 0.185, 0.016), "Right": Vector3(
 
 @export_group("Size")
 @export var model_scale := 1.3
-## The grunt cannons' size on its arms.
+## The grunt cannons' size on its arms, and how far back over the arm's
+## end they sit (m, model scale).
 @export var cannon_scale := 0.8
+@export var cannon_inset := 0.12
 
 @export_group("Flight")
 ## Height above the floor below it it keeps to (m), and how high over its
@@ -80,6 +84,7 @@ var startles := 0
 var dashes := 0
 var trail: PlasmaTrail
 var flex: SentinelFlex
+var arms: SentinelArms
 var tree: AnimationTree
 var cannons: Array[Node3D] = []
 
@@ -202,6 +207,10 @@ func _build_model() -> void:
 	flex.name = "Flex"
 	_skeleton.add_child(flex)
 	flex.setup(_skeleton)
+	arms = SentinelArms.new()
+	arms.name = "Arms"
+	_skeleton.add_child(arms)
+	arms.setup(_skeleton)
 	_mount_cannons()
 	if hit_fx:
 		hit_fx.queue_free()
@@ -352,9 +361,12 @@ func _mount_cannons() -> void:
 		var key := "Left" if side == "L" else "Right"
 		var mount := Node3D.new()
 		mount.name = "GruntCannon_" + side
-		# The grunt's forearm runs along its bone's +Y: turned to point
-		# forward (+Z), set back a little so it sits on the arm's end.
-		mount.transform = Transform3D(Basis(Vector3.RIGHT, PI * 0.5).scaled(Vector3.ONE * cannon_scale), Vector3(0.0, -0.02, -0.12))
+		# Plugged into the end of the arm like the players' arm weapons: the
+		# grunt's forearm cannon (along its bone's +Y) carries straight on
+		# along the forearm (-X left, +X right), set back a little so it
+		# sits over the arm's end.
+		var s := 1.0 if side == "L" else -1.0
+		mount.transform = Transform3D(Basis(Vector3.BACK, PI * 0.5 * s).scaled(Vector3.ONE * cannon_scale), Vector3(cannon_inset * s, 0.0, 0.0))
 		tip.add_child(mount)
 		for m in g[key]["meshes"]:
 			var mi := MeshInstance3D.new()
@@ -568,6 +580,10 @@ func _feed_motion(delta: float) -> void:
 	if flex:
 		flex.accel = la
 		flex.bank = _roll
+	if arms:
+		arms.accel = la
+		arms.startled = startle_left > 0.0
+		arms.aim = _aim_point() if target and (engaged or startle_left > 0.0) else Vector3.INF
 	# Model faces +Z; its right is -X.
 	var want := Vector2(clampf(-lv.x / cruise_speed, -1.0, 1.0), clampf(lv.z / cruise_speed, -1.0, 1.0))
 	_blend = _blend.lerp(want, clampf(4.0 * delta, 0.0, 1.0))
@@ -645,8 +661,10 @@ func _dash(from_dir: Vector3) -> void:
 		dir = (-side * s + Vector3.UP * 0.3).normalized()
 		if not _clear_path(dir, evade_speed * evade_time + 1.0):
 			dir = Vector3.UP
-	if global_position.y + dir.y * 3.0 < _floor_y + hover_height.x * 0.7 and dir.y < 0.0:
+	# Never dodges down near the floor: it stays well above the players.
+	if dir.y < 0.0 and global_position.y + dir.y * evade_speed * evade_time * 0.7 < _floor_y + hover_height.x * 0.85:
 		dir.y = -dir.y
+		dir = dir.normalized()
 	_start_dash(dir)
 
 
@@ -718,6 +736,8 @@ func _fire_one() -> void:
 	Net.world_event(self, &"fire")
 	var i := _next_cannon
 	_next_cannon = 1 - _next_cannon
+	if arms:
+		arms.recoil(i)
 	var muzzle := muzzle_position(i)
 	var aim := _aim_point()
 	if target is CharacterBody3D:
@@ -771,6 +791,8 @@ func frost_freeze(seconds: float) -> void:
 		tree.active = false
 	gravity_scale = 1.0
 	_dash_t = 0.0
+	if arms:
+		arms.frozen = true
 	if trail:
 		trail.emitting = false
 
@@ -781,6 +803,8 @@ func on_thawed() -> void:
 		if tree:
 			tree.active = true
 		gravity_scale = 0.0
+		if arms:
+			arms.frozen = false
 		if trail:
 			trail.emitting = true
 
@@ -826,6 +850,7 @@ func die(info: DamageInfo) -> void:
 		_anim.speed_scale = 1.4
 		flex.dying = true
 		flex.die_t = 0.0
+		arms.dying = true
 		for n in ["Yellow_Plasma_Gas_Volume", "Tiny_Electric_Energy_Ball"]:
 			var mi := _skeleton.get_node_or_null(n) as MeshInstance3D
 			if mi:

@@ -272,11 +272,16 @@
   up, circles its target 7-13 m out changing height / side, banks into
   turns, steers round walls; dodges often (player bolts coming its way 75%,
   after hits 55%, unprompted jukes every 1.4-3.2 s: banking side-dashes).
-  Two of the grunts' own forearm cannons on its arm tips (grunt bolts and
+  Two of the grunts' own forearm cannons on its arm ends (grunt bolts and
   the owner's grunt cannon sound), one bolt each per volley every 3.2-4.8 s
   (less often than a grunt). Its own flight clips blended by its motion
   (AnimationTree), wings / antennae springing with its acceleration and
-  bank (`SentinelFlex`); first sight of a player: Startled_See_Player
+  bank (`SentinelFlex`); arms never in the clips' T-pose (owner asked):
+  `SentinelArms` bends them at the shoulders (ball) and elbows (hinge) -
+  upper arms out and down, forearms aiming the cannons at the player - with
+  springy sway, lag, a recoil kick per shot, limp dangling when it dies; the
+  grunt cannons plug into the forearms' ends along their axis like the
+  players' arm weapons (`cannon_inset`); first sight of a player: Startled_See_Player
   (wings, arms, antennae flare out) before it attacks. Halo-sentinel style
   plasma trail from its booster (`PlasmaTrail`: GPU ribbon, white-hot core,
   lime to magenta glow, flare, sparks). Death: eye smashes (Death_Eye_Burst

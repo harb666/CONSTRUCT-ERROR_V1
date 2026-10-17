@@ -4343,6 +4343,27 @@ func _sentinel_tests() -> void:
 		"sentinel: their muzzles at the ends of its arms, pointing forward")
 	_check(s.volley_cooldown.x > s.burst_cooldown.y and s.volley_cooldown.x > 2.5,
 		"sentinel: fires its two cannons less often than a grunt (a volley every %.1f-%.1f s; a grunt bursts every %.1f-%.1f s)" % [s.volley_cooldown.x, s.volley_cooldown.y, s.burst_cooldown.x, s.burst_cooldown.y])
+	# Arms (owner asked: not a T-pose, cannons on the ends like the
+	# players', elbows bent, alive).
+	var sk := s.get_skeleton()
+	var arm_ok := true
+	var fwd_v := s._visual.global_basis.z
+	for i in 2:
+		# (The shoulder's own position isn't moved by its pose; the arm tip
+		# follows the final, bent pose.)
+		var sh := (sk.global_transform * sk.get_bone_global_pose(sk.find_bone(&"Cannon_L" if i == 0 else &"Cannon_R"))).origin
+		var tip := s._tips[i].global_position
+		var reach := (tip - sh).normalized()
+		# Down and forward from the shoulder, not straight out sideways.
+		arm_ok = arm_ok and reach.y < -0.25 and reach.dot(fwd_v) > 0.2
+		# The cannon carries on along the forearm from its end.
+		var fore: Vector3 = (sk.global_basis * (s.arms.arm_dirs(i)[1] as Vector3)).normalized()
+		arm_ok = arm_ok and (s.muzzle_position(i) - tip).normalized().dot(fore) > 0.9
+	_check(arm_ok, "sentinel: arms bent at the shoulders and elbows (no T-pose), the grunt cannons on the ends of the forearms like the players'")
+	var before: Array = s.arms.arm_dirs(0).duplicate()
+	await _ticks(30)
+	var after: Array = s.arms.arm_dirs(0)
+	_check((before[0] as Vector3).distance_to(after[0]) > 0.001, "sentinel: its arms sway (alive)")
 	_check(s.trail != null and s.trail.point_count() >= 4 and s.trail.flare.visible, "sentinel: its booster streams a plasma trail (%d points) with a flare at the booster" % s.trail.point_count())
 	# First sight of a player: startled - wings, antennae and arms flare.
 	var rest_wing := s.get_skeleton().get_bone_pose_rotation(s.get_skeleton().find_bone(&"Wing_L"))
@@ -4371,6 +4392,10 @@ func _sentinel_tests() -> void:
 		var st: Vector4 = s.flex._s.get(s.get_skeleton().find_bone(&"Antenna_L"), Vector4.ZERO)
 		sway = maxf(sway, Vector2(st.x, st.y).length())
 	_check(dodged, "sentinel: it dodges a player's shot coming its way (banking side-dash)")
+	var f0: Vector3 = s.arms.arm_dirs(0)[1]
+	s.arms.recoil(0)
+	await _ticks(6)
+	_check((s.arms.arm_dirs(0)[1] as Vector3).y > f0.y + 0.05, "sentinel: a cannon's arm kicks back and up when it fires")
 	_check(rad_to_deg(sway) > 3.0, "sentinel: its antennae swing with the dash (%.0f deg) - wings / antennae move with its flight" % rad_to_deg(sway))
 	s.evade_chance = 0.75
 	var shots0 := s.shots_fired
