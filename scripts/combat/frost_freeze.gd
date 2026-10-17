@@ -327,8 +327,17 @@ static func crystal_material(is_heavy: bool) -> StandardMaterial3D:
 ## none if there's no floor below.
 func _make_floor_frost() -> void:
 	var from := robot.global_position + Vector3.UP * 0.5
-	var q0 := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 40.0, 1, [robot.get_rid()] if robot is CollisionObject3D else [])
-	var hit := robot.get_world_3d().direct_space_state.intersect_ray(q0)
+	var skip: Array[RID] = []
+	if robot is CollisionObject3D:
+		skip.append(robot.get_rid())
+	var hit := {}
+	for i in 4:  # (past any robot or player under it: the ground)
+		var q0 := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 40.0, 1, skip)
+		hit = robot.get_world_3d().direct_space_state.intersect_ray(q0)
+		if hit.is_empty() or not (hit.collider is CharacterBody3D or hit.collider is RigidBody3D):
+			break
+		skip.append(hit.rid)
+		hit = {}
 	if hit.is_empty():
 		return
 	_floor = MeshInstance3D.new()

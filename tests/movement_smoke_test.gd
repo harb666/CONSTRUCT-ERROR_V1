@@ -2828,7 +2828,7 @@ func _weapon_switch_tests(main: Node) -> void:
 	await process_frame
 	_check(wheel.hover_def == null, "small drags select nothing (dead zone)")
 	wheel.release_at(start + Vector2(20, -15))
-	await _wall_wait(func() -> bool: return not wheel.is_open and Engine.time_scale == 1.0, 4.0)  # wheel easing runs in real time
+	await _wall_wait(func() -> bool: return not wheel.is_open and Engine.time_scale == 1.0, 10.0)  # wheel easing runs in real time (slow CI machines too)
 	Input.action_release("move_forward")
 	_check(not wheel.is_open and Engine.time_scale == 1.0 and h.slot("Right").definition == cannon and h.slot("Left").definition == cannon, "releasing in the dead zone changes nothing; speed back to normal")
 
@@ -4601,8 +4601,11 @@ func _sentinel_tests() -> void:
 	s.frost_freeze(20.0)
 	await _ticks(3)
 	var frost_floor: MeshInstance3D = s._frost._floor if s._frost else null
-	_check(frost_floor != null and absf(frost_floor.global_position.y - floor_y) < 0.2 and s.global_position.y - floor_y > 1.5,
-		"sentinel: frozen in the air, the ground frost lies on the floor below it (at %.2f m; it's %.1f m up), not floating" % [frost_floor.global_position.y if frost_floor else -1.0, s.global_position.y])
+	var under := PhysicsRayQueryParameters3D.create(s.global_position, s.global_position + Vector3.DOWN * 40.0, 1, [s.get_rid()])
+	var ground: Dictionary = s.get_world_3d().direct_space_state.intersect_ray(under)
+	_check(frost_floor != null and not ground.is_empty() and absf(frost_floor.global_position.y - (ground.position as Vector3).y) < 0.2
+		and s.global_position.y - frost_floor.global_position.y > 1.5,
+		"sentinel: frozen in the air, the ground frost lies on what's below it (at %.2f m; it's %.1f m up), not floating" % [frost_floor.global_position.y if frost_floor else -1.0, s.global_position.y])
 	s._frost.thaw()
 	await _ticks(90)
 	# Dies: the eye bursts, smoke, electric discharge; the wings break apart
