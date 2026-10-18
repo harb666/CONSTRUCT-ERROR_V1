@@ -110,6 +110,7 @@ func open_front_end() -> void:
 	front_end = FrontEnd.new()
 	front_end.name = "FrontEnd"
 	front_end.orbit_camera = _menu_camera
+	front_end.current_scene_path = scene_file_path
 	var c := Vector3.ZERO
 	for sp: Node3D in spawn_points.get_children():
 		c += sp.global_position
@@ -121,6 +122,14 @@ func open_front_end() -> void:
 
 func _on_deployed(character: CharacterDefinition) -> void:
 	get_tree().paused = false
+	# Another level picked on the level select: load it, the player going
+	# straight in as the picked character (online: the host takes the room).
+	var level := front_end.level_path() if front_end else ""
+	if level != "" and level != scene_file_path:
+		Music.stop(0.8)
+		LevelTransfer.start_as(character)
+		Net.go_to_level(get_tree(), level)
+		return
 	# Menu music out, the level's in.
 	if level_music:
 		Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)

@@ -38,6 +38,14 @@ static func capture(player: PlayerController) -> void:
 			unlocked.append(d.id)
 
 
+## A level picked on the level select: the player starts there as
+## `character`, with nothing carried over (Net.go_to_level / go then load it).
+static func start_as(character: CharacterDefinition) -> void:
+	character_id = character.id if character else &""
+	weapons.clear()
+	unlocked.clear()
+
+
 ## Fade out, then load `scene_path` (the next part).
 static func go(tree: SceneTree, scene_path: String, player: PlayerController = null) -> void:
 	if player:

@@ -5694,7 +5694,7 @@ func _front_end_tests() -> void:
 	await process_frame
 	var ap := fe._preview_vp.find_child("AnimationPlayer", true, false) as AnimationPlayer if fe._preview_vp else null
 	_check(fe.selected == roster.characters[0] and ap != null and ap.is_playing() and ap.current_animation == "Idle 9", "front end: the Grinch is picked, 3D preview plays its idle")
-	_check(fe._buttons.has("char:grinch") and fe._buttons.has("deploy"), "front end: character card and DEPLOY button laid out")
+	_check(fe._buttons.has("char:grinch") and fe._buttons.has("next") and not fe._buttons.has("deploy"), "front end: character card and NEXT (on to the level select) laid out")
 	# The glitchy menu (owner asked): locked to the menu music's beat it
 	# merges in and out of vector lines; the text stays crisp on top.
 	var g: MenuGlitch = fe.glitch
@@ -5711,7 +5711,7 @@ func _front_end_tests() -> void:
 		"menu glitch: the squares sweep up / down the screen fast - in a fraction of a beat, then hold")
 	_check(g != null and g.get_index() == fe.get_child_count() - 1 or fe.get_children().filter(func(c: Node) -> bool: return c is CanvasItem).back() == g,
 		"menu glitch: drawn over the whole menu")
-	_check(not g.texts.is_empty() and HudStyle.defer_for == null and g.texts.any(func(t: Array) -> bool: return t[2] == "DEPLOY"),
+	_check(not g.texts.is_empty() and HudStyle.defer_for == null and g.texts.any(func(t: Array) -> bool: return t[2] == "NEXT"),
 		"menu glitch: the menu's text is drawn crisp on top of the lines (%d strings)" % g.texts.size())
 	var wires := fe._preview_vp.find_children("*_Wire", "MeshInstance3D", true, false)
 	var posed := wires.filter(func(w: Node) -> bool: return (w as MeshInstance3D).skin != null and (w as MeshInstance3D).get_node_or_null((w as MeshInstance3D).skeleton) is Skeleton3D)
@@ -5727,7 +5727,49 @@ func _front_end_tests() -> void:
 	await process_frame
 	await process_frame
 	_check(g.keep_rect.size.x > 0.05 and g.keep_rect.size.y > 0.2, "menu glitch: the line pass leaves the preview to its own wire dissolve")
-	# Tap DEPLOY.
+	# Tap NEXT: the level select (owner asked) - LEVEL 1, LEVEL 2 and the
+	# TEST AREA, each with a preview picture; the level behind the menu is
+	# picked to start with.
+	var nxt: Rect2 = fe._buttons["next"]
+	for pressed in [true, false]:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 7
+		ev.pressed = pressed
+		ev.position = xf * nxt.get_center()
+		Input.parse_input_event(ev)
+		await process_frame
+		await process_frame
+	await process_frame
+	_check(fe.screen == FrontEnd.Screen.LEVEL and main.players.is_empty() and paused, "level select: NEXT opens the level select (no player yet)")
+	_check(fe._buttons.has("level:level1") and fe._buttons.has("level:level2") and fe._buttons.has("level:test") and fe._buttons.has("deploy") and fe._buttons.has("back"),
+		"level select: cards for LEVEL 1, LEVEL 2 and the TEST AREA, BACK and DEPLOY laid out")
+	_check(FrontEnd.LEVELS.all(func(l: Dictionary) -> bool: return ResourceLoader.exists(l["scene"]) and load(l["image"]) is Texture2D and (load(l["image"]) as Texture2D).get_width() >= 640)
+		and fe._level_images.size() == 3 and fe._level_images.values().all(func(t: Variant) -> bool: return t is Texture2D),
+		"level select: each level has its scene and a preview picture, drawn on its card")
+	_check(fe.level_id == "test" and fe.level_path() == main.scene_file_path, "level select: the level behind the menu (the test area) is picked to start with")
+	var lvl_texts: Array = g.texts.map(func(t: Array) -> String: return t[2])
+	_check(["LEVEL SELECT", "LEVEL 1", "LEVEL 2", "TEST AREA", "SKYFORGE ARENA", "TOXIC WORKS", "BATTLE ARENA", "DEPLOY", "BACK"].all(func(w: String) -> bool: return w in lvl_texts),
+		"level select: all its text is drawn crisp over the glitch (%d strings)" % lvl_texts.size())
+	# Readable through the glitch: with the screen all lines, every string
+	# gets a dark outline.
+	g.wire = 1.0
+	g.glitch = 0.6
+	g.set_process(false)
+	fe.queue_redraw()
+	await process_frame
+	var outlined := g.wire > 0.0 and g.active and not g.texts.is_empty()  # (MenuGlitch._draw: outline >= 5 then)
+	g.set_process(true)
+	_check(outlined and g.active, "level select: over the lines every string is outlined (stays readable)")
+	fe._activate("level:level2")
+	_check(fe.level_id == "level2" and fe.level_path() == "res://scenes/toxic_works.tscn", "level select: tapping a card picks that level")
+	fe._activate("back")
+	_check(fe.screen == FrontEnd.Screen.SELECT, "level select: BACK returns to the character select")
+	fe._activate("next")
+	fe._activate("level:test")
+	_check(fe.screen == FrontEnd.Screen.LEVEL and fe.level_id == "test", "level select: and NEXT comes back to it")
+	await process_frame
+	await process_frame
+	# Tap DEPLOY (the test area: the level behind the menu).
 	var dep: Rect2 = fe._buttons["deploy"]
 	for pressed in [true, false]:
 		var ev := InputEventScreenTouch.new()
@@ -5738,7 +5780,13 @@ func _front_end_tests() -> void:
 		await process_frame
 		await process_frame
 	var p: PlayerController = main.players.get(1)
-	_check(p != null and p.character == roster.characters[0] and not paused, "front end: DEPLOY spawns the Grinch and starts the match")
+	_check(p != null and p.character == roster.characters[0] and not paused and not LevelTransfer.pending, "front end: DEPLOY spawns the Grinch and starts the match (in the level behind the menu)")
+	# Another level picked: it loads with the picked character, nothing
+	# carried over.
+	LevelTransfer.weapons = {"Right": &"shotgun"}
+	LevelTransfer.start_as(roster.characters[1])
+	_check(LevelTransfer.character_id == &"harbinger" and LevelTransfer.weapons.is_empty() and LevelTransfer.unlocked.is_empty(),
+		"level select: another level starts with the picked character (nothing carried over)")
 	_check(p != null and main.get_viewport().get_camera_3d() != null and main.get_viewport().get_camera_3d().get_parent().get_parent() is CameraRig, "front end: the player's camera takes over")
 	await _wall_wait(func() -> bool: return not is_instance_valid(fe), 3.0)
 	_check(not is_instance_valid(fe) and main.get_node_or_null("FrontEndLayer") == null, "front end: fades out and is removed")

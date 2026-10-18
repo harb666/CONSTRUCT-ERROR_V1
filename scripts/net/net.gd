@@ -980,7 +980,14 @@ func _world(state: Dictionary) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _go_level(scene_path: String) -> void:
-	LevelTransfer.go(get_tree(), scene_path, local_player(get_tree()))
+	var me := local_player(get_tree())
+	if me == null:
+		# Still on the menus (the host picked a level on the level select):
+		# load it and open the character select there.
+		rejoin_select = true
+		LevelTransfer.swap(get_tree(), scene_path)
+		return
+	LevelTransfer.go(get_tree(), scene_path, me)
 
 
 ## Robots here follow the host (joined) or think for themselves.

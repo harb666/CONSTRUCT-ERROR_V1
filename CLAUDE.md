@@ -162,6 +162,21 @@
   4-player co-op squad shown with open slots until online play exists) ->
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
+- Level select (owner asked: after character select, levels 1 and 2 and
+  the test area, with preview pictures, text readable through the glitch):
+  character select's button is NEXT (a joined co-op phone keeps DEPLOY -
+  the host picks the level) -> LEVEL SELECT: LEVEL 1 Skyforge Arena,
+  LEVEL 2 Toxic Works, TEST AREA battle arena (`FrontEnd.LEVELS`), each a
+  card with a preview picture (`assets/ui/levels/`, rendered from the game
+  by `tools/render_level_previews.gd`), BACK and DEPLOY. Starts on the level
+  behind the menu (the test area); picking another fades out and loads it
+  with the picked character (`LevelTransfer.start_as`, `Net.go_to_level`:
+  a hosting phone takes the room; joined phones still on the menus get the
+  character select there). Level 2 starts on the lift, as from Skyforge;
+  menu music fades out, then the level's own (Level 2 has none of its own:
+  its music carries on from Level 1 down the lift). All its text goes
+  through `HudStyle.text`, so `MenuGlitch` draws it crisp and outlined over
+  the lines.
 - Glitchy main menu (owner asked; ideas from the owner's `glitch-video`
   repo, branch `glitch-music-video`): locked to the menu music's beat (133
   BPM, first beat 0.428 s - measured from the new track; own clock when the

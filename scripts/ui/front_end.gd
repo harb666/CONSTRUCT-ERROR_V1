@@ -11,7 +11,13 @@ extends Control
 ##    Online co-op (Net): HOST opens a room with a 4-digit code; on the other
 ##    phone JOIN and type the code on the number pad (or open the game with
 ##    ?join=<code>). The squad rows fill with whoever is in. DEPLOY starts
-##    (players can drop in while the host plays).
+##    (players can drop in while the host plays). NEXT (DEPLOY on a joined
+##    phone: the host picks the level) goes on to
+## 3. Level select (owner asked): LEVEL 1 (Skyforge Arena), LEVEL 2 (Toxic
+##    Works) and the TEST AREA (battle arena), each with a preview picture
+##    (tools/render_level_previews.gd). DEPLOY: in the level behind the menu
+##    the match starts there; another one loads (LevelTransfer) with the
+##    picked character.
 ## Drawn in the owner's cyan HUD style (HudStyle). Emits `deployed`, then
 ## fades out and frees itself. On the music's beat it goes glitchy and
 ## merges in and out of neon vector lines and wire meshes (MenuGlitch; owner
@@ -20,7 +26,18 @@ extends Control
 signal started
 signal deployed(character: CharacterDefinition)
 
-enum Screen { TITLE, SELECT, OUT }
+enum Screen { TITLE, SELECT, LEVEL, OUT }
+
+## The level select's levels: id, its title and name, a line about it, its
+## scene and its preview picture (tools/render_level_previews.gd).
+const LEVELS := [
+	{"id": "level1", "title": "LEVEL 1", "name": "SKYFORGE ARENA", "info": "7 ROUNDS  //  RIDE THE LIFT DOWN",
+		"scene": "res://scenes/skyforge_arena.tscn", "image": "res://assets/ui/levels/skyforge.png"},
+	{"id": "level2", "title": "LEVEL 2", "name": "TOXIC WORKS", "info": "3 WAVES  //  SLIME, CRUSHER, LASER GATES",
+		"scene": "res://scenes/toxic_works.tscn", "image": "res://assets/ui/levels/works.png"},
+	{"id": "test", "title": "TEST AREA", "name": "BATTLE ARENA", "info": "EVERY WEAPON  //  ONE OF EACH ENEMY",
+		"scene": "res://scenes/battle_arena.tscn", "image": "res://assets/ui/levels/battle.png"},
+]
 
 ## The ring gauge shows LOADING until this many smooth frames in a row (the
 ## phone has finished preparing the arena's graphics) or `max_loading_time`
@@ -32,6 +49,18 @@ enum Screen { TITLE, SELECT, OUT }
 var screen := Screen.TITLE
 var roster: CharacterRoster
 var selected: CharacterDefinition
+## The level behind the menu (main.gd sets it) and the picked one (its id
+## in LEVELS; "" = stay in this one). Starts on the level behind the menu.
+var current_scene_path := "":
+	set(v):
+		current_scene_path = v
+		level_id = ""
+		for l in LEVELS:
+			if l["scene"] == v:
+				level_id = l["id"]
+var level_id := ""
+var _level_images := {}
+var _was_level := false
 ## Slowly circles the arena behind the menus (optional).
 var orbit_camera: Camera3D
 var orbit_center := Vector3.ZERO
@@ -193,7 +222,16 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	elif event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
-		_activate("start" if screen == Screen.TITLE else "deploy")
+		if screen == Screen.TITLE:
+			_activate("start")
+		elif screen == Screen.SELECT and picks_level():
+			_activate("next")
+		else:
+			_activate("deploy")
+		get_viewport().set_input_as_handled()
+		return
+	elif event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE and screen == Screen.LEVEL:
+		_activate("back")
 		get_viewport().set_input_as_handled()
 		return
 	else:
@@ -231,6 +269,19 @@ func _activate(id: String) -> void:
 		_auto_net()
 	elif id.begins_with("pad:") and pad_open:
 		_pad_key(id.substr(4))
+	elif id == "next" and screen == Screen.SELECT and selected:
+		screen = Screen.LEVEL
+		_screen_t = 0.0
+	elif id == "back" and screen == Screen.LEVEL:
+		screen = Screen.SELECT
+		_screen_t = 0.0
+	elif id.begins_with("level:") and screen == Screen.LEVEL:
+		level_id = id.substr(6)
+	elif id == "deploy" and screen == Screen.LEVEL and selected:
+		_was_level = true
+		screen = Screen.OUT
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		deployed.emit(selected)
 	elif screen != Screen.SELECT:
 		return
 	elif id == "host" and Net.instance and not Net.is_online():
@@ -304,13 +355,36 @@ func _pad_key(k: String) -> void:
 		pad_code += k
 
 
+## This phone picks the level (offline or hosting; a joined phone plays
+## the host's).
+func picks_level() -> bool:
+	return not Net.is_client()
+
+
+## The picked level's scene ("" = the one behind the menu).
+func level_path() -> String:
+	for l in LEVELS:
+		if l["id"] == level_id:
+			return l["scene"]
+	return ""
+
+
 ## Test / desktop helpers.
 func press_start() -> void:
 	_activate("start")
 
 
+## Deploys straight away (from character select: in the picked level).
 func press_deploy() -> void:
 	_activate("deploy")
+
+
+func press_next() -> void:
+	_activate("next")
+
+
+func press_level(id: String) -> void:
+	_activate("level:" + id)
 
 
 func press_character(id: StringName) -> void:
@@ -527,6 +601,8 @@ func _draw() -> void:
 	# (Backdrop and title emblem: the layers underneath, see _process.)
 	if screen == Screen.TITLE:
 		_draw_title(a)
+	elif screen == Screen.LEVEL or (screen == Screen.OUT and _was_level):
+		_draw_levels(a)
 	else:
 		_draw_select(a)
 	if NetBadge.show_log():
@@ -682,12 +758,16 @@ func _draw_select(a: float) -> void:
 			HudStyle.text(self, lf, Vector2(rr.end.x - 16, ty), "IN GAME" if mate.get("deployed", false) else "JOINED", 19, Color(HudStyle.CYAN, a), 1.0)
 		else:
 			HudStyle.text(self, lf, Vector2(chip.end.x + 14, ty), "OPEN SLOT", 20, Color(HudStyle.TEXT, 0.4 * a))
-	# Deploy.
+	# Next (on to the level select) / deploy (a joined phone: the host's
+	# level).
 	var pulse := 0.5 + 0.5 * sin(_t * 4.0)
+	var next := picks_level()
 	HudStyle.panel(self, deploy, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.5), 0.3 + pulse * 0.3), 16.0, a)
 	HudStyle.brackets(self, deploy, Color(HudStyle.CYAN, a), 16.0, 5.0 + pulse * 3.0)
-	HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 12), "DEPLOY", 32, Color(HudStyle.TEXT, a), 0.5, 3)
-	_buttons["deploy"] = deploy
+	HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 12), "NEXT" if next else "DEPLOY", 32, Color(HudStyle.TEXT, a), 0.5, 3)
+	if next:
+		HudStyle.text(self, lf, Vector2(deploy.get_center().x, deploy.position.y - 10), "LEVEL SELECT", 18, Color(HudStyle.CYAN, a), 0.5, 2)
+	_buttons["next" if next else "deploy"] = deploy
 	if pad_open:
 		_draw_pad(a)
 
@@ -730,3 +810,94 @@ func _draw_pad(a: float) -> void:
 	HudStyle.panel(self, cr, HudStyle.CYAN_DIM, HudStyle.FILL, 8.0, a)
 	HudStyle.text(self, lf, cr.get_center() + Vector2(0, 7), "CANCEL", 20, Color(HudStyle.TEXT, a), 0.5)
 	_buttons["pad:cancel"] = cr
+
+
+## Level select: a card per level (preview picture, title, name, a line
+## about it), BACK and DEPLOY. All its text goes through HudStyle.text, so
+## the glitch draws it crisp (outlined) over the lines.
+func _draw_levels(a: float) -> void:
+	var tf := HudStyle.title_font()
+	var lf := HudStyle.label_font()
+	var m := _margin()
+	var slide := 1.0 - pow(1.0 - clampf(_screen_t / 0.3, 0.0, 1.0), 3.0)
+	var off := Vector2(0, (1.0 - slide) * 24.0)
+	a *= slide
+	# Header.
+	var head := Rect2(Vector2(m, 16) - off, Vector2(size.x - 2.0 * m, 52))
+	HudStyle.panel(self, head, HudStyle.CYAN, HudStyle.FILL, 14.0, a)
+	HudStyle.text(self, tf, head.position + Vector2(20, 36), "LEVEL SELECT", HudStyle.fit(tf, "LEVEL SELECT", head.size.x * 0.5, 28), Color(HudStyle.TEXT, a), 0.0, 2)
+	var who := selected.display_name if selected else "-"
+	if selected and selected.portrait:
+		var ps := 40.0
+		draw_texture_rect(selected.portrait, Rect2(Vector2(head.end.x - 16 - ps, head.position.y + 6), Vector2(ps, ps)), false, Color(1, 1, 1, a))
+	HudStyle.text(self, lf, Vector2(head.end.x - 70, head.position.y + 34), "AGENT  " + who, 22, Color(HudStyle.CYAN, a), 1.0, 2)
+	# Buttons along the bottom.
+	var bottom := size.y - 24.0
+	var deploy := Rect2(Vector2(size.x - m - 280, bottom - 62) + off, Vector2(280, 62))
+	var back := Rect2(Vector2(m, bottom - 52) + off, Vector2(180, 52))
+	# Cards: as wide as fits three across, short enough to leave the buttons.
+	var gap := 22.0
+	var top := head.end.y + 26.0
+	var text_h := 112.0
+	var cw := (size.x - 2.0 * m - gap * 2.0) / 3.0
+	cw = minf(cw, (deploy.position.y - 24.0 - top - text_h) * 16.0 / 9.0)
+	var ih := cw * 9.0 / 16.0
+	var x0 := (size.x - (cw * 3.0 + gap * 2.0)) * 0.5
+	for i in LEVELS.size():
+		var l: Dictionary = LEVELS[i]
+		var cr := Rect2(Vector2(x0 + i * (cw + gap), top) + off, Vector2(cw, ih + text_h))
+		_draw_level_card(l, cr, ih, l["id"] == level_id, a)
+		_buttons["level:" + String(l["id"])] = cr
+	# BACK / DEPLOY.
+	HudStyle.panel(self, back, HudStyle.CYAN_DIM, HudStyle.FILL, 12.0, a)
+	HudStyle.text(self, lf, back.get_center() + Vector2(0, 8), "BACK", 24, Color(HudStyle.TEXT, a), 0.5, 2)
+	_buttons["back"] = back
+	var pulse := 0.5 + 0.5 * sin(_t * 4.0)
+	HudStyle.panel(self, deploy, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.5), 0.3 + pulse * 0.3), 16.0, a)
+	HudStyle.brackets(self, deploy, Color(HudStyle.CYAN, a), 16.0, 5.0 + pulse * 3.0)
+	HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 12), "DEPLOY", 32, Color(HudStyle.TEXT, a), 0.5, 3)
+	_buttons["deploy"] = deploy
+	var picked := ""
+	for l in LEVELS:
+		if l["id"] == level_id:
+			picked = "%s  -  %s" % [l["title"], l["name"]]
+	if picked != "":
+		HudStyle.text(self, lf, Vector2(deploy.position.x - 24, deploy.get_center().y + 8), picked,
+			HudStyle.fit(lf, picked, deploy.position.x - back.end.x - 48.0, 22), Color(HudStyle.TEXT, a), 1.0, 2)
+
+
+func _draw_level_card(l: Dictionary, cr: Rect2, ih: float, sel: bool, a: float) -> void:
+	var tf := HudStyle.title_font()
+	var lf := HudStyle.label_font()
+	var col := HudStyle.CYAN if sel else HudStyle.CYAN_DIM
+	HudStyle.panel(self, cr, col, HudStyle.FILL_DARK if not sel else HudStyle.FILL, 14.0, a)
+	# Preview picture (dimmed unless picked), with scan lines.
+	var ir := Rect2(cr.position + Vector2(8, 8), Vector2(cr.size.x - 16, ih - 16))
+	var path: String = l["image"]
+	if not _level_images.has(path):
+		_level_images[path] = load(path) if ResourceLoader.exists(path) else null
+	var tex: Texture2D = _level_images[path]
+	var dim := 1.0 if sel else 0.5
+	if tex:
+		draw_texture_rect(tex, ir, false, Color(dim, dim, dim, a))
+	else:
+		draw_rect(ir, Color(HudStyle.BG, a))
+	var y := ir.position.y + 3.0
+	while y < ir.end.y:
+		draw_line(Vector2(ir.position.x, y), Vector2(ir.end.x, y), Color(HudStyle.CYAN, 0.06 * a), 1.0)
+		y += 5.0
+	draw_rect(ir, Color(col, a), false, 1.5)
+	# Title plate, name, line about it.
+	var tx := cr.position.x + 18.0
+	var tw := cr.size.x - 36.0
+	var ty := ir.end.y + 40.0
+	var title: String = l["title"]
+	HudStyle.text(self, tf, Vector2(tx, ty), title, HudStyle.fit(tf, title, tw * 0.75, 30), Color(HudStyle.TEXT if sel else Color(HudStyle.TEXT, 0.75), a), 0.0, 3)
+	HudStyle.stripes(self, Vector2(cr.end.x - 52.0, ty - 6.0), 5, Color(HudStyle.CYAN, (0.9 if sel else 0.4) * a))
+	var lname: String = l["name"]
+	HudStyle.text(self, lf, Vector2(tx, ty + 28.0), lname, HudStyle.fit(lf, lname, tw, 23), Color(HudStyle.CYAN if sel else Color(HudStyle.CYAN, 0.7), a), 0.0, 2)
+	var info: String = l["info"]
+	HudStyle.text(self, lf, Vector2(tx, ty + 52.0), info, HudStyle.fit(lf, info, tw, 17), Color(HudStyle.TEXT, (0.85 if sel else 0.55) * a), 0.0, 2)
+	if sel:
+		var gap := 6.0 + 2.5 * sin(_t * 5.0)
+		HudStyle.brackets(self, cr.grow(4.0), Color(HudStyle.CYAN, a), 20.0, gap, 3.0)
