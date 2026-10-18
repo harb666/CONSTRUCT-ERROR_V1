@@ -37,7 +37,7 @@ const SENTINEL := 2
 ## Neon Sentinels per wave (same order as `waves`; missing = none): they
 ## fly in from outside through the windows (`window_entries`), first in
 ## their wave (owner asked: the Toxic Works hall's last wave).
-@export var wave_sentinels: PackedInt32Array = []
+@export var wave_sentinels: Array[int] = []
 ## Marker3Ds outside the windows, -Z pointing into the level: a sentinel
 ## starts at one and flies `entry_depth` m in through the window.
 @export var window_entries_path: NodePath = ^"../WindowEntries"

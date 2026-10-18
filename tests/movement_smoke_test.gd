@@ -6284,7 +6284,7 @@ func _works_catwalks_and_sentinels(main: Node, tw: ToxicWorks, p: PlayerControll
 	_check(tries == 6 and clear == tries, "works: the player's shots reach both catwalk grunts from the hall floor (%d / %d lines clear)" % [clear, tries])
 	# The last wave: two sentinels first, flying in through the windows.
 	var d := tw.director
-	_check(d != null and d.wave_sentinels == PackedInt32Array([0, 0, 2]) and main.get_node(^"WindowEntries").get_child_count() == 5,
+	_check(d != null and d.wave_sentinels == [0, 0, 2] and main.get_node(^"WindowEntries").get_child_count() == 5,
 		"works: the hall's last wave has two Neon Sentinels, coming in through its windows")
 	var was := [d.state, d.wave]
 	d._start_wave(3)
