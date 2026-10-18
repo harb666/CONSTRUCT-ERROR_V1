@@ -3756,6 +3756,54 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 			else:
 				start = Vector3.INF
 	_check(worst_slide < 0.06 * sc, "boss: planted feet don't slide while walking (%.3f m)" % worst_slide)
+	# Backing up (walk clip played backwards): one stomp per footfall, not a
+	# stomp every frame (that was a loud "DDDDDD" buzz).
+	var back_from := boss.global_position
+	p.global_position = boss.global_position + fwd * 8.0 + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
+	var back := {"frames": 0, "stomps": 0, "most": 0}
+	var back_h := [[], []]
+	var back_stomp_frames := []
+	for i in 240:
+		# The player keeps close, so it keeps backing away.
+		p.global_position = boss.global_position + fwd * 8.0 + Vector3(0, 0.05, 0)
+		var s_before := boss.step_sounds
+		await _ticks(1)
+		# Counted once it backs at full speed (past the blend from idle).
+		if back.frames == 0 and (boss.anim.current_animation != RobotBoss.WALK_CLIP or boss.anim.get_playing_speed() > -1.0):
+			continue
+		var n := boss.step_sounds - s_before
+		back_stomp_frames.append(n)
+		back.frames += 1
+		back.stomps += n
+		back.most = maxi(back.most, n)
+		for k in 2:
+			back_h[k].append((sk.global_transform * sk.get_bone_global_pose(feet[k]).origin).y - boss.global_position.y)
+	var back_plants := 0
+	var back_matched := 0
+	for k in 2:
+		var hs: Array = back_h[k]
+		if hs.is_empty():
+			continue
+		var hs_lo: float = hs.min()
+		var up := false
+		for f in hs.size():
+			if hs[f] > hs_lo + 0.1:
+				up = true
+			elif up and hs[f] <= hs_lo + 0.01:
+				up = false
+				back_plants += 1
+				for g in range(maxi(f - 3, 0), mini(f + 4, back_stomp_frames.size())):
+					if back_stomp_frames[g] > 0:
+						back_matched += 1
+						break
+	_check(back.frames > 120 and back.most <= 1 and back_plants >= 1 and back_matched == back_plants and absi(back.stomps - back_plants) <= 1,
+		"boss: backing up stomps once per footfall, in sync (%d frames backwards, %d feet down, %d in sync, %d stomps)" % [back.frames, back_plants, back_matched, back.stomps])
+	boss.global_position = back_from
+	boss.linear_velocity = Vector3.ZERO
+	boss.reset_physics_interpolation()
+	p.global_position = back_from + fwd * 8.0 + Vector3(0, 0.05, 0)
+	p.reset_physics_interpolation()
 	# Stop: the player comes closer, it halts and settles into idle.
 	p.global_position = boss.global_position + fwd * (boss.preferred_range.x + 2.0) + Vector3(0, 0.05, 0)
 	p.reset_physics_interpolation()

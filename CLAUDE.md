@@ -58,6 +58,10 @@
   `tools/cut_boss_steps.py` into `mini_boss_step_1/2/3.ogg`, each starting
   at its impact; `RobotBoss` plays one each time a foot lands in the clip
   (`STEP_TIMES`, `_update_steps`), so every step is heard, in sync.
+  Backing up plays the walk backwards: its steps are where the feet touch
+  down in reverse (`STEP_TIMES_BACK`), and stomps are never closer than
+  `step_min_gap` (0.2 s) - backing up used to fire both stomps every frame
+  (a loud "DDDDDD" buzz).
 
 - `assets/audio/weapons/rocket_launcher_firing.ogg` (sha256
   7e547e4c9ced3b9f03cc9db1ca55c946d38c39fcfb24c3f8c9ebfcd6289a8642) - the

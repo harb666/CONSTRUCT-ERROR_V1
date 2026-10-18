@@ -49,6 +49,9 @@ const ARMOUR_SHADER := preload("res://scripts/vfx/boss_armour.gdshader")
 const STEP_TIMES := {
 	&"Heavy_Walk": [0.70, 1.60], &"Heavy_Step": [0.70, 1.60],
 	&"Heavy_Turn_L": [0.47, 0.90], &"Heavy_Turn_R": [0.47, 0.90]}
+## Backing up plays the walk backwards: then a foot comes down where it
+## lifts in the forward clip (left 0.00, right 0.90).
+const STEP_TIMES_BACK := {&"Heavy_Walk": [0.0, 0.90], &"Heavy_Step": [0.0, 0.90]}
 ## Heavy_Walk's in-place speed at playback 1 (model units/s, at scale 1;
 ## from tools/author_boss_walk.gd: 2 * STEP / CYCLE).
 const WALK_CLIP_SPEED := 0.6 / 1.8
@@ -153,6 +156,9 @@ const BULLET_HOT := Color(1.0, 0.9, 0.5)
 ## Starts each stomp this much clip time before the foot lands (makes up
 ## for the frame the clip is read in, so the hit lands on the frame).
 @export var step_lead := 0.025
+## Never two stomps closer than this (s): a safety net against a clip
+## position that jitters back and forth retriggering them every frame.
+@export var step_min_gap := 0.2
 ## Projectile speed (m/s).
 @export var chaingun_bullet_speed := 46.0
 @export var chaingun_damage := 0.4
@@ -259,6 +265,7 @@ var _step_voices: Array[DynamicSound] = []
 var _step_pick := -1
 var _step_clip := &""
 var _step_pos := 0.0
+var _step_gap := 0.0
 var _mg_next := 0
 var _mg_shot := 0
 ## Direction of the last chaingun round (tests).
@@ -1315,12 +1322,33 @@ func _update_steps(_delta: float) -> void:
 		_step_clip = &""
 		return
 	var pos := anim.current_animation_position
-	if clip == _step_clip:
-		for t0: float in STEP_TIMES[clip]:
-			var t := maxf(t0 - step_lead, 0.0)
-			var crossed := (_step_pos < t and t <= pos) if pos >= _step_pos else (t > _step_pos or t <= pos)
-			if crossed:
+	var length := anim.current_animation_length
+	_step_gap = maxf(_step_gap - _delta, 0.0)
+	# Which way the clip runs: backing up plays the walk backwards. (Read
+	# as a loop every frame, that fired both stomps every frame - a loud
+	# buzz.) A jump the wrong way is a loop / restart only if it's most of
+	# the clip; a small one is a stray seek and plays nothing.
+	var back := anim.get_playing_speed() < 0.0
+	if clip == _step_clip and pos != _step_pos:
+		var wrapped := absf(pos - _step_pos) > length * 0.5
+		var times: Array = STEP_TIMES_BACK.get(clip, []) if back else STEP_TIMES[clip]
+		for t0: float in times:
+			var crossed := false
+			if back:
+				var t := minf(t0 + step_lead, length)
+				if pos < _step_pos and not wrapped:
+					crossed = pos <= t and t < _step_pos
+				elif pos > _step_pos and wrapped:
+					crossed = t < _step_pos or t >= pos
+			else:
+				var t := maxf(t0 - step_lead, 0.0)
+				if pos > _step_pos and not wrapped:
+					crossed = _step_pos < t and t <= pos
+				elif pos < _step_pos and wrapped:
+					crossed = t > _step_pos or t <= pos
+			if crossed and _step_gap <= 0.0:
 				last_step_time = t0
+				_step_gap = step_min_gap
 				_step_sound()
 	_step_clip = clip
 	_step_pos = pos
