@@ -36,6 +36,13 @@ var character: CharacterDefinition
 @export var ground_decel := 55.0
 ## Extra acceleration when pushing against current velocity (snappy direction changes).
 @export var turnaround_accel := 60.0
+## Walks up lips and kerbs up to this high (m) instead of stopping dead
+## at them (owner asked: a lift's deck standing a little proud of the floor,
+## the top of a ramp a little short of its platform); the model eases up
+## after the body (`step_ease_speed`, m/s). Steps down as far stay on the
+## floor too (floor snap).
+@export var max_step := 0.55
+@export var step_ease_speed := 4.0
 
 @export_group("Air")
 @export var air_accel := 32.0
@@ -136,6 +143,63 @@ func gait_speed(amount: float, sprinting: bool) -> float:
 ## device, NetPlayerInput). Their device decides the damage they take; here
 ## hits only show (flinch, flash).
 var is_remote := false
+
+
+## Lips and kerbs walked up (tests).
+var steps_taken := 0
+var _step_ease := Vector3.ZERO
+var _step_col := KinematicCollision3D.new()
+
+
+## Walking into a lip no higher than `max_step`: up onto it, as if it were
+## a stair (the body is lifted, carried on by what was left of this tick's
+## move - or far enough for its round foot to clear the lip's corner - and
+## set down on the lip's top, if that's open, walkable floor).
+func _step_up(from: Vector3, want: Vector3) -> void:
+	var moved := global_position - from
+	var rest := want - Vector3(moved.x, 0.0, moved.z)
+	if rest.length() < 0.002:
+		return
+	var dir := rest.normalized()
+	var start := global_transform
+	var up := max_step
+	if test_move(start, Vector3.UP * max_step, _step_col):
+		up = _step_col.get_travel().y - 0.01
+		if up < 0.05:
+			return
+	for reach in [maxf(rest.length(), 0.12), _foot_radius() + 0.06]:
+		var xf := start
+		xf.origin.y += up
+		if test_move(xf, dir * reach, _step_col):
+			return  # still in the way up there: a wall, not a lip
+		xf.origin += dir * reach
+		if not test_move(xf, Vector3.DOWN * (up + 0.05), _step_col):
+			return  # nothing to stand on
+		var land := xf.origin + _step_col.get_travel()
+		var rise := land.y - start.origin.y
+		if rise < 0.02 or rise > max_step + 0.01:
+			return
+		if _step_col.get_normal().y < cos(floor_max_angle):
+			continue  # on the lip's corner: a little further on
+		_step_ease -= land - start.origin - dir * rest.length()
+		global_position = land
+		steps_taken += 1
+		return
+
+
+func _foot_radius() -> float:
+	var cs := get_node_or_null(^"CollisionShape3D") as CollisionShape3D
+	return (cs.shape as CapsuleShape3D).radius if cs and cs.shape is CapsuleShape3D else 0.35
+
+
+## The model catches up with the body after a step (no pop).
+func _ease_step(delta: float) -> void:
+	if _step_ease == Vector3.ZERO:
+		return
+	_step_ease = _step_ease.move_toward(Vector3.ZERO, step_ease_speed * delta)
+	var visual := get_node_or_null(^"Visual") as Node3D
+	if visual:
+		visual.position = global_basis.inverse() * _step_ease
 
 
 ## Called by enemy weapons (DamageInfo.apply).
@@ -332,8 +396,15 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 		_fall_speed = maxf(-velocity.y, 0.0)
 	var ext := external_velocity
 	velocity += ext
+	var from := global_position
+	var want := Vector3(velocity.x, 0.0, velocity.z) * delta
 	move_and_slide()
 	velocity -= ext
+	# (Still on the floor after the move: walking, not jumping - going up a
+	# ramp moves up too.)
+	if on_floor and is_on_floor() and not downed and not is_dodging and is_on_wall():
+		_step_up(from, want)
+	_ease_step(delta)
 	_shove_pulled_props()
 	if ext != Vector3.ZERO:
 		if is_on_wall():

@@ -5062,10 +5062,12 @@ func _toxic_works_tests() -> void:
 	_check(tw.roof_opened and tw.car_hidden > 0, "works: the roof is open for the lift, the package's own car hidden (%d pieces)" % tw.car_hidden)
 	var grunts := 0
 	var skirm := 0
+	var catwalk := 0
 	for c in main.get_node("Targets").get_children():
-		if c is RobotSkirmisher: skirm += 1
+		if String(c.name).ends_with("CatwalkGrunt"): catwalk += 1
+		elif c is RobotSkirmisher: skirm += 1
 		elif c is RobotEnemy: grunts += 1
-	_check(grunts == 4 and skirm == 2, "works: 4 grunts and 2 skirmishers wait in the Works (%d, %d)" % [grunts, skirm])
+	_check(grunts == 4 and skirm == 2 and catwalk == 2, "works: 4 grunts and 2 skirmishers wait in the Works, 2 grunts on the hall's catwalks (%d, %d, %d)" % [grunts, skirm, catwalk])
 	var wd: WaveDirector = main.get_node("WaveDirector")
 	_check(wd.state == WaveDirector.State.WAITING and main.get_node("HallTargets").get_child_count() == 0 and wd.total_waves() == 3,
 		"works: the hall's 3 waves wait for the lift to land")
@@ -5111,13 +5113,17 @@ func _toxic_works_tests() -> void:
 	_check(lift.arriving() and lift.global_position.y > 20.0 and p.controls_locked and absf(p.global_position.y - lift.global_position.y) < 1.0,
 		"works: the player starts high up the shaft on the lift, controls held (%.1f m)" % p.global_position.y)
 	var lift_xz := Vector2(lift.global_position.x, lift.global_position.z)
-	_check(cam is ArrivalCamera and cam.global_position.y > 26.5 and Vector2(cam.global_position.x, cam.global_position.z).distance_to(lift_xz) < 5.0
-		and cam.global_position.y > p.global_position.y,
-		"works: the view starts riding down the shaft just above the squad (%s)" % cam.global_position)
+	# The opening shot (owner asked): low down in a far corner of the hall,
+	# looking up at the lift coming through the roof...
+	var b0 := Vector2(cam.global_position.x, cam.global_position.z) - lift_xz
+	_check(cam is ArrivalCamera and b0.length() > 35.0 and cam.global_position.y < lift._top.y + 3.0 and cam.global_position.y < p.global_position.y,
+		"works: the intro starts low down in a far corner of the hall, looking up at the lift (%s)" % cam.global_position)
 	await _ticks(240)
-	var cxz := Vector2(cam.global_position.x, cam.global_position.z).distance_to(lift_xz) if is_instance_valid(cam) else 0.0
-	_check(is_instance_valid(cam) and cam is ArrivalCamera and cam.global_position.y < 21.0 and cxz > 7.0 and cam.global_position.y > p.global_position.y + 2.0,
-		"works: out of the roof it pulls out to circle the lift, under the ceiling's beams, looking down on the squad (%.1f m out, %.1f m up)" % [cxz, cam.global_position.y if is_instance_valid(cam) else 0.0])
+	# ...then pans round the squad, closing in.
+	var b1 := Vector2(cam.global_position.x, cam.global_position.z) - lift_xz if is_instance_valid(cam) else b0
+	var on_them := is_instance_valid(cam) and (-cam.global_basis.z).dot((p.global_position + Vector3.UP * 1.2 - cam.global_position).normalized()) > 0.95
+	_check(is_instance_valid(cam) and cam is ArrivalCamera and b1.length() < b0.length() * 0.6 and absf(rad_to_deg(b0.angle_to(b1))) > 50.0 and on_them and cam.global_position.y < 21.0,
+		"works: it pans round the squad, closing in, always on them (%.1f m out, %.0f deg round)" % [b1.length(), absf(rad_to_deg(b0.angle_to(b1)))])
 	await _ticks(90)
 	_check(is_instance_valid(cam) and cam is ArrivalCamera and (cam as ArrivalCamera)._swoop_t > 0.0,
 		"works: then it swoops in to the player")
@@ -5127,6 +5133,12 @@ func _toxic_works_tests() -> void:
 		"works: the lift lands, the player is free on the floor (%.2f m)" % p.global_position.y)
 	_check(now != null and not (now is ArrivalCamera) and now == p.get_tree().get_first_node_in_group(&"camera_rigs").camera,
 		"works: the player's own camera takes over")
+	# Facing the laser gate (owner asked), and so is their camera.
+	var to_gate := (Vector3(0, 0, -55.7) - p.global_position) * Vector3(1, 0, 1)
+	_check((-p.global_basis.z).dot(to_gate.normalized()) > 0.95 and (-now.global_basis.z * Vector3(1, 0, 1)).normalized().dot(to_gate.normalized()) > 0.9,
+		"works: off the lift the player (and their camera) face the laser gate")
+	await _works_catwalks_and_sentinels(main, tw, p)
+	await _works_walkable(main, p)
 	# The slime: back to the spawn.
 	var slime: Area3D = null
 	for a in main.get_tree().get_nodes_in_group(&"hazard"):
@@ -6244,6 +6256,103 @@ func _combat3_tests(main: Node) -> void:
 
 
 ## Final (after every leg modifier) foot positions, for the gait tests.
+## Grunts on the red-railed catwalks (owner asked), and the hall's last wave
+## bringing two Neon Sentinels in through the windows.
+func _works_catwalks_and_sentinels(main: Node, tw: ToxicWorks, p: PlayerController) -> void:
+	var gate_g := main.get_node_or_null(^"Targets/GateCatwalkGrunt") as RobotEnemy
+	var south_g := main.get_node_or_null(^"Targets/SouthCatwalkGrunt") as RobotEnemy
+	_check(gate_g != null and south_g != null and absf(gate_g.global_position.y - 16.6) < 0.3 and absf(south_g.global_position.y - 14.6) < 0.3
+		and absf(gate_g.global_position.z + 54.4) < 1.6 and absf(south_g.global_position.z - 54.4) < 1.6,
+		"works: a grunt stands on the catwalk over the laser gate and one on the catwalk across the hall (%s, %s)" % [gate_g.global_position if gate_g else Vector3.ZERO, south_g.global_position if south_g else Vector3.ZERO])
+	_check(tw.catwalks.size() == 2 and main.find_children("Catwalk_*_Barrier", "StaticBody3D", true, false).all(func(b: StaticBody3D) -> bool: return b.collision_layer == ShaftBarrier.LAYER),
+		"works: the catwalks get decks, and robot-only barriers along their railings")
+	# Shots reach them from the hall floor: nothing (the railings have no
+	# collision; the barriers aren't hit by shots) between.
+	var space := p.get_world_3d().direct_space_state
+	var clear := 0
+	var tries := 0
+	for g: RobotEnemy in [gate_g, south_g]:
+		if g == null:
+			continue
+		var aim := (g.get_node("Targetable") as Targetable).get_aim_point()
+		for from: Vector3 in [Vector3(0, 9.5, 0), Vector3(-8, 9.5, -g.global_position.z * 0.5), Vector3(10, 9.5, -g.global_position.z * 0.3)]:
+			tries += 1
+			var q := PhysicsRayQueryParameters3D.create(from, aim, 1, [p.get_rid()])
+			var hit := space.intersect_ray(q)
+			if hit.is_empty() or hit.collider == g:
+				clear += 1
+	_check(tries == 6 and clear == tries, "works: the player's shots reach both catwalk grunts from the hall floor (%d / %d lines clear)" % [clear, tries])
+	# The last wave: two sentinels first, flying in through the windows.
+	var d := tw.director
+	_check(d != null and d.wave_sentinels == PackedInt32Array([0, 0, 2]) and main.get_node(^"WindowEntries").get_child_count() == 5,
+		"works: the hall's last wave has two Neon Sentinels, coming in through its windows")
+	var was := [d.state, d.wave]
+	d._start_wave(3)
+	var first: Array = d._queue.slice(0, 2)
+	d._queue.clear()
+	d.state = was[0]
+	d.wave = was[1]
+	_check(first == [WaveDirector.SENTINEL, WaveDirector.SENTINEL], "works: the sentinels come first in that wave")
+	var hall := main.get_node(^"HallTargets")
+	var n0 := hall.get_child_count()
+	_check(d._spawn_sentinel(), "works: a sentinel starts outside a window")
+	var s := hall.get_child(hall.get_child_count() - 1) as RobotSentinel
+	var out_at := s.global_position if s else Vector3.ZERO
+	var outside := absf(out_at.x) > 60.0 or absf(out_at.z) > 60.0
+	var flew_in := false
+	for i in 360:
+		await _ticks(1)
+		if is_instance_valid(s) and not s.entering and absf(s.global_position.x) < 54.0 and absf(s.global_position.z) < 54.0:
+			flew_in = true
+			break
+	_check(s != null and hall.get_child_count() == n0 + 1 and outside and flew_in,
+		"works: and flies in through the window into the hall (from %s to %s)" % [out_at, s.global_position if is_instance_valid(s) else Vector3.ZERO])
+	if is_instance_valid(s):
+		s.queue_free()
+	d._windows_used.clear()
+
+
+## Walking smoothly onto the lift and up the ramps (owner asked: no lips to
+## jump): the player is walked across them with no jumping.
+func _works_walkable(main: Node, p: PlayerController) -> void:
+	var walker := WalkInput.new()
+	var was := p.input
+	p.add_child(walker)
+	p.input = walker
+	var steps0 := p.steps_taken
+	var ok := []
+	for leg: Array in [[Vector3(0, 8.0, 8.0), Vector3(0, 8.25, 1.0)], [Vector3(-11.7, 5.0, 11.7), Vector3(-5.0, 8.0, 5.0)]]:
+		p.global_position = leg[0] + Vector3.UP * 0.1
+		p.velocity = Vector3.ZERO
+		p.reset_physics_interpolation()
+		var to: Vector3 = leg[1]
+		walker.dir = ((to - p.global_position) * Vector3(1, 0, 1)).normalized()
+		var got := false
+		for i in 240:
+			await _ticks(1)
+			if Vector2(p.global_position.x - to.x, p.global_position.z - to.z).length() < 0.8:
+				got = absf(p.global_position.y - to.y) < 0.4
+				break
+		ok.append(got)
+	walker.dir = Vector3.ZERO
+	p.input = was
+	walker.queue_free()
+	_check(ok == [true, true] and p.steps_taken - steps0 >= 2,
+		"works: walks onto the lift and up a ramp onto the middle platform without jumping (%s, %d lips stepped up)" % [ok, p.steps_taken - steps0])
+
+
+## Walks straight along `dir` (tests).
+class WalkInput extends PlayerInput:
+	var dir := Vector3.ZERO
+
+	func get_command() -> PlayerCommand:
+		var c := PlayerCommand.new()
+		if dir != Vector3.ZERO:
+			c.move = Vector2(0, -0.6)
+			c.view_yaw = atan2(-dir.x, -dir.z)
+		return c
+
+
 class FootProbe extends SkeletonModifier3D:
 	var feet: Array = []
 	var pos: Array = [Vector3.ZERO, Vector3.ZERO]

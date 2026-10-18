@@ -19,7 +19,9 @@ signal robot_spawned(robot: RobotEnemy, scene_index: int)
 const SCENES: Array[PackedScene] = [
 	preload("res://scenes/enemies/robot_enemy.tscn"),
 	preload("res://scenes/enemies/robot_skirmisher.tscn"),
+	preload("res://scenes/enemies/robot_sentinel.tscn"),
 ]
+const SENTINEL := 2
 
 @export var targets_path: NodePath = ^"../Targets"
 @export var spawns_path: NodePath = ^"../WaveSpawns"
@@ -32,6 +34,14 @@ const SCENES: Array[PackedScene] = [
 ## Starts by itself once someone is in the level. Off: waits for `begin()`
 ## (the Toxic Works: once the lift has landed).
 @export var auto_start := true
+## Neon Sentinels per wave (same order as `waves`; missing = none): they
+## fly in from outside through the windows (`window_entries`), first in
+## their wave (owner asked: the Toxic Works hall's last wave).
+@export var wave_sentinels: PackedInt32Array = []
+## Marker3Ds outside the windows, -Z pointing into the level: a sentinel
+## starts at one and flies `entry_depth` m in through the window.
+@export var window_entries_path: NodePath = ^"../WindowEntries"
+@export var entry_depth := 16.0
 ## Most robots alive on the map at once.
 @export var max_active := 8
 ## Per later wave (same order as `waves`): the spawn points (WaveSpawns
@@ -136,6 +146,7 @@ func _physics_process(delta: float) -> void:
 func _start_wave(index: int) -> void:
 	wave = index
 	state = State.FIGHTING
+	_windows_used.clear()
 	var t := targets()
 	if t and hunt_players:
 		for c in t.get_children():
@@ -151,6 +162,8 @@ func _start_wave(index: int) -> void:
 		for i in w.y:
 			_queue.append(1)
 		_queue.shuffle()
+		for i in (wave_sentinels[slot] if slot < wave_sentinels.size() else 0):
+			_queue.push_front(SENTINEL)
 	wave_started.emit(wave, total_waves())
 
 
@@ -167,8 +180,11 @@ func finish_now() -> void:
 	all_cleared.emit()
 
 
-## Teleport one robot in. False if no spawn point is free.
+## Teleport one robot in (a sentinel flies in through a window). False if
+## no spawn point is free.
 func _spawn(scene_index: int) -> bool:
+	if scene_index == SENTINEL:
+		return _spawn_sentinel()
 	var at := _pick_spot()
 	if at == Vector3.INF:
 		return false
@@ -194,6 +210,55 @@ func _spawn(scene_index: int) -> bool:
 	spawned += 1
 	Net.robot_spawned(r, t)
 	robot_spawned.emit(r, scene_index)
+	return true
+
+
+var _windows_used: Array[Node3D] = []
+
+
+## A sentinel flying in through a window: the one farthest from the players
+## not used yet this wave (each comes in through its own).
+func _spawn_sentinel() -> bool:
+	var entries := get_node_or_null(window_entries_path)
+	var t := targets()
+	if entries == null or t == null or entries.get_child_count() == 0:
+		return false
+	var best: Node3D = null
+	var best_d := -1.0
+	for m in entries.get_children():
+		var n := m as Node3D
+		if n == null or n in _windows_used:
+			continue
+		var near := _nearest_player(n.global_position)
+		var d := near.global_position.distance_to(n.global_position) if near else 0.0
+		if d > best_d:
+			best_d = d
+			best = n
+	if best == null:
+		_windows_used.clear()
+		best = entries.get_child(randi() % entries.get_child_count()) as Node3D
+	_windows_used.append(best)
+	var from := best.global_position
+	var inward := -best.global_basis.z
+	inward.y = 0.0
+	inward = inward.normalized()
+	var to := from + inward * entry_depth
+	var r := SCENES[SENTINEL].instantiate() as RobotSentinel
+	_counts[SENTINEL] = int(_counts.get(SENTINEL, 0)) + 1
+	r.name = "W%d_Sentinel%d" % [wave, _counts[SENTINEL]]
+	r.respawn_time = -1.0
+	r.patrol_distance = 0.0
+	r.transform = Transform3D(Basis(Vector3.UP, atan2(inward.x, inward.z)), from)
+	t.add_child(r)
+	if hunt_players:
+		_hunt(r)
+	# Whatever is in the way in (the window's barrier) lets it through.
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1, [r.get_rid()])
+	var hit := r.get_world_3d().direct_space_state.intersect_ray(q)
+	r.fly_in(to, hit.collider as PhysicsBody3D if not hit.is_empty() else null)
+	spawned += 1
+	Net.robot_spawned(r, t)
+	robot_spawned.emit(r, SENTINEL)
 	return true
 
 

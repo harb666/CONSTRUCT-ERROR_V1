@@ -492,12 +492,60 @@ func muzzle_position(i: int) -> Vector3:
 	return _tips[i].global_transform * _muzzles[i].origin
 
 
+# --- Flying in (WaveDirector: through a window) ---
+
+## Flies in from outside: straight for `to` at `entry_speed`, through the
+## body in the way (`through`: the window's barrier, which keeps players in
+## - not it), then its own AI (startled at the first player it sees).
+@export var entry_speed := 9.0
+var entering := false
+var _entry_to := Vector3.ZERO
+var _entry_through: PhysicsBody3D
+var _entry_left := 0.0
+
+
+func fly_in(to: Vector3, through: PhysicsBody3D = null) -> void:
+	entering = true
+	_entry_to = to
+	_entry_left = global_position.distance_to(to) / entry_speed + 3.0
+	_entry_through = through
+	if through:
+		add_collision_exception_with(through)
+	linear_velocity = (to - global_position).normalized() * entry_speed
+
+
+func _fly_in_step(delta: float) -> void:
+	_entry_left -= delta
+	var off := _entry_to - global_position
+	if off.length() < 1.5 or _entry_left <= 0.0:
+		entering = false
+		if is_instance_valid(_entry_through):
+			remove_collision_exception_with(_entry_through)
+		_entry_through = null
+		if target and not engaged and startle_left <= 0.0:
+			_startle()
+		return
+	# Eases off as it arrives.
+	var want := off.normalized() * minf(entry_speed, maxf(off.length() * 1.6, 2.0))
+	linear_velocity = linear_velocity.move_toward(want, acceleration * 1.5 * delta)
+
+
 # --- Behaviour ---
 
 func _behave(delta: float) -> void:
 	if freeze or Engine.get_physics_frames() - _pulled_frame < 6:
 		_feed_motion(delta)
 		return  # held / dragged by a black hole: helpless
+	if entering:
+		_think_t -= delta
+		if _think_t <= 0.0:
+			_think_t = 0.25
+			_think()
+		_fly_in_step(delta)
+		_face(delta)
+		_feed_motion(delta)
+		_express(delta)
+		return
 	_think_t -= delta
 	if _think_t <= 0.0:
 		_think_t = 0.25 + randf() * 0.05
@@ -544,7 +592,7 @@ func _think() -> void:
 				best_d = d
 				best = n
 	target = best
-	if target and prev == null and not engaged and startle_left <= 0.0:
+	if target and prev == null and not engaged and startle_left <= 0.0 and not entering:
 		_startle()
 	var space := get_world_3d().direct_space_state
 	var from := global_position

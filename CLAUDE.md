@@ -173,8 +173,8 @@
   with the picked character (`LevelTransfer.start_as`, `Net.go_to_level`:
   a hosting phone takes the room; joined phones still on the menus get the
   character select there). Level 2 starts on the lift, as from Skyforge;
-  menu music fades out, then the level's own (Level 2 has none of its own:
-  its music carries on from Level 1 down the lift). All its text goes
+  menu music fades out, then the level's own (Level 1's music, which
+  Level 2 also plays). All its text goes
   through `HudStyle.text`, so `MenuGlitch` draws it crisp and outlined over
   the lines.
 - Glitchy main menu (owner asked; ideas from the owner's `glitch-video`
@@ -390,10 +390,27 @@
   shaft hole is open; the package's own elevator car is hidden). Saved as
   "level 2 so far" (owner asked: branch `saved/level-2-so-far`); reached
   with `?level=works` (DEPLOY drops the squad in on the lift).
-  Opening shot (`ArrivalCamera`; owner asked for it closer, still dynamic):
-  rides down the shaft just above the squad, breaks out under the roof,
-  pulls out (staying under the ceiling's beams, < 21 m) into a crane shot
-  circling the lift, then swoops round behind the player.
+  Opening shot (`ArrivalCamera`; owner asked: "start in a far lower
+  corner and pan round the player before smoothly emerging into
+  gameplay"): starts low (1.6 m up) 48 m out in the hall's far corner by the
+  gate (bearing -60 deg, a path clear of the hall's columns), looking up at
+  the lift coming through the roof (aimed just under the roof's beams
+  until the squad is below them), pans 150 deg round the squad closing in
+  to 9 m, then swoops in behind the player and hands over to their camera
+  as the lift lands. The squad faces the laser gate (spawn points turned
+  to -Z), so their camera starts looking at it.
+  Catwalks (owner asked): a grunt on each red-railed catwalk high on the
+  hall's walls - over the laser gate (`GateCatwalkGrunt`) and across the
+  hall (`SouthCatwalkGrunt`); they hold their post (strafing a little,
+  engaging from 45 m). The catwalks were scenery: `ToxicWorks._catwalks`
+  gives each a deck and a robot-only barrier (ShaftBarrier's layer) along
+  its railing and ends. The railings have no collision, so the player's
+  shots reach the grunts (left in place; a test checks the lines are clear).
+  The hall's last wave adds two Neon Sentinels (owner asked; WaveDirector
+  `wave_sentinels`, first in the wave): each starts outside one of the
+  hall's 5 windows (`WindowEntries`, the one farthest from the players, a
+  different one each) and flies 22 m in through it (`RobotSentinel.fly_in`,
+  passing the window's barrier), startled as it arrives.
   Owner's latest map maker update (image-to-level 6f473a6, rebuilt here with
   its own `generate.py` + `package.py --game`; its 4 newest changes weren't in
   its committed export): the hall's 3 waves (4 grunts; 4 + 2 skirmishers;
@@ -484,6 +501,15 @@
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 
+- Step-up (owner asked: "all walkable platforms" smooth - the Works lift
+  stood 0.25 m proud of the floor, Skyforge's up to 0.39 m, the tops of the
+  Works' central ramps fell 0.17-0.32 m short of their platform, other
+  ramps / stairs up to 0.5 m): the player walks up any lip up to
+  `PlayerController.max_step` (0.55 m) - lifted onto its top if that's open
+  floor, the model easing up after the body (`_step_up`, `_ease_step`) -
+  and stays on the floor stepping down as far (floor snap 0.35 -> 0.55 m).
+  So low blocks up to that high (e.g. a 0.4 m block in the test arena) are
+  walked onto too.
 - Testing: the player can't die (`main.gd` `players_can_die = false`; hits
   still land, health can reach 0, no death / respawn). Owner asked for this
   to test; set it back to true to restore dying.

@@ -124,12 +124,56 @@ func _ready() -> void:
 	_shotgun_pad.call_deferred()
 	_shrink_gir.call_deferred()
 	_wind_streaks.call_deferred()
+	_catwalks()
 	var ui := get_parent().get_node_or_null(^"UI") if get_parent() else null
 	if ui:
 		hud = LevelFlowHud.new()
 		hud.name = "LevelFlowHud"
 		ui.add_child(hud)
 		ui.move_child(hud, 0)
+
+
+## The two red-railed catwalks high on the hall's walls - over the laser
+## gate (north) and across the hall (south) - had no collision (scenery):
+## each gets a deck to stand on and a robot-only barrier (ShaftBarrier's
+## layer: players / robots, not shots or debris) along its railing and
+## open ends, so the grunt posted on each (owner asked) can't step off.
+## The railings have no collision, so they never stop anyone's shots.
+## [centre of the deck's top, size (x, z)]
+const CATWALKS := {
+	"Catwalk_Gate": [Vector3(0.0, 16.6, -54.5), Vector2(40.0, 3.0)],
+	"Catwalk_South": [Vector3(0.0, 14.6, 54.5), Vector2(20.0, 3.0)],
+}
+var catwalks: Array[StaticBody3D] = []
+
+
+func _catwalks() -> void:
+	for id in CATWALKS:
+		var top: Vector3 = CATWALKS[id][0]
+		var size: Vector2 = CATWALKS[id][1]
+		var deck := StaticBody3D.new()
+		deck.name = id + "_Deck"
+		_box(deck, top + Vector3.DOWN * 0.15, Vector3(size.x, 0.3, size.y))
+		add_child(deck)
+		catwalks.append(deck)
+		var bar := StaticBody3D.new()
+		bar.name = id + "_Barrier"
+		bar.collision_layer = ShaftBarrier.LAYER
+		bar.collision_mask = 0
+		var hall := -signf(top.z)  # the railing's side (towards the hall)
+		_box(bar, top + Vector3(0.0, 1.25, hall * (size.y * 0.5 + 0.1)), Vector3(size.x, 2.5, 0.2))
+		for e in [-1.0, 1.0]:
+			_box(bar, top + Vector3(e * (size.x * 0.5 + 0.1), 1.25, 0.0), Vector3(0.2, 2.5, size.y))
+		add_child(bar)
+
+
+func _box(body: StaticBody3D, at: Vector3, size: Vector3) -> void:
+	var cs := CollisionShape3D.new()
+	var b := BoxShape3D.new()
+	b.size = size
+	cs.shape = b
+	cs.position = at
+	body.add_child(cs)
 
 
 ## The ceiling's collider came in as one convex hull, which closes the
