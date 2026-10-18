@@ -4660,7 +4660,10 @@ func _sentinel_tests() -> void:
 	_check(dodged, "sentinel: it dodges a player's shot coming its way (banking side-dash)")
 	_check(split, "sentinel: dodging, its covers split - one up, one down")
 	# (on a side whose wing cover is up: under a lowered one the arm stays
-	# tucked)
+	# tucked - so its random flicks are held, covers up, while measuring)
+	s._flick = Vector2(-1.0, -1.0)
+	s._flick_t = 99.0
+	s._flutter_t = 99.0
 	var ri := 0
 	for i in 90:
 		if s.flex.hinge_down(0) < 20.0 or s.flex.hinge_down(1) < 20.0:
@@ -4671,6 +4674,8 @@ func _sentinel_tests() -> void:
 	s.arms.recoil(ri)
 	await _ticks(6)
 	_check((s.arms.arm_dirs(ri)[1] as Vector3).y > f0.y + 0.05, "sentinel: a cannon's arm kicks back and up when it fires")
+	s._flick_t = 0.0
+	s._flutter_t = 0.0
 	_check(rad_to_deg(sway) > 3.0, "sentinel: its antennae swing with the dash (%.0f deg) - wings / antennae move with its flight" % rad_to_deg(sway))
 	s.evade_chance = 0.75
 	var shots0 := s.shots_fired
