@@ -247,4 +247,51 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 		items[i].scale = Vector3.ONE * 0.05
 		items[i].visible = true
 	fire.set_process(false)
+	_warm_up_robots(root)
 	root.get_tree().create_timer(seconds, true).timeout.connect(root.queue_free)
+
+
+## The robots a level can spawn later (a wave's first sentinel, grunt or
+## skirmisher): one of each set up and drawn tiny with the rest, inert (no
+## AI, no physics, in no group), so their one-off set-up and their shaders
+## are done here, not as the first one teleports in mid-fight (on phones a
+## new shader stalls the game). Their materials are kept, so the compiled
+## shaders stay ready.
+const WARM_ROBOTS: Array[String] = [
+	"res://scenes/enemies/robot_enemy.tscn",
+	"res://scenes/enemies/robot_skirmisher.tscn",
+	"res://scenes/enemies/robot_sentinel.tscn",
+]
+static var _robot_materials: Array[Material] = []
+static var robots_warmed := 0
+
+
+static func _warm_up_robots(root: Node3D) -> void:
+	var holder := Node3D.new()
+	holder.name = "Robots"
+	root.add_child(holder)
+	holder.position = Vector3(0.0, 0.0, -0.5)
+	holder.scale = Vector3.ONE * 0.06
+	for i in WARM_ROBOTS.size():
+		var r := (load(WARM_ROBOTS[i]) as PackedScene).instantiate() as Node3D
+		r.process_mode = Node.PROCESS_MODE_DISABLED
+		holder.add_child(r)
+		r.position = Vector3(i * 2.5, 0.0, 0.0)
+		for n in [r] + r.find_children("*", "", true, false):
+			for g in (n as Node).get_groups():
+				if not String(g).begins_with("_"):
+					(n as Node).remove_from_group(g)
+		for mi: MeshInstance3D in r.find_children("*", "MeshInstance3D", true, false):
+			for m in [mi.material_override, mi.material_overlay]:
+				if m and not _robot_materials.has(m):
+					_robot_materials.append(m)
+			for si in mi.get_surface_override_material_count():
+				var sm := mi.get_surface_override_material(si)
+				if sm and not _robot_materials.has(sm):
+					_robot_materials.append(sm)
+			if mi.mesh:
+				for si in mi.mesh.get_surface_count():
+					var mm := mi.mesh.surface_get_material(si)
+					if mm and not _robot_materials.has(mm):
+						_robot_materials.append(mm)
+		robots_warmed += 1

@@ -498,6 +498,15 @@ func muzzle_position(i: int) -> Vector3:
 ## body in the way (`through`: the window's barrier, which keeps players in
 ## - not it), then its own AI (startled at the first player it sees).
 @export var entry_speed := 9.0
+## Hunting a player out of sight (WaveDirector's hunters): flies its way
+## to them through the level's open air (FlightNav, where the level has
+## one) at this speed.
+@export var hunt_speed := 8.0
+var _route := PackedVector3Array()
+var _route_i := 0
+var _route_t := 0.0
+var _route_best := INF
+var _route_stuck := 0.0
 var entering := false
 var _entry_to := Vector3.ZERO
 var _entry_through: PhysicsBody3D
@@ -600,6 +609,7 @@ func _think() -> void:
 		var q := PhysicsRayQueryParameters3D.create(from, _aim_point(), 1, [get_rid()])
 		var hit := space.intersect_ray(q)
 		_los = hit.is_empty() or hit.collider == target or (hit.collider is Node and (hit.collider as Node).is_in_group(&"enemies"))
+	_update_route()
 	var down := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 40.0, 1, [get_rid()]))
 	_floor_y = (down["position"] as Vector3).y if not down.is_empty() else (target.global_position.y - 1.0 if target else _floor_y)
 	var up := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.UP * 14.0, 1, [get_rid()]))
@@ -617,6 +627,28 @@ func _think() -> void:
 		_scan_threats()
 
 
+## A hunter out of sight of its target or far off: a route to it through
+## the air (a clear line of sight isn't a clear way for its body), re-planned
+## every 2 s, or sooner when the target moves well away from its end or it
+## gets stuck. (The ground navigation mesh is no use to a flyer.)
+func _update_route() -> void:
+	var near := target != null and _los and Vector2(target.global_position.x - global_position.x, target.global_position.z - global_position.z).length() < orbit_range.y + 8.0
+	if not hunt_nav or target == null or net_puppet or near:
+		_route.clear()
+		return
+	_route_t -= 0.25
+	var moved := _route.size() >= 2 and _route[_route.size() - 1].distance_to(target.global_position) > 6.0
+	if _route_t > 0.0 and _route.size() >= 2 and not moved:
+		return
+	_route_t = 2.0
+	var nav := get_tree().get_first_node_in_group(&"flight_nav") as FlightNav
+	if nav == null:
+		return
+	_route = nav.route(get_world_3d().direct_space_state, global_position, _aim_point() + Vector3.UP * 1.5, [get_rid()])
+	_route_i = 0
+	_route_best = INF
+
+
 ## Height it should be at: over the floor below, under any ceiling.
 func _clamp_height(y: float) -> float:
 	var lo := _floor_y + hover_height.x if _floor_y > -INF else y
@@ -626,6 +658,23 @@ func _clamp_height(y: float) -> float:
 
 
 func _combat_velocity(delta: float) -> Vector3:
+	# Hunting a target out of sight or far off: along its route through
+	# the air.
+	if _route.size() >= 2:
+		while _route_i < _route.size() - 1 and global_position.distance_to(_route[_route_i]) < 2.5:
+			_route_i += 1
+			_route_best = INF
+		var to := _route[_route_i] - global_position
+		# Not getting any closer to the next point: plan again.
+		if to.length() < _route_best - 0.5:
+			_route_best = to.length()
+			_route_stuck = 0.0
+		else:
+			_route_stuck += delta
+			if _route_stuck > 1.5:
+				_route_stuck = 0.0
+				_route_t = 0.0
+		return (to.normalized() * hunt_speed + _sep * 2.5).limit_length(hunt_speed * 1.1)
 	var tp := target.global_position
 	var off := global_position - tp
 	var flat := Vector2(off.x, off.z)

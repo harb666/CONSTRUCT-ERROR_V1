@@ -11,6 +11,8 @@
 [ext_resource type="Script" path="res://scripts/camera/arrival_camera.gd" id="arrcam"]
 [ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
 [ext_resource type="NavigationMesh" path="res://levels/slime_arena/gameplay/navmesh.res" id="navmesh"]
+[ext_resource type="Script" path="res://scripts/world/flight_nav.gd" id="flightnav"]
+[ext_resource type="Resource" path="res://levels/slime_arena/gameplay/flight_graph.res" id="flightgraph"]
 [ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 
 [sub_resource type="Environment" id="env"]
@@ -67,26 +69,6 @@ transform = Transform3D(-0.938493, 0, -0.345298, 0, 1, 0, 0.345298, 0, -0.938493
 respawn_time = -1.0
 patrol_distance = 0.0
 
-[node name="GateCatwalkGrunt" parent="Targets" instance=ExtResource("7")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.65, -54.4)
-respawn_time = -1.0
-patrol_distance = 0.0
-detect_range = 45.0
-lose_range = 60.0
-preferred_range = Vector2(2, 70)
-combat_speed = 1.4
-fire_range = 45.0
-
-[node name="SouthCatwalkGrunt" parent="Targets" instance=ExtResource("7")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 14.65, 54.4)
-respawn_time = -1.0
-patrol_distance = 0.0
-detect_range = 45.0
-lose_range = 60.0
-preferred_range = Vector2(2, 70)
-combat_speed = 1.4
-fire_range = 45.0
-
 [node name="HallTargets" type="Node3D" parent="."]
 
 [node name="WaveSpawns" type="Node3D" parent="."]
@@ -114,11 +96,48 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 18, 68)
 [node name="West" type="Marker3D" parent="WindowEntries"]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -68, 18, -28)
 
+[node name="WavePosts" type="Node3D" parent="."]
+
+[node name="GateCatwalk" type="Marker3D" parent="WavePosts"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16.65, -54.4)
+
+[node name="SouthCatwalk" type="Marker3D" parent="WavePosts"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14.65, 54.4)
+
+[node name="WorksWindowEntries" type="Node3D" parent="."]
+
+[node name="NorthEast" type="Marker3D" parent="WorksWindowEntries"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 30, 19, -242)
+
+[node name="East" type="Marker3D" parent="WorksWindowEntries"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 68, 18.5, -195)
+
+[node name="WestNear" type="Marker3D" parent="WorksWindowEntries"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -68, 18.5, -105)
+
+[node name="WestFar" type="Marker3D" parent="WorksWindowEntries"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -68, 18.5, -190)
+
+[node name="ExitAmbush" type="Node3D" parent="."]
+
+[node name="Grunt1" type="Marker3D" parent="ExitAmbush"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 43, 8.2, -113)
+
+[node name="Grunt2" type="Marker3D" parent="ExitAmbush"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 50, 8.2, -112)
+
+[node name="Skirmisher1" type="Marker3D" parent="ExitAmbush"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 43, 8.2, -121)
+
+[node name="Skirmisher2" type="Marker3D" parent="ExitAmbush"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 49, 8.2, -119)
+
 [node name="WaveDirector" type="Node" parent="."]
 script = ExtResource("waves")
 targets_path = NodePath("../HallTargets")
 waves = Array[Vector2i]([Vector2i(4, 0), Vector2i(4, 2), Vector2i(5, 3)])
 wave_sentinels = Array[int]([0, 0, 2])
+wave_posts = Array[int]([0, 0, 2])
 entry_depth = 22.0
 first_wave_placed = false
 auto_start = false
@@ -126,6 +145,10 @@ hunt_players = true
 
 [node name="Navigation" type="NavigationRegion3D" parent="."]
 navigation_mesh = ExtResource("navmesh")
+
+[node name="FlightNav" type="Node" parent="."]
+script = ExtResource("flightnav")
+graph = ExtResource("flightgraph")
 
 [node name="ElevatorLift" type="AnimatableBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)

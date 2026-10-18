@@ -400,9 +400,10 @@
   as the lift lands. The squad faces the laser gate (spawn points turned
   to -Z), so their camera starts looking at it.
   Catwalks (owner asked): a grunt on each red-railed catwalk high on the
-  hall's walls - over the laser gate (`GateCatwalkGrunt`) and across the
-  hall (`SouthCatwalkGrunt`); they hold their post (strafing a little,
-  engaging from 45 m). The catwalks were scenery: `ToxicWorks._catwalks`
+  hall's walls - over the laser gate and across the hall; they teleport in
+  with the last wave's sentinels (owner asked; WaveDirector `wave_posts`,
+  `WavePosts` markers GateCatwalk / SouthCatwalk) and hold their post
+  (strafing a little, engaging from 45 m). The catwalks were scenery: `ToxicWorks._catwalks`
   gives each a deck and a robot-only barrier (ShaftBarrier's layer) along
   its railing and ends. The railings have no collision, so the player's
   shots reach the grunts (left in place; a test checks the lines are clear).
@@ -411,6 +412,23 @@
   hall's 5 windows (`WindowEntries`, the one farthest from the players, a
   different one each) and flies 22 m in through it (`RobotSentinel.fly_in`,
   passing the window's barrier), startled as it arrives.
+  So the last wave is 2 sentinels + 2 catwalk grunts + 5 grunts + 3
+  skirmishers.
+  Works hunter (owner asked): 2 s after the Works gate opens, a Neon
+  Sentinel flies in through the window nearest the squad (the hall's 5 or
+  the Works' 4, `WorksWindowEntries`) and hunts them wherever they are;
+  5 s after it dies another comes, for as long as the squad is in the level
+  (`ToxicWorks._spawn_hunter`, `hunter_respawn`). Hunting sentinels fly
+  routes through the level's open air (`FlightNav` over
+  `gameplay/flight_graph.res`, baked by `tools/bake_flight_graph.gd`: 4 m
+  grid, links through a laser gate only once it's open; built 100 cells a
+  frame from the level's start so phones don't hitch) while out of sight
+  or far off (`hunt_speed` 8), then fight as usual. The ground navmesh is
+  no use to a flyer (it snapped to walkways with no way off).
+  Exit ambush (owner asked): once the fan is off (control terminal) and a
+  player comes back within 26 m of the exit's Conduit Walk, 2 grunts and 2
+  skirmishers teleport onto it (`ExitAmbush` markers,
+  `ToxicWorks._exit_ambush`), hunting, with an AMBUSH banner.
   Owner's latest map maker update (image-to-level 6f473a6, rebuilt here with
   its own `generate.py` + `package.py --game`; its 4 newest changes weren't in
   its committed export): the hall's 3 waves (4 grunts; 4 + 2 skirmishers;
@@ -498,6 +516,12 @@
   (spinning rings / the move stick are layers that rotate / move). Every
   polygon / AA line drawn makes graphics buffers again on each redraw: the
   HUD made ~400 a frame, and iPhone Safari closed the page after ~2.5 min.
+- Robot warm-up (owner reported a freeze / FPS 7 in the Works): one of each
+  robot a level spawns later (grunt, skirmisher, sentinel) is set up and
+  drawn tiny, inert, behind the title and under the fade-in after a level
+  change (`Vfx._warm_up_robots`, `main._warm_up_level`), their materials
+  kept, so the first one teleporting in mid-fight doesn't stall a phone
+  compiling its shaders.
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

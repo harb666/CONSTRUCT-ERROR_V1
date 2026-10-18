@@ -416,8 +416,92 @@ func use_terminal(id: String) -> void:
 
 
 func _on_gate_opened(gate_id: String) -> void:
+	var flight := get_parent().get_node_or_null(^"FlightNav") as FlightNav
+	if flight:
+		flight.open_gate(gate_id)
 	if hud and gate_id == WORKS_GATE:
 		hud.banner("HALL CLEARED", "THE WORKS GATE IS OPEN")
+	if gate_id == WORKS_GATE and Net.is_authority():
+		get_tree().create_timer(hunter_first_delay, false).timeout.connect(_spawn_hunter)
+
+
+## The Works' hunter (owner asked): once the hall's laser gate is open, a
+## Neon Sentinel comes in through a window (the hall's or the Works', the one
+## nearest the players) and goes straight for them wherever they are; `hunter_respawn`
+## s after it dies another comes, for as long as the squad is in the Works.
+@export var hunter_first_delay := 2.0
+@export var hunter_respawn := 5.0
+var hunter: RobotSentinel
+var hunters := 0
+
+
+func _spawn_hunter() -> void:
+	if director == null or not is_inside_tree():
+		return
+	# Whichever window is nearest the squad, the hall's or the Works'.
+	var entries: Array = []
+	for n in [^"WindowEntries", ^"WorksWindowEntries"]:
+		var e := get_parent().get_node_or_null(n)
+		if e:
+			entries.append_array(e.get_children())
+	hunter = director.spawn_sentinel(entries, true, true)
+	if hunter == null:
+		get_tree().create_timer(hunter_respawn, false).timeout.connect(_spawn_hunter)
+		return
+	hunters += 1
+	hunter.name = "WorksHunter%d" % hunters
+	hunter.died.connect(func(_info: DamageInfo) -> void:
+		get_tree().create_timer(hunter_respawn, false).timeout.connect(_spawn_hunter), CONNECT_ONE_SHOT)
+
+
+## The exit ambush (owner asked): once the fan is off (the control terminal
+## stops it) and someone comes back near the exit platform (the Conduit
+## Walk), 2 grunts and 2 skirmishers teleport onto the platform
+## (`ExitAmbush` markers), hunting the squad.
+const EXIT_WALK := Vector3(47.9, 8.0, -130.0)
+@export var ambush_trigger_range := 26.0
+var ambushed := false
+
+
+func _exit_ambush_check() -> void:
+	if ambushed or director == null or not _fan_off():
+		return
+	for n in get_tree().get_nodes_in_group(&"players"):
+		var p := (n as Node3D).global_position
+		if Vector2(p.x - EXIT_WALK.x, p.z - EXIT_WALK.z).length() < ambush_trigger_range and p.y > EXIT_WALK.y - 3.0:
+			_exit_ambush()
+			return
+
+
+func _exit_ambush() -> void:
+	ambushed = true
+	var marks := get_parent().get_node_or_null(^"ExitAmbush")
+	if marks == null:
+		return
+	var kinds := [0, 0, 1, 1]  # 2 grunts, 2 skirmishers
+	var i := 0
+	for m in marks.get_children():
+		if i >= kinds.size():
+			break
+		var r := director.spawn_robot_at(kinds[i], (m as Node3D).global_position, true)
+		if r:
+			r.name = "ExitAmbush_%s" % m.name
+		i += 1
+	Net.world_event(self, &"exit_ambush")
+	if hud:
+		hud.banner("AMBUSH", "ROBOTS AT THE EXIT")
+
+
+## The turbine fan by the exit is off (stopped for good at the terminal).
+func _fan_off() -> bool:
+	var winds = effects.get("_winds")
+	if not winds is Array or (winds as Array).is_empty():
+		return true
+	var t: float = effects.get("_t")
+	for wr in winds:
+		if float(effects.call("_wind_strength", wr, t)) > 0.05:
+			return false
+	return terminals_used.has("Works_Terminal")
 
 
 ## The host's events, here too (online).
@@ -431,6 +515,10 @@ func net_event(kind: StringName, args: Array) -> void:
 			_on_waves_done()
 		&"terminal":
 			use_terminal(String(args[0]))
+		&"exit_ambush":
+			ambushed = true
+			if hud:
+				hud.banner("AMBUSH", "ROBOTS AT THE EXIT")
 
 
 func _json(path: String) -> Dictionary:
@@ -563,6 +651,8 @@ var _carried := {}  # players on the wind (PlayerController -> true)
 func _physics_process(_delta: float) -> void:
 	if effects == null:
 		return
+	if Net.is_authority():
+		_exit_ambush_check()
 	var winds = effects.get("_winds")
 	if not winds is Array or (winds as Array).is_empty():
 		return

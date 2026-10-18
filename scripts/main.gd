@@ -56,6 +56,7 @@ func _ready() -> void:
 		var p := spawn_player(_local_id(), true, def)
 		LevelTransfer.apply(p, carried)
 		LevelTransfer.fade_in(get_tree())
+		_warm_up_level.call_deferred()
 		if level_music:
 			Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)
 		_net_ready(p)
@@ -71,6 +72,14 @@ func _ready() -> void:
 		_net_ready(null)
 	else:
 		_net_ready(spawn_player(_local_id(), true))
+
+
+## Arrived from another level (no title screen to prepare behind): the
+## effects' and robots' shaders are prepared under the fade from black, in
+## whichever camera is showing (the arrival's, or the player's).
+func _warm_up_level() -> void:
+	await get_tree().process_frame
+	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6)
 
 
 ## This device's player number: 1 offline / hosting, the room's slot when

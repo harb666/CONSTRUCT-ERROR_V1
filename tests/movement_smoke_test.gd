@@ -5067,7 +5067,7 @@ func _toxic_works_tests() -> void:
 		if String(c.name).ends_with("CatwalkGrunt"): catwalk += 1
 		elif c is RobotSkirmisher: skirm += 1
 		elif c is RobotEnemy: grunts += 1
-	_check(grunts == 4 and skirm == 2 and catwalk == 2, "works: 4 grunts and 2 skirmishers wait in the Works, 2 grunts on the hall's catwalks (%d, %d, %d)" % [grunts, skirm, catwalk])
+	_check(grunts == 4 and skirm == 2 and catwalk == 0, "works: 4 grunts and 2 skirmishers wait in the Works (the catwalks' grunts come with the hall's last wave) (%d, %d, %d)" % [grunts, skirm, catwalk])
 	var wd: WaveDirector = main.get_node("WaveDirector")
 	_check(wd.state == WaveDirector.State.WAITING and main.get_node("HallTargets").get_child_count() == 0 and wd.total_waves() == 3,
 		"works: the hall's 3 waves wait for the lift to land")
@@ -5163,6 +5163,14 @@ func _toxic_works_tests() -> void:
 		await _ticks(30)
 		_check(not wipe.visible and not wipe.playing() and p.global_position.distance_to(p.spawn_transform.origin) < 1.0,
 			"works: and it streaks away off the screen to show them there")
+	# Flying robots' routes (FlightNav), built a slice a frame from the
+	# start: none into the Works while its laser gate is closed.
+	var fnav0 := main.get_node(^"FlightNav") as FlightNav
+	var built_early := fnav0.ready_to_route
+	fnav0.build_all()
+	var shut := fnav0.route(main.get_viewport().world_3d.direct_space_state, Vector3(-28.0, 18.0, 40.0), Vector3(25.0, 21.0, -164.0))
+	_check(fnav0.astar.get_point_count() > 10000 and fnav0.build_per_frame <= 150 and not shut.is_empty() and shut[shut.size() - 1].distance_to(Vector3(25.0, 21.0, -164.0)) > 60.0,
+		"works: flyers' routes through the air are built a slice a frame (%s by now), none through the closed gate" % built_early)
 	# The hall's waves (they started as the lift landed), cleared: the
 	# Works gate opens.
 	_check(wd.wave >= 1 and main.get_node("HallTargets").get_child_count() > 0, "works: the waves start once the lift has landed (wave %d)" % wd.wave)
@@ -5173,6 +5181,38 @@ func _toxic_works_tests() -> void:
 		"works: the hall cleared, the laser gate into the Works opens (exit still closed)")
 	_check(not is_instance_valid(gfx.get("Gate_Works_Laser")) or (gfx["Gate_Works_Laser"] as LaserGateFX).opened,
 		"works: its beams overload and collapse as it opens")
+	# The Works' hunter (owner asked): a Neon Sentinel comes in through one
+	# of the Works' windows and goes for the squad; 5 s after it dies,
+	# another. (The gate's beams fade out over 0.6 s, then 2 s.)
+	await _ticks(130)
+	var hunter := tw.hunter
+	var h_at := hunter.global_position if is_instance_valid(hunter) else Vector3.ZERO
+	var by_window := false
+	for m in main.get_node(^"WindowEntries").get_children() + main.get_node(^"WorksWindowEntries").get_children():
+		by_window = by_window or h_at.distance_to(m.global_position) < 20.0
+	_check(is_instance_valid(hunter) and tw.hunters == 1 and hunter.entering and hunter.hunt_nav and hunter.detect_range >= 400.0 and by_window,
+		"works: with the gate open a Neon Sentinel comes in through a window (the one nearest the squad), hunting them (%s)" % h_at)
+	# It finds its way to them through the air (FlightNav: the ground
+	# paths are no use to a flyer), now through the open gate too.
+	var fnav := main.get_node(^"FlightNav") as FlightNav
+	var space := main.get_viewport().world_3d.direct_space_state
+	var deep := Vector3(25.0, 21.0, -164.0)
+	var way := fnav.route(space, Vector3(-28.0, 18.0, 40.0), deep)
+	var via_gate := false
+	for w in way:
+		via_gate = via_gate or (absf(w.x) < 6.0 and absf(w.z + 55.7) < 4.0 and w.y > 7.0 and w.y < 13.0)
+	_check(fnav.ready_to_route and way.size() > 10 and way[way.size() - 1] == deep and via_gate,
+		"works: a sentinel's flight route from the hall to deep in the Works goes through the opened gate (%d points)" % way.size())
+	if is_instance_valid(hunter):
+		hunter.die(DamageInfo.make(9.0, DamageInfo.Type.ENERGY, hunter.global_position, Vector3.DOWN))
+	await _ticks(250)
+	var second_early := tw.hunters
+	await _ticks(130)
+	_check(second_early == 1 and tw.hunters == 2 and is_instance_valid(tw.hunter) and tw.hunter != hunter,
+		"works: 5 s after it dies another comes in")
+	tw.hunter_respawn = 100000.0
+	if is_instance_valid(tw.hunter):
+		tw.hunter.queue_free()
 	# The pads surge up out of the slime as a player comes near.
 	var riser: Array = fx.get("_risers")[0]
 	var trig: Vector3 = Vector3(riser[0]["trigger"]["center"][0], riser[0]["trigger"]["center"][1], riser[0]["trigger"]["center"][2])
@@ -5222,6 +5262,18 @@ func _toxic_works_tests() -> void:
 	_check(float(wind[4]) >= 0.0, "works: reaching the terminal stops the fan (it spins down for good)")
 	gates = main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion()).map(func(n: Node) -> String: return String(n.name))
 	_check(tw.terminals_used.has("Works_Terminal") and not gates.has("Exit_Hall_Laser_Blocker"), "works: using the control terminal opens the exit's laser gate")
+	# The exit ambush (owner asked): fan off, back near the exit platform -
+	# 2 grunts and 2 skirmishers teleport onto it.
+	await _ticks(300)
+	var amb0 := tw.ambushed
+	p.global_position = ToxicWorks.EXIT_WALK + Vector3(-2, 0.3, -18)
+	p.velocity = Vector3.ZERO
+	await _ticks(20)
+	var amb: Array = main.get_node(^"HallTargets").get_children().filter(func(c: Node) -> bool: return String(c.name).begins_with("ExitAmbush_"))
+	var g_n := amb.filter(func(c: Node) -> bool: return not (c is RobotSkirmisher)).size()
+	var on_walk := amb.all(func(c: Node3D) -> bool: return absf(c.global_position.y - 8.0) < 0.4 and absf(c.global_position.x - 47.9) < 8.5 and c.global_position.z > -150.0 and c.global_position.z < -110.0)
+	_check(not amb0 and tw.ambushed and amb.size() == 4 and g_n == 2 and on_walk,
+		"works: fan off and back near the exit, 2 grunts and 2 skirmishers teleport onto the exit platform (%d, %d grunts)" % [amb.size(), g_n])
 	main.queue_free()
 	await _ticks(5)
 	RobotEnemy.ai_enabled = ai_was
@@ -5685,6 +5737,10 @@ func _front_end_tests() -> void:
 	await _ticks(5)
 	var fe: FrontEnd = main.front_end
 	_check(fe != null and paused and main.players.is_empty(), "front end: opens over the paused arena, no player yet")
+	# Freeze fix: one of each robot a level spawns later is set up and drawn
+	# tiny behind the title (shaders ready), inert and in no group.
+	var warm_in_play := get_nodes_in_group(&"enemies").filter(func(n: Node) -> bool: return n.get_parent() != null and n.get_parent().name == &"Robots")
+	_check(Vfx.robots_warmed >= 3 and warm_in_play.is_empty(), "front end: the robots' set-up and shaders are prepared behind the title (%d), none of them in play" % Vfx.robots_warmed)
 	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
 	var cam_from: Vector3 = main._menu_camera.global_position
 	_check(not fe.loaded and fe._buttons.has("start"), "front end: TAP TO START is up while the arena is still loading")
@@ -6259,8 +6315,27 @@ func _combat3_tests(main: Node) -> void:
 ## Grunts on the red-railed catwalks (owner asked), and the hall's last wave
 ## bringing two Neon Sentinels in through the windows.
 func _works_catwalks_and_sentinels(main: Node, tw: ToxicWorks, p: PlayerController) -> void:
-	var gate_g := main.get_node_or_null(^"Targets/GateCatwalkGrunt") as RobotEnemy
-	var south_g := main.get_node_or_null(^"Targets/SouthCatwalkGrunt") as RobotEnemy
+	# The catwalk grunts teleport in at their posts with the last wave.
+	var wd0 := tw.director
+	var was0 := [wd0.state, wd0.wave]
+	wd0.wave = 3
+	wd0._posts_used.clear()
+	var hall0 := main.get_node(^"HallTargets")
+	var n_before := hall0.get_child_count()
+	wd0._spawn_post()
+	wd0._spawn_post()
+	wd0.state = was0[0]
+	wd0.wave = was0[1]
+	var gate_g: RobotEnemy = null
+	var south_g: RobotEnemy = null
+	for c in hall0.get_children():
+		if String(c.name).ends_with("_Post_GateCatwalk"):
+			gate_g = c
+		elif String(c.name).ends_with("_Post_SouthCatwalk"):
+			south_g = c
+	await _ticks(60)
+	_check(hall0.get_child_count() == n_before + 2 and gate_g != null and south_g != null and gate_g.detect_range >= 70.0 and not gate_g.hunt_nav,
+		"works: the last wave's grunts teleport in at their posts on the catwalks, engaging from afar (not hunting round the hall)")
 	_check(gate_g != null and south_g != null and absf(gate_g.global_position.y - 16.6) < 0.3 and absf(south_g.global_position.y - 14.6) < 0.3
 		and absf(gate_g.global_position.z + 54.4) < 1.6 and absf(south_g.global_position.z - 54.4) < 1.6,
 		"works: a grunt stands on the catwalk over the laser gate and one on the catwalk across the hall (%s, %s)" % [gate_g.global_position if gate_g else Vector3.ZERO, south_g.global_position if south_g else Vector3.ZERO])
@@ -6282,21 +6357,23 @@ func _works_catwalks_and_sentinels(main: Node, tw: ToxicWorks, p: PlayerControll
 			if hit.is_empty() or hit.collider == g:
 				clear += 1
 	_check(tries == 6 and clear == tries, "works: the player's shots reach both catwalk grunts from the hall floor (%d / %d lines clear)" % [clear, tries])
+	for g in [gate_g, south_g]:
+		if g:
+			g.queue_free()
 	# The last wave: two sentinels first, flying in through the windows.
 	var d := tw.director
-	_check(d != null and d.wave_sentinels == [0, 0, 2] and main.get_node(^"WindowEntries").get_child_count() == 5,
-		"works: the hall's last wave has two Neon Sentinels, coming in through its windows")
+	_check(d != null and d.wave_sentinels == [0, 0, 2] and d.wave_posts == [0, 0, 2] and main.get_node(^"WindowEntries").get_child_count() == 5,
+		"works: the hall's last wave has two Neon Sentinels coming in through its windows, and the catwalk grunts")
 	var was := [d.state, d.wave]
 	d._start_wave(3)
-	var first: Array = d._queue.slice(0, 2)
+	var first: Array = d._queue.slice(0, 4)
 	d._queue.clear()
 	d.state = was[0]
 	d.wave = was[1]
-	_check(first == [WaveDirector.SENTINEL, WaveDirector.SENTINEL], "works: the sentinels come first in that wave")
+	_check(first == [WaveDirector.SENTINEL, WaveDirector.SENTINEL, WaveDirector.POST, WaveDirector.POST], "works: the sentinels and the catwalk grunts come first in that wave")
 	var hall := main.get_node(^"HallTargets")
-	var n0 := hall.get_child_count()
-	_check(d._spawn_sentinel(), "works: a sentinel starts outside a window")
-	var s := hall.get_child(hall.get_child_count() - 1) as RobotSentinel
+	var s := d.spawn_sentinel()
+	_check(s != null, "works: a sentinel starts outside a window")
 	var out_at := s.global_position if s else Vector3.ZERO
 	var outside := absf(out_at.x) > 60.0 or absf(out_at.z) > 60.0
 	var flew_in := false
@@ -6305,7 +6382,7 @@ func _works_catwalks_and_sentinels(main: Node, tw: ToxicWorks, p: PlayerControll
 		if is_instance_valid(s) and not s.entering and absf(s.global_position.x) < 54.0 and absf(s.global_position.z) < 54.0:
 			flew_in = true
 			break
-	_check(s != null and hall.get_child_count() == n0 + 1 and outside and flew_in,
+	_check(s != null and s.get_parent() == hall and outside and flew_in,
 		"works: and flies in through the window into the hall (from %s to %s)" % [out_at, s.global_position if is_instance_valid(s) else Vector3.ZERO])
 	if is_instance_valid(s):
 		s.queue_free()

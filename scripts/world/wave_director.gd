@@ -22,6 +22,8 @@ const SCENES: Array[PackedScene] = [
 	preload("res://scenes/enemies/robot_sentinel.tscn"),
 ]
 const SENTINEL := 2
+## (Queue entry: a grunt teleporting in at one of the posts, `wave_posts`.)
+const POST := 3
 
 @export var targets_path: NodePath = ^"../Targets"
 @export var spawns_path: NodePath = ^"../WaveSpawns"
@@ -42,6 +44,14 @@ const SENTINEL := 2
 ## starts at one and flies `entry_depth` m in through the window.
 @export var window_entries_path: NodePath = ^"../WindowEntries"
 @export var entry_depth := 16.0
+## Grunts per wave (same order as `waves`) teleporting in at fixed posts
+## (`posts_path`'s Marker3Ds, e.g. the Toxic Works hall's high catwalks)
+## with the wave's first; they hold their post and engage from afar.
+@export var wave_posts: Array[int] = []
+@export var posts_path: NodePath = ^"../WavePosts"
+@export var post_detect_range := 70.0
+@export var post_fire_range := 45.0
+@export var post_combat_speed := 1.4
 ## Most robots alive on the map at once.
 @export var max_active := 8
 ## Per later wave (same order as `waves`): the spawn points (WaveSpawns
@@ -147,6 +157,7 @@ func _start_wave(index: int) -> void:
 	wave = index
 	state = State.FIGHTING
 	_windows_used.clear()
+	_posts_used.clear()
 	var t := targets()
 	if t and hunt_players:
 		for c in t.get_children():
@@ -162,6 +173,8 @@ func _start_wave(index: int) -> void:
 		for i in w.y:
 			_queue.append(1)
 		_queue.shuffle()
+		for i in (wave_posts[slot] if slot < wave_posts.size() else 0):
+			_queue.push_front(POST)
 		for i in (wave_sentinels[slot] if slot < wave_sentinels.size() else 0):
 			_queue.push_front(SENTINEL)
 	wave_started.emit(wave, total_waves())
@@ -184,7 +197,9 @@ func finish_now() -> void:
 ## no spawn point is free.
 func _spawn(scene_index: int) -> bool:
 	if scene_index == SENTINEL:
-		return _spawn_sentinel()
+		return spawn_sentinel() != null
+	if scene_index == POST:
+		return _spawn_post()
 	var at := _pick_spot()
 	if at == Vector3.INF:
 		return false
@@ -214,29 +229,37 @@ func _spawn(scene_index: int) -> bool:
 
 
 var _windows_used: Array[Node3D] = []
+var _posts_used: Array[Node3D] = []
 
 
-## A sentinel flying in through a window: the one farthest from the players
-## not used yet this wave (each comes in through its own).
-func _spawn_sentinel() -> bool:
-	var entries := get_node_or_null(window_entries_path)
+## A sentinel flying in through a window (`entries`' markers; default the
+## wave windows): the one farthest from the players not used yet this wave
+## (each comes in through its own) - or, `nearest`, the one nearest them (but
+## not right on top of them). `hunt`: it goes for the players wherever they
+## are. Null if there's nowhere to come in.
+func spawn_sentinel(entries: Array = [], hunt := hunt_players, nearest := false) -> RobotSentinel:
+	if entries.is_empty():
+		var own := get_node_or_null(window_entries_path)
+		entries = own.get_children() if own else []
 	var t := targets()
-	if entries == null or t == null or entries.get_child_count() == 0:
-		return false
+	if t == null or entries.is_empty():
+		return null
 	var best: Node3D = null
-	var best_d := -1.0
-	for m in entries.get_children():
+	var best_d := INF if nearest else -1.0
+	for m in entries:
 		var n := m as Node3D
-		if n == null or n in _windows_used:
+		if n == null or (not nearest and n in _windows_used):
 			continue
 		var near := _nearest_player(n.global_position)
 		var d := near.global_position.distance_to(n.global_position) if near else 0.0
-		if d > best_d:
+		if nearest:
+			d = d if d > min_player_distance else d + 1000.0
+		if (d < best_d) if nearest else (d > best_d):
 			best_d = d
 			best = n
 	if best == null:
 		_windows_used.clear()
-		best = entries.get_child(randi() % entries.get_child_count()) as Node3D
+		best = entries.pick_random() as Node3D
 	_windows_used.append(best)
 	var from := best.global_position
 	var inward := -best.global_basis.z
@@ -250,7 +273,7 @@ func _spawn_sentinel() -> bool:
 	r.patrol_distance = 0.0
 	r.transform = Transform3D(Basis(Vector3.UP, atan2(inward.x, inward.z)), from)
 	t.add_child(r)
-	if hunt_players:
+	if hunt:
 		_hunt(r)
 	# Whatever is in the way in (the window's barrier) lets it through.
 	var q := PhysicsRayQueryParameters3D.create(from, to, 1, [r.get_rid()])
@@ -259,7 +282,60 @@ func _spawn_sentinel() -> bool:
 	spawned += 1
 	Net.robot_spawned(r, t)
 	robot_spawned.emit(r, SENTINEL)
+	return r
+
+
+## A grunt teleporting in at a post not used yet this wave: it holds it,
+## engaging from afar (not hunting round the map).
+func _spawn_post() -> bool:
+	var posts := get_node_or_null(posts_path)
+	if posts == null:
+		return true  # (nothing to do)
+	for m in posts.get_children():
+		var n := m as Node3D
+		if n == null or n in _posts_used:
+			continue
+		_posts_used.append(n)
+		var r := spawn_robot_at(0, n.global_position, false)
+		if r:
+			r.name = "W%d_Post_%s" % [wave, n.name]
+			r.detect_range = post_detect_range
+			r.lose_range = post_detect_range + 20.0
+			r.fire_range = post_fire_range
+			r.combat_speed = post_combat_speed
+			r.preferred_range = Vector2(2.0, post_detect_range + 20.0)
+		return true
 	return true
+
+
+## Teleport a robot (SCENES index) in at `at` (snapped onto the floor),
+## facing the nearest player. `hunt`: it goes for the players wherever they
+## are. Null if there's no floor there.
+func spawn_robot_at(scene_index: int, at: Vector3, hunt := hunt_players) -> RobotEnemy:
+	var t := targets()
+	var floor := _floor(at)
+	if t == null or floor == Vector3.INF:
+		return null
+	floor += Vector3.UP * 0.05
+	var r := SCENES[scene_index].instantiate() as RobotEnemy
+	_counts[scene_index] = int(_counts.get(scene_index, 0)) + 1
+	r.name = "%s%d" % [["Grunt", "Skirmisher", "Sentinel"][scene_index], _counts[scene_index]]
+	r.respawn_time = -1.0
+	r.patrol_distance = 0.0
+	var face := _nearest_player(floor)
+	var yaw := 0.0
+	if face:
+		var to := face.global_position - floor
+		yaw = atan2(to.x, to.z)
+	r.transform = Transform3D(Basis(Vector3.UP, yaw), floor)
+	t.add_child(r)
+	if hunt:
+		_hunt(r)
+	Hologram.teleport_in(r.get(&"_visual") as Node3D, 0.0, Color(1.0, 0.35, 0.3))
+	spawned += 1
+	Net.robot_spawned(r, t)
+	robot_spawned.emit(r, scene_index)
+	return r
 
 
 ## Make `r` hunt the players from anywhere on the map.
