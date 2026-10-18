@@ -250,6 +250,13 @@
   as modelled), so the round gunmetal sleeve with two red bands covers that
   length (owner asked for it back), stopping short of the front clamp ring
   so the whole tip - clamp ring and barrel ends - shows, spinning.
+  Barrel head (owner asked: a red blob on it, ends lumpy / uneven): the
+  rotor's own head in front of the sleeve is replaced by a clean symmetric
+  one spinning with it (`rotor_tip()`): round gunmetal clamp disc, 5
+  barrels evenly round the axis (still 5: the fire rate is synced to them),
+  each with a muzzle collar and a deep dark bore, a centre spindle and a
+  bolt between each pair. Antenna on the chaingun: its ball tip glows green
+  (owner asked; `Antenna_Tip_Emissive`, the grunts' plasma green).
 - Every other character's opaque body materials draw both sides too
   (`TwoSided`: Grinch / Harbinger, grunts, skirmishers, Sentinel) - no
   see-through gaps at joints or coat hems.

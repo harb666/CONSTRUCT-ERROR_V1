@@ -49,6 +49,13 @@ are. Changes (all reproducible from here):
     modelled), so a plain round gunmetal sleeve with two red bands covers
     that length; it stops short of the rotor's front clamp ring, so the
     whole tip - clamp ring and barrel ends - shows, spinning.
+  * Chaingun barrel head (owner asked: a red chip of texture on it, the
+    barrel ends lumpy and unevenly spaced): the rotor's head in front of
+    TIP_CUT is replaced by a clean, 5-fold symmetric one (rotor_tip):
+    clamp disc, 5 barrels with muzzle collars and dark bores, a centre
+    spindle and bolts, in the atlas's gunmetal patches.
+  * The ball tip of the chaingun's antenna gets its own glowing green
+    material (owner asked).
   * Optional: an authored death clip (from tools/author_boss_death.gd) is
     added.
   * Storage: tangents dropped (Godot regenerates them on import), weights
@@ -129,6 +136,34 @@ BORE_DEPTH = 0.03  # the lip's inner wall
 SLEEVE_BANDS = ((0.025, 0.05), (0.155, 0.18))
 BAND_R = 0.162
 SLEEVE_SEGMENTS = 28
+# The rotor's barrel head (owner asked: a red chip of texture on it and the
+# barrel ends lumpy / uneven): everything of the rotor in front of TIP_CUT
+# (inside the sleeve) is replaced by a clean, symmetric head in the rotor's
+# own space, spinning with it - a round clamp disc (HEAD_R, from HEAD_T[0]
+# inside the sleeve to its chamfered face at HEAD_T[1]), BARRELS barrels
+# evenly round BARREL_RING, each with a thicker muzzle collar and a deep
+# dark bore, a centre spindle and a bolt between each pair of barrels.
+TIP_CUT = 0.192
+HEAD_R = 0.13
+HEAD_T = (0.165, 0.232)
+HEAD_CHAMFER = 0.007
+TIP_BARRELS = 5          # as modelled (the fire rate is synced to 5 barrels)
+BARREL_RING = 0.078
+BARREL_R = 0.031
+BARREL_END = 0.28
+COLLAR_R = 0.035
+COLLAR_T = 0.262
+MUZZLE_BORE_R = 0.019
+MUZZLE_BORE_DEPTH = 0.042
+SPINDLE_R = 0.026
+SPINDLE_END = 0.25
+BOLT_RING = 0.108
+BOLT_R = 0.008
+BOLT_H = 0.006
+# Antenna on top of the chaingun (owner asked: its ball tip green): the ball's
+# triangles (bind space: centre, radius) get their own glowing green material.
+ANTENNA_TIP = (np.array([0.7922, 0.9515, -0.0044]), 0.0232)
+ANTENNA_GREEN = [0.15, 1.0, 0.1]  # the grunts' plasma green (PlasmaFx.GREEN)
 
 # Chest (model/bind space, metres). The recess back wall is flat at z 0.015.
 CHAMBER_BACK_Z = 0.015
@@ -351,6 +386,94 @@ def muzzle_sleeve(c, ax):
     wrong = (np.cross(b - a, cc - a) * np.array(nor)[T[:, 0]]).sum(1) < 0
     T[wrong] = T[wrong][:, [0, 2, 1]]
     return P, np.array(nor, np.float32), np.array(uvs, np.float32), T
+
+
+def rotor_tip():
+    """The chaingun rotor's new barrel head (rotor space): positions,
+    normals, uvs, triangles."""
+    ax = ROTOR_AXIS / np.linalg.norm(ROTOR_AXIS)
+    u = np.cross(ax, [0.0, 0.0, 1.0])
+    u /= np.linalg.norm(u)
+    v = np.cross(ax, u)
+    pos, nor, uvs, tris = [], [], [], []
+
+    def ring(n, phase=0.0):
+        ang = np.linspace(0, 2 * np.pi, n, endpoint=False) + phase
+        return np.outer(np.cos(ang), u) + np.outer(np.sin(ang), v)
+
+    def patch_uv(a, b, patch):
+        # Tiny UVs in the uniform patch, laid out smoothly over the surface
+        # (consistent tangents: no faceted highlights).
+        return np.stack([patch[0] + (a - a.mean()) * MICRO_UV, patch[1] + (b - b.mean()) * MICRO_UV], 1)
+
+    def band(c, rg, r0, t0, r1, t1, normals, patch):
+        # A ring of quads round centre c (off the axis), from radius r0 at
+        # t0 to r1 at t1; the seam column is doubled so the UVs don't wrap.
+        base, n = len(pos), len(rg)
+        arc, along = [], []
+        for k in range(n + 1):
+            j = k % n
+            pos.append(c + ax * t0 + rg[j] * r0)
+            pos.append(c + ax * t1 + rg[j] * r1)
+            nor.extend([normals[j], normals[j]])
+            s_ = 2 * np.pi * k / n
+            arc.extend([s_ * r0, s_ * r1])
+            along.extend([t0 + r0, t1 + r1])  # (also spreads flat annuli)
+        for k in range(n):
+            a0, a1 = base + 2 * k, base + 2 * k + 1
+            b0, b1 = base + 2 * k + 2, base + 2 * k + 3
+            tris.extend([[a0, b0, a1], [a1, b0, b1]])
+        uvs.extend(patch_uv(np.array(arc), np.array(along), patch))
+
+    def cap(c, rg, r, t, normal, patch):
+        base, n = len(pos), len(rg)
+        pos.append(c + ax * t)
+        nor.append(normal)
+        for k in range(n):
+            pos.append(c + ax * t + rg[k] * r)
+            nor.append(normal)
+        for k in range(n):
+            tris.append([base, base + 1 + k, base + 1 + (k + 1) % n])
+        Q = np.array(pos[base:])
+        uvs.extend(patch_uv(Q @ u, Q @ v, patch))
+
+    o = np.zeros(3)
+    # Clamp disc: side, chamfer, face.
+    rd = ring(40)
+    t0, t1 = HEAD_T
+    band(o, rd, HEAD_R, t0, HEAD_R, t1 - HEAD_CHAMFER, rd, GUNMETAL_LIGHT)
+    ch = (rd + ax) / np.sqrt(2)
+    band(o, rd, HEAD_R, t1 - HEAD_CHAMFER, HEAD_R - HEAD_CHAMFER, t1, ch, ARMOUR_GREY)
+    cap(o, rd, HEAD_R - HEAD_CHAMFER, t1, ax, GUNMETAL_DARK)
+    # Barrels, evenly round the axis.
+    rb = ring(20)
+    for k in range(TIP_BARRELS):
+        a = 2 * np.pi * k / TIP_BARRELS
+        c = (np.cos(a) * u + np.sin(a) * v) * BARREL_RING
+        band(c, rb, BARREL_R, t1, BARREL_R, COLLAR_T, rb, GUNMETAL_LIGHT)
+        band(c, rb, BARREL_R, COLLAR_T, COLLAR_R, COLLAR_T, [-ax] * len(rb), GUNMETAL_LIGHT)
+        band(c, rb, COLLAR_R, COLLAR_T, COLLAR_R, BARREL_END, rb, GUNMETAL_LIGHT)
+        band(c, rb, COLLAR_R, BARREL_END, MUZZLE_BORE_R, BARREL_END, [ax] * len(rb), ARMOUR_GREY)
+        band(c, rb, MUZZLE_BORE_R, BARREL_END, MUZZLE_BORE_R, BARREL_END - MUZZLE_BORE_DEPTH, -rb, GUNMETAL_DARK)
+        cap(c, rb, MUZZLE_BORE_R, BARREL_END - MUZZLE_BORE_DEPTH, ax, GUNMETAL_DARK)
+        # A bolt head between this barrel and the next.
+        b = a + np.pi / TIP_BARRELS
+        cb = (np.cos(b) * u + np.sin(b) * v) * BOLT_RING
+        rh = ring(6, b)
+        band(cb, rh, BOLT_R, t1, BOLT_R, t1 + BOLT_H, rh, ARMOUR_GREY)
+        cap(cb, rh, BOLT_R, t1 + BOLT_H, ax, ARMOUR_GREY)
+    # Centre spindle.
+    rs = ring(20)
+    band(o, rs, SPINDLE_R, t1, SPINDLE_R, SPINDLE_END, rs, GUNMETAL_LIGHT)
+    cap(o, rs, SPINDLE_R, SPINDLE_END, ax, ARMOUR_GREY)
+    P = np.array(pos, np.float32)
+    N = np.array(nor, np.float32)
+    T = np.array(tris, np.uint32)
+    # Wind every triangle to face along its normal.
+    a, b, cc = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
+    wrong = (np.cross(b - a, cc - a) * N[T[:, 0]]).sum(1) < 0
+    T[wrong] = T[wrong][:, [0, 2, 1]]
+    return P, N, np.array(uvs, np.float32), T
 
 
 def inner_filler(P, J, Wt, joint_names, bones, shrink):
@@ -730,6 +853,9 @@ def main():
     housing_hidden = 0
     visor_tris = 0
     visor_prim = None
+    antenna_prim = None
+    antenna_tris = 0
+    tip_removed = tip_added = 0
     remapped = 0
     back_xy = np.zeros((0, 3, 2))
     filler_tris = {}
@@ -780,6 +906,20 @@ def main():
             stub_vertices = np.unique(idx[stub])
             stubs_removed = int(stub.sum())
             idx = idx[~stub]
+        if m["name"] == "Chaingun_Barrel_Rotor":
+            # The old barrel head goes (all of it in front of TIP_CUT, inside
+            # the sleeve); the new symmetric one is appended.
+            RP = read_acc(g, B, at["POSITION"])
+            rax_l = ROTOR_AXIS / np.linalg.norm(ROTOR_AXIS)
+            old_head = (RP[idx] @ rax_l).max(1) > TIP_CUT
+            tip_removed = int(old_head.sum())
+            idx = idx[~old_head]
+            tp, tn, tu, tt = rotor_tip()
+            tip_added = len(tt)
+            idx = np.vstack([idx, tt + len(RP)])
+            rotor_arrays = [np.concatenate([RP, tp]).astype(np.float32),
+                            np.concatenate([read_acc(g, B, at["NORMAL"]), tn]).astype(np.float32)]
+            uv = np.concatenate([uv, tu]).astype(np.float32)
         prim = {"attributes": {}, "material": pr.get("material", 0)}
         fill = None
         if m["name"] == "Robot_Body":
@@ -818,6 +958,9 @@ def main():
             uv = fill[2]
             prim["attributes"]["POSITION"] = W.acc(fill[0], 5126, "VEC3", target=34962, minmax=True)
             prim["attributes"]["NORMAL"] = W.acc(fill[1], 5126, "VEC3", target=34962)
+        elif m["name"] == "Chaingun_Barrel_Rotor":
+            prim["attributes"]["POSITION"] = W.acc(rotor_arrays[0], 5126, "VEC3", target=34962, minmax=True)
+            prim["attributes"]["NORMAL"] = W.acc(rotor_arrays[1], 5126, "VEC3", target=34962)
         else:
             prim["attributes"]["POSITION"] = keep(at["POSITION"], 34962)
             prim["attributes"]["NORMAL"] = keep(at["NORMAL"], 34962)
@@ -848,6 +991,14 @@ def main():
                           "indices": W.acc(idx[vis].reshape(-1), 5125, "SCALAR", target=34963)}
             idx = idx[~vis]
             prims.append(visor_prim)
+            # Antenna ball tip: its own (green emissive) primitive.
+            ac, ar = ANTENNA_TIP
+            ball = (np.linalg.norm(P[idx] - ac, axis=2) < ar * 1.1).all(1)
+            antenna_tris = int(ball.sum())
+            antenna_prim = {"attributes": prim["attributes"], "material": None,
+                            "indices": W.acc(idx[ball].reshape(-1), 5125, "SCALAR", target=34963)}
+            idx = idx[~ball]
+            prims.append(antenna_prim)
         prim["indices"] = W.acc(idx.reshape(-1), 5125, "SCALAR", target=34963)
         mesh_map[mi] = len(out_meshes)
         out_meshes.append({"name": m["name"], "primitives": prims})
@@ -903,6 +1054,14 @@ def main():
         "NORMAL": W.acc(cn, 5126, "VEC3", target=34962)},
         "indices": W.acc(ci.astype(np.uint16), 5123, "SCALAR", target=34963), "material": len(materials) - 1}]}
     out_meshes.append(core_mesh)
+    # Antenna tip: glowing green ball (after the core, which takes the
+    # material before it).
+    materials.append({"name": "Antenna_Tip_Emissive",
+                      "pbrMetallicRoughness": {"baseColorFactor": [c * 0.4 for c in ANTENNA_GREEN] + [1.0],
+                                               "metallicFactor": 0.0, "roughnessFactor": 0.3},
+                      "emissiveFactor": [c * 0.6 for c in ANTENNA_GREEN],
+                      "extensions": {"KHR_materials_emissive_strength": {"emissiveStrength": 1.0}}})
+    antenna_prim["material"] = len(materials) - 1
     sock = names["Reactor_Core_Socket"]
     nodes[sock]["translation"] = [float(x) for x in to_spine(CORE_CENTRE)]
     nodes[sock].pop("rotation", None)
@@ -1026,7 +1185,8 @@ def main():
           f"{remapped} void-texel vertices remapped, {removed_tris} recess-back triangles replaced, "
           f"{housing_hidden} enclosed tube triangles removed, {visor_tris} visor triangles, "
           f"{len(anims)} clips, {turned} inside-out triangles turned, inner cores {filler_tris}, "
-          f"{stubs_removed} static chopped barrel-piece triangles removed round the chaingun's rotor (sleeve over it)")
+          f"{stubs_removed} static chopped barrel-piece triangles removed round the chaingun's rotor (sleeve over it), "
+          f"rotor head: {tip_removed} old triangles -> {tip_added} new, {antenna_tris} antenna tip triangles (green)")
 
 
 if __name__ == "__main__":

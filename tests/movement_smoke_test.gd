@@ -3653,6 +3653,33 @@ func _robot_boss_v2_tests(main: Node, boss: RobotBoss, body: MeshInstance3D) -> 
 	_check(absf(lo - ground) < 0.05 * sc and hi - ground > 1.5 * sc, "boss: standing on the floor (lowest %.2f m), %.1f m tall" % [lo - ground, hi - ground])
 	_check(boss.get_node("Targetable").position.y > 1.0 * sc - 0.01 and absf(boss.get_node("Targetable").select_radius - 1.2 * sc) < 0.01, "boss: aim point and tap area follow the size")
 	_check(boss.chaingun_muzzle.global_position.distance_to(boss.rotor.global_position) > 0.25 * sc, "boss: chaingun muzzle at the barrel tips")
+	# The barrel head (in front of the sleeve) is symmetric: turned a fifth
+	# of a turn about the spin axis, every vertex lands on another one.
+	var rotor_mi := boss.rotor as MeshInstance3D
+	var spin_ax := (boss.rotor.global_transform.affine_inverse() * boss.chaingun_muzzle.global_position).normalized()
+	var head := []
+	if rotor_mi:
+		for f: Vector3 in rotor_mi.mesh.get_faces():
+			if f.dot(spin_ax) > 0.2:
+				head.append(f)
+	var unmatched := 0
+	var turn := Basis(spin_ax, TAU / 5.0)
+	for i in range(0, head.size(), 7):
+		var q: Vector3 = turn * head[i]
+		var best := INF
+		for h: Vector3 in head:
+			best = minf(best, q.distance_squared_to(h))
+		if best > 0.001 * 0.001:
+			unmatched += 1
+	_check(head.size() > 300 and unmatched == 0, "boss: chaingun barrel head is symmetric, 5 barrels evenly round the axis (%d of %d points off)" % [unmatched, (head.size() + 6) / 7])
+	# Antenna on the chaingun: green glowing ball tip.
+	var tip_green := false
+	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
+		for si in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(si) as StandardMaterial3D
+			if m and m.resource_name == "Antenna_Tip_Emissive":
+				tip_green = m.emission_enabled and m.emission.g > m.emission.r * 2.0 and m.emission.g > m.emission.b * 2.0 and m.albedo_color.g > m.albedo_color.r * 2.0
+	_check(tip_green, "boss: chaingun antenna's ball tip glows green")
 	# Rocket arm: housing on the forearm, launch line out through its port.
 	var housing := boss.model.find_child("Rocket_Launcher_Housing", true, false) as MeshInstance3D
 	var ms := boss.missile_socket.global_transform
