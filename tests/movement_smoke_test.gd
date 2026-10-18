@@ -4030,6 +4030,39 @@ func _robot_boss_v4_tests(main: Node, boss: RobotBoss) -> void:
 	p.reset_physics_interpolation()
 	await _ticks(60)
 	_check(boss.turn_steps == steps0 and absf(boss.torso_twist.current) > deg_to_rad(10.0), "boss: small aiming corrections twist the upper body only (%.0f deg)" % rad_to_deg(boss.torso_twist.current))
+	# The twist turns about the middle of the waist (where the upper body's
+	# armour meets the pelvis), so the torso turns in place on its groin
+	# instead of swinging off it (the bones run along the body's front).
+	var tsk := boss._sk
+	var tbody: MeshInstance3D = null
+	for mi: MeshInstance3D in boss.model.find_children("*", "MeshInstance3D", true, false):
+		if mi.skin != null and (tbody == null or mi.mesh.get_faces().size() > tbody.mesh.get_faces().size()):
+			tbody = mi
+	var tarr := tbody.mesh.surface_get_arrays(0)
+	var tverts: PackedVector3Array = tarr[Mesh.ARRAY_VERTEX]
+	var tbi: PackedInt32Array = tarr[Mesh.ARRAY_BONES]
+	var tbw: PackedFloat32Array = tarr[Mesh.ARRAY_WEIGHTS]
+	var tper := tbi.size() / tverts.size()
+	var s2 := tsk.find_bone("mixamorig_Spine2")
+	var ring_lo := Vector2(INF, INF)
+	var ring_hi := Vector2(-INF, -INF)
+	for v in tverts.size():
+		for k in tper:
+			var bind := tbi[v * tper + k]
+			if tbw[v * tper + k] > 0.5 and tsk.find_bone(tbody.skin.get_bind_name(bind)) == s2:
+				var q := tsk.get_bone_global_rest(s2) * tbody.skin.get_bind_pose(bind) * tverts[v]
+				if q.y > 0.75 and q.y < 0.87:
+					ring_lo = ring_lo.min(Vector2(q.x, q.z))
+					ring_hi = ring_hi.max(Vector2(q.x, q.z))
+	var ring_mid := (ring_lo + ring_hi) * 0.5
+	var spine_at := tsk.get_bone_global_rest(tsk.find_bone("mixamorig_Spine")).origin
+	_check(ring_mid.distance_to(Vector2(RobotBoss.TWIST_PIVOT.x, RobotBoss.TWIST_PIVOT.z)) < 0.01
+		and ring_mid.distance_to(Vector2(spine_at.x, spine_at.z)) > 0.2,
+		"boss: torso twists about the middle of its waist, not the spine bone at the front (waist middle %s, pivot %s)" % [ring_mid, Vector2(RobotBoss.TWIST_PIVOT.x, RobotBoss.TWIST_PIVOT.z)])
+	var piv := boss.torso_twist.pivot_now(tsk)
+	var hips_now := tsk.get_bone_global_pose(tsk.find_bone("mixamorig_Hips"))
+	_check(piv.distance_to(hips_now * (tsk.get_bone_global_rest(tsk.find_bone("mixamorig_Hips")).affine_inverse() * Vector3(RobotBoss.TWIST_PIVOT.x, spine_at.y, RobotBoss.TWIST_PIVOT.z))) < 0.001,
+		"boss: the twist's pivot rides with the hips")
 	boss.always_active = false
 	await _ticks(10)
 	# Grounding: never stands on the small box; doesn't walk into it.

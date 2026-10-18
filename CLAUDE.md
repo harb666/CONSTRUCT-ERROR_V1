@@ -257,6 +257,13 @@
   each with a muzzle collar and a deep dark bore, a centre spindle and a
   bolt between each pair. Antenna on the chaingun: its ball tip glows green
   (owner asked; `Antenna_Tip_Emissive`, the grunts' plasma green).
+- Boss torso twist (owner asked: turning to keep attacking, its upper body
+  slid off its groin): the rig's spine bones run along the body's front,
+  ~1.2 m (at 4x) in front of the waist's middle, so twisting about the
+  Spine bone swung the whole upper body sideways off the pelvis.
+  `BossTorsoTwist` now turns it about a vertical axis through the middle
+  of the waist ring (`RobotBoss.TWIST_PIVOT`, carried with the hips), so
+  the torso turns in place on the pelvis. Same angles / rate as before.
 - Every other character's opaque body materials draw both sides too
   (`TwoSided`: Grinch / Harbinger, grunts, skirmishers, Sentinel) - no
   see-through gaps at joints or coat hems.

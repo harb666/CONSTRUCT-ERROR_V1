@@ -41,6 +41,10 @@ const STEP_CLIP := &"Heavy_Step"
 const TURN_LEFT := &"Heavy_Turn_L"
 const TURN_RIGHT := &"Heavy_Turn_R"
 const TURN_STEP_DEG := 45.0
+## The waist ring's middle (skeleton space at rest, x / z): where the upper
+## body armour meets the pelvis (the bones run along the body's front, ~0.3
+## in front of it). The torso twist turns about it.
+const TWIST_PIVOT := Vector3(-0.117, 0.0, -0.062)
 const WORN_SHADER := preload("res://scripts/vfx/worn_armour.gdshader")
 const ARMOUR_SHADER := preload("res://scripts/vfx/boss_armour.gdshader")
 ## Where each clip's feet land (s into the clip; tools: foot heights back
@@ -440,6 +444,7 @@ func _build_model() -> void:
 	# aiming true).
 	torso_twist = BossTorsoTwist.new()
 	torso_twist.name = "TorsoTwist"
+	torso_twist.pivot = TWIST_PIVOT
 	sk.add_child(torso_twist)
 	torso_twist.setup(sk)
 	stomp_pose = BossStompPose.new()
