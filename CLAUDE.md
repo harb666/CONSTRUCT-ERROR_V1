@@ -421,9 +421,12 @@
   (`ToxicWorks._spawn_hunter`, `hunter_respawn`). Hunting sentinels fly
   routes through the level's open air (`FlightNav` over
   `gameplay/flight_graph.res`, baked by `tools/bake_flight_graph.gd`: 4 m
-  grid, links through a laser gate only once it's open; built 100 cells a
-  frame from the level's start so phones don't hitch) while out of sight
-  or far off (`hunt_speed` 8), then fight as usual. The ground navmesh is
+  grid, links through a laser gate only once it's open) while out of sight
+  or far off (`hunt_speed` 8), then fight as usual. FlightNav searches the
+  baked grid's own link bits (A*, a little greedy) a slice a frame
+  (`request` / `route_ready`, 250 cells a frame): ~0.5 MB. An engine
+  AStar3D of it took 19 MB of the wasm heap mid-level (crash hunt: iPhone
+  Safari copes worst with the heap growing during play). The ground navmesh is
   no use to a flyer (it snapped to walkways with no way off).
   Exit ambush (owner asked): once the fan is off (control terminal) and a
   player comes back within 26 m of the exit's Conduit Walk, 2 grunts and 2
@@ -522,6 +525,11 @@
   change (`Vfx._warm_up_robots`, `main._warm_up_level`), their materials
   kept, so the first one teleporting in mid-fight doesn't stall a phone
   compiling its shaders.
+- Crash report (DebugHud, web): the session record carries on across level
+  changes (time, peaks) and names the level; only the first level after
+  the page opens reports the previous session (a level change - e.g.
+  Skyforge's lift down to the Works - used to show a false "LAST SESSION
+  STOPPED UNEXPECTEDLY"), shown for the first 90 s of play.
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

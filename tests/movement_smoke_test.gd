@@ -5163,14 +5163,27 @@ func _toxic_works_tests() -> void:
 		await _ticks(30)
 		_check(not wipe.visible and not wipe.playing() and p.global_position.distance_to(p.spawn_transform.origin) < 1.0,
 			"works: and it streaks away off the screen to show them there")
-	# Flying robots' routes (FlightNav), built a slice a frame from the
-	# start: none into the Works while its laser gate is closed.
+	# Flying robots' routes (FlightNav): searched on the baked grid itself
+	# (an engine route graph of it took 19 MB of the game's memory), none
+	# into the Works while its laser gate is closed.
 	var fnav0 := main.get_node(^"FlightNav") as FlightNav
-	var built_early := fnav0.ready_to_route
-	fnav0.build_all()
-	var shut := fnav0.route(main.get_viewport().world_3d.direct_space_state, Vector3(-28.0, 18.0, 40.0), Vector3(25.0, 21.0, -164.0))
-	_check(fnav0.astar.get_point_count() > 10000 and fnav0.build_per_frame <= 150 and not shut.is_empty() and shut[shut.size() - 1].distance_to(Vector3(25.0, 21.0, -164.0)) > 60.0,
-		"works: flyers' routes through the air are built a slice a frame (%s by now), none through the closed gate" % built_early)
+	var sp0 := main.get_viewport().world_3d.direct_space_state
+	var far_end := Vector3(25.0, 21.0, -164.0)
+	var mem0 := OS.get_static_memory_usage()
+	var shut := fnav0.route(sp0, Vector3(-28.0, 18.0, 40.0), far_end)
+	var grew := (OS.get_static_memory_usage() - mem0) / 1048576.0
+	_check(fnav0.point_count() > 10000 and fnav0.get(&"astar") == null and grew < 2.0 and not shut.is_empty() and shut[shut.size() - 1].distance_to(far_end) > 60.0,
+		"works: flyers' routes come from the baked grid itself (+%.1f MB), none through the closed gate" % grew)
+	# A sentinel's request is answered over the next frames, a slice a
+	# frame (a whole search at once could be a hitch on a phone).
+	var asker := RouteAsker.new()
+	fnav0.request(asker, sp0, Vector3(-28.0, 18.0, 40.0), far_end)
+	var waited := 0
+	while asker.path.is_empty() and waited < 120:
+		await _ticks(1)
+		waited += 1
+	_check(not asker.path.is_empty() and waited > 3 and fnav0.per_frame <= 300 and fnav0.pending() == 0,
+		"works: a sentinel's route request is searched a slice a frame (%d frames, %d cells)" % [waited, fnav0.last_searched])
 	# The hall's waves (they started as the lift landed), cleared: the
 	# Works gate opens.
 	_check(wd.wave >= 1 and main.get_node("HallTargets").get_child_count() > 0, "works: the waves start once the lift has landed (wave %d)" % wd.wave)
@@ -6419,6 +6432,13 @@ func _works_walkable(main: Node, p: PlayerController) -> void:
 
 
 ## Walks straight along `dir` (tests).
+class RouteAsker extends RefCounted:
+	var path := PackedVector3Array()
+
+	func route_ready(p: PackedVector3Array) -> void:
+		path = p
+
+
 class WalkInput extends PlayerInput:
 	var dir := Vector3.ZERO
 

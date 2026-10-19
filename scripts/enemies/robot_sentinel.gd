@@ -628,23 +628,32 @@ func _think() -> void:
 
 
 ## A hunter out of sight of its target or far off: a route to it through
-## the air (a clear line of sight isn't a clear way for its body), re-planned
-## every 2 s, or sooner when the target moves well away from its end or it
-## gets stuck. (The ground navigation mesh is no use to a flyer.)
+## the air (a clear line of sight isn't a clear way for its body; FlightNav
+## finds it over the next frames), asked for every 2 s, or sooner when the
+## target moves well away from its end or it gets stuck. (The ground
+## navigation mesh is no use to a flyer.)
 func _update_route() -> void:
 	var near := target != null and _los and Vector2(target.global_position.x - global_position.x, target.global_position.z - global_position.z).length() < orbit_range.y + 8.0
 	if not hunt_nav or target == null or net_puppet or near:
 		_route.clear()
+		_route_t = 0.0
 		return
 	_route_t -= 0.25
 	var moved := _route.size() >= 2 and _route[_route.size() - 1].distance_to(target.global_position) > 6.0
-	if _route_t > 0.0 and _route.size() >= 2 and not moved:
+	if _route_t > 0.0 and not moved:
 		return
 	_route_t = 2.0
 	var nav := get_tree().get_first_node_in_group(&"flight_nav") as FlightNav
 	if nav == null:
 		return
-	_route = nav.route(get_world_3d().direct_space_state, global_position, _aim_point() + Vector3.UP * 1.5, [get_rid()])
+	nav.request(self, get_world_3d().direct_space_state, global_position, _aim_point() + Vector3.UP * 1.5, [get_rid()])
+
+
+## FlightNav's answer to request().
+func route_ready(path: PackedVector3Array) -> void:
+	if not alive or target == null:
+		return
+	_route = path
 	_route_i = 0
 	_route_best = INF
 

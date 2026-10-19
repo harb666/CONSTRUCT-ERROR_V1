@@ -19,19 +19,23 @@ var _perf_t := 0.0
 ## Web only: what the game was doing, saved every few seconds, so a session
 ## the browser killed (iOS "this page was reloaded because a problem
 ## occurred") can be reported on the next start.
+## The session's numbers carry on across level changes (one page load, one
+## session), and only the first level after the page opens reports the one
+## before: a level change isn't a crash.
 var _rec_t := 0.0
-var _session_t := 0.0
-var _last_session := ""
-var _last_session_t := 0.0
+static var _session_t := 0.0
+static var _read_last := false
+static var _last_session := ""
+static var _last_session_t := 0.0
 ## Web only, first minute: when the game was ready and when its sounds could
 ## first play (seconds since the page opened), to check start-up audio.
 var _ready_at := -1.0
 var _audio_text := ""
-var _vmem0 := -1.0
-var _heap0 := -1.0
-var _hpeak := 0.0
+static var _vmem0 := -1.0
+static var _heap0 := -1.0
+static var _hpeak := 0.0
 var _res_text := ""
-var _vpeak := 0.0
+static var _vpeak := 0.0
 
 
 func _ready() -> void:
@@ -50,17 +54,19 @@ func _ready() -> void:
 	if FileAccess.file_exists("res://build_info.txt"):
 		_build = FileAccess.get_file_as_string("res://build_info.txt").strip_edges()
 	if OS.has_feature("web"):
+		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
+	if OS.has_feature("web") and not _read_last:
+		_read_last = true
 		var prev = JavaScriptBridge.eval("localStorage.getItem('ce_session') || ''")
 		var d = JSON.parse_string(str(prev)) if prev != null and str(prev) != "" else null
 		if d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
-			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: fps %d, robots %d, debris %d, nodes %d, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
-				int(d.t) / 60, int(d.t) % 60, int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
+			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: level %s, fps %d, robots %d, debris %d, nodes %d, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
+				int(d.t) / 60, int(d.t) % 60, str(d.get("level", "?")), int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
 				int(d.get("nodes", 0)), str(d.get("heap", "?")), str(d.get("heap0", "?")), str(d.get("hpeak", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("res", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
 		var ev = JavaScriptBridge.eval("localStorage.getItem('ce_events') || ''")
 		if _last_session != "" and ev != null and str(ev) != "":
 			_last_session += ", last events: " + str(ev)
 		JavaScriptBridge.eval("try { localStorage.removeItem('ce_events'); } catch (e) {}")
-		_ready_at = float(JavaScriptBridge.eval("performance.now() / 1000"))
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
 
@@ -144,7 +150,8 @@ func _record(delta: float) -> void:
 		if a is Dictionary and a.has("running"):
 			_audio_text = "audio: game start %s, audio on %s, first sound %s, helper %s" % [
 				_secs(_ready_at), _secs(a.running), _secs(a.firstSound), _secs(a.posReady)]
-	var d := {"t": snappedf(_session_t, 0.1), "fps": Engine.get_frames_per_second(), "robots": alive,
+	var scene := get_tree().current_scene
+	var d := {"t": snappedf(_session_t, 0.1), "level": scene.scene_file_path.get_file().get_basename() if scene else "?", "fps": Engine.get_frames_per_second(), "robots": alive,
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0,
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
