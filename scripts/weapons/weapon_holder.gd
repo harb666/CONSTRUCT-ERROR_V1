@@ -38,6 +38,8 @@ const SIDES := ["Right", "Left"]
 @export var left_target_lock_path: NodePath = ^"../TargetLockLeft"
 
 var slots := {}
+## Times one arm's shot was held back to take turns with the other (tests).
+var turns_held := 0
 
 ## The RIGHT slot's weapon (single-weapon callers, pickups, HUD).
 var current: Weapon:
@@ -88,7 +90,8 @@ func weapon(side: String) -> Weapon:
 
 
 ## Auto-fire: each tick every slot fires at its own locked target as fast as
-## its weapon allows, once that arm's (upper-body-aimed) barrel points at it.
+## its weapon allows, once that arm's (upper-body-aimed) barrel points at it
+## (both on one target: in turn, _take_turns).
 ## Movement is never touched here, except turning a standing player towards
 ## its targets when they are outside the upper body's reach.
 func _on_command(cmd: PlayerCommand, _delta: float) -> void:
@@ -110,7 +113,31 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 		# The right arm's cannon is busy punching (PlayerMelee fires it).
 		if side == "Right" and player.melee and player.melee.active:
 			continue
-		(slots[side] as WeaponSlot).update(player)
+		if (slots[side] as WeaponSlot).update(player):
+			_take_turns(side)
+
+
+## Both arms on one target take turns (owner asked: "both weapons fire at
+## them, not at the same time"): a shot from one arm holds the other's next
+## shot back until at least half the shorter of their two reloads later,
+## so two of the same gun alternate evenly and never fire together. Rates
+## are unchanged (a reload is only ever pushed back when it would have gone
+## off within that half).
+func _take_turns(side: String) -> void:
+	var a := slots[side] as WeaponSlot
+	var b := slots["Left" if side == "Right" else "Right"] as WeaponSlot
+	if b == null or b.current == null or not is_instance_valid(b.current) or not b.has_target():
+		return
+	if b.lock.current != a.lock.current:
+		return
+	var ia := a.current.shot_interval()
+	var ib := b.current.shot_interval()
+	if ia <= 0.0 or ib <= 0.0:
+		return
+	var gap := 0.5 * minf(ia, ib)
+	if b.current.next_shot_in() < gap:
+		b.current.delay_next_shot(gap)
+		turns_held += 1
 
 
 func _skeleton() -> Skeleton3D:

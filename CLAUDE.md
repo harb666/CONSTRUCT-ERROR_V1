@@ -199,6 +199,16 @@
   under it (`PlayerController.respawn_wiped`), it holds 0.14 s and streaks
   on down off the screen in 0.3 s. Only on the device of the player it
   happens to; teammates' characters still go straight back.
+- Both weapons on one enemy (owner asked: "when one enemy is selected both
+  weapons fire at them, not at the same time"): an arm with nothing of its
+  own locked joins the other arm's target (`TargetLock.assist_partner` /
+  `assisting`; a tap on another enemy still gives that arm the new one, as
+  before), and two arms on one target take turns: each shot holds the
+  other arm's next one back to at least half the shorter reload after it
+  (`WeaponHolder._take_turns`, weapons' `shot_interval` / `next_shot_in` /
+  `delay_next_shot`), so two of a gun alternate evenly, never firing in the
+  same frame, at their full rates. The black hole gun (charge-based) isn't
+  held back. The joined target shows the shared (both-arm) reticle.
 - Lock-on reticles in the owner's sci-fi HUD reference style (owner asked):
   lock-in snap animation, segmented / tick rings, notches, brackets and a
   readout (arm, distance, target health); arm colours unchanged.

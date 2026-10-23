@@ -30,6 +30,16 @@ var view_camera: Camera3D
 ## Eye height the line of sight is checked from (m above the player's feet).
 @export var eye_height := 1.4
 
+## One enemy locked, the other arm free (owner asked): the free arm's lock
+## follows the other arm's target, so both weapons fire at it (WeaponHolder
+## has them take turns). A tap on another enemy gives this arm that one
+## instead, as before.
+@export var assist_partner := true
+## The other arm's lock (found beside this one).
+var partner: TargetLock
+## True while this lock only follows `partner`'s target.
+var assisting := false
+
 var current: Targetable
 var _player: Node3D
 ## False while level geometry blocks the line to the target.
@@ -47,6 +57,8 @@ var last_lost_point := Vector3.ZERO
 
 func _ready() -> void:
 	_player = get_parent() as Node3D
+	if _player:
+		partner = _player.get_node_or_null(^"TargetLockLeft" if side == "Right" else ^"TargetLock") as TargetLock
 	var pc := _player as PlayerController
 	if pc:
 		pc.command_processed.connect(_on_command)
@@ -59,6 +71,11 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 	elif id != 0:
 		id = 0
 	var wanted := Targetable.find_by_id(id) if id != 0 else null
+	var assist := false
+	if wanted == null and assist_partner and partner and partner.has_target() and not partner.assisting:
+		wanted = partner.current
+		assist = true
+	assisting = assist
 	if wanted != current:
 		if wanted == null:
 			_set_target(null, "released")
@@ -74,12 +91,12 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 			_los_t = los_interval
 			clear = _line_clear(current.get_aim_point())
 		obstructed_for = 0.0 if clear else obstructed_for + _delta
-		if obstructed_for > cover_memory:
+		if obstructed_for > cover_memory and not assisting:
 			_dropped_id = current.target_id
 			_set_target(null, "obstructed")
 	if current != null and view_camera and is_instance_valid(view_camera):
 		off_screen_for = 0.0 if in_view(current.get_aim_point()) else off_screen_for + _delta
-		if off_screen_for > off_screen_grace:
+		if off_screen_for > off_screen_grace and not assisting:
 			_dropped_id = current.target_id
 			_set_target(null, "off_screen")
 

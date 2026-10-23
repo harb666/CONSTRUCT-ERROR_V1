@@ -129,6 +129,18 @@ func can_fire() -> bool:
 	return is_equipped and _cool <= 0.0
 
 
+func shot_interval() -> float:
+	return fire_interval
+
+
+func next_shot_in() -> float:
+	return maxf(_cool, 0.0)
+
+
+func delay_next_shot(seconds: float) -> void:
+	_cool = maxf(_cool, seconds)
+
+
 func muzzle_position() -> Vector3:
 	return _muzzle.global_position if _muzzle else global_position
 

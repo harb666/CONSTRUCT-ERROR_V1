@@ -90,6 +90,22 @@ func fire_at(_shooter: Node3D, _target_point: Vector3) -> bool:
 	return false
 
 
+## Both arms on one target take turns (WeaponHolder): the seconds between
+## this weapon's shots, the seconds until its next one, and holding that one
+## back. Weapons without a plain reload timer (the black hole gun's charge)
+## report 0 and aren't held back.
+func shot_interval() -> float:
+	return 0.0
+
+
+func next_shot_in() -> float:
+	return 0.0
+
+
+func delay_next_shot(_seconds: float) -> void:
+	pass
+
+
 ## Direction the weapon's barrel points (weapons fire along +X by convention).
 func get_barrel_direction() -> Vector3:
 	return global_basis.x.normalized()

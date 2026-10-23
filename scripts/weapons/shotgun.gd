@@ -125,6 +125,18 @@ func can_fire() -> bool:
 	return _cool <= 0.0
 
 
+func shot_interval() -> float:
+	return 1.0 / maxf(fire_rate, 0.01)
+
+
+func next_shot_in() -> float:
+	return maxf(_cool, 0.0)
+
+
+func delay_next_shot(seconds: float) -> void:
+	_cool = maxf(_cool, seconds)
+
+
 func barrel_positions() -> Array[Vector3]:
 	var out: Array[Vector3] = []
 	for b in _barrels:
