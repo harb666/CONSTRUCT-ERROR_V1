@@ -967,8 +967,8 @@ func _melee_tests(main: Node) -> void:
 	_check(mel.strikes == 1 and killed_at >= 0.12 and killed_at <= 0.22, "melee: the punch lands quickly (%.2f s) and kills the grunt" % killed_at)
 	_check(p.global_position.distance_to(p0) > 1.5, "melee: lunges in to the enemy (%.1f m)" % p.global_position.distance_to(p0))
 	_check(max_w > 0.95, "melee: full-body punch pose plays (weight %.2f)" % max_w)
-	await _ticks(2)
-	_check(mel.hit_stops == 1 and Engine.time_scale == 1.0, "melee: a beat of hit-stop as it lands, then full speed again")
+	await _wall_wait(func() -> bool: return Engine.time_scale == 1.0, 2.0)
+	_check(mel.hit_stops == 1 and ts_min < 0.2 and Engine.time_scale == 1.0, "melee: a beat of hit-stop as it lands (x%.2f, held - not reset the next frame), then eases back to full speed" % ts_min)
 	_check(shot_ok and mel.kills == 1, "melee: the cannon fires as it lands (its shot sound + cel flash)")
 	_check(is_instance_valid(g) and g.last_destruction != BreakApart.Level.NONE, "melee: the grunt is blown to pieces")
 	_check(rig == null or cam_swing > 0.8, "melee: the camera swings round a little (%.2f)" % cam_swing)
@@ -1075,14 +1075,17 @@ func _glide_melee_tests(main: Node) -> void:
 	var glide_cam := 0.0
 	var wide := 0.0
 	var arrived_t := -1.0
+	var struck_t := -1.0
 	var frames := 0
 	while mel.active:
 		await _ticks(1)
 		frames += 1
+		if mel.hit_done and struck_t < 0.0:
+			struck_t = frames / 60.0
 		if mel.gliding:
 			max_speed = maxf(max_speed, Vector2(p.velocity.x, p.velocity.z).length())
 			var gl := p.get_node_or_null("GlitchGlide") as GlitchGlide
-			if gl:
+			if gl and gl.active:
 				glitched = true
 				for mi: MeshInstance3D in p.find_children("*", "MeshInstance3D", true, false):
 					overlaid = overlaid or (mi.material_overlay != null and (mi.material_overlay as ShaderMaterial) != null and (mi.material_overlay as ShaderMaterial).shader == GlitchGlide.SHADER)
@@ -1101,8 +1104,10 @@ func _glide_melee_tests(main: Node) -> void:
 	_check(glitched and overlaid, "glide melee: the player glitches as they glide (torn cyan / magenta bands, pixel trail)")
 	_check(rig == null or (glide_cam > 0.9 and wide > 20.0), "glide melee: the camera drops into a low, wide chase shot (fov +%.0f)" % wide)
 	_check(mel.kills >= 1 and not g.alive and p.global_position.distance_to(p0) > 9.0, "glide melee: then strikes - the grunt is blown apart (%.1f m covered)" % p.global_position.distance_to(p0))
+	_check(struck_t > arrived_t and struck_t - arrived_t <= 0.12, "glide melee: the punch carries straight on from the flight (lands %.2f s after arriving)" % (struck_t - arrived_t))
 	await _ticks(20)
-	_check(p.get_node_or_null("GlitchGlide") == null and (rig == null or (rig.glide_blend < 0.05 and not rig.speed_lines.visible)), "glide melee: the glitch, the speed lines and the chase shot are gone after")
+	var glg := p.get_node_or_null("GlitchGlide") as GlitchGlide
+	_check((glg == null or not glg.active) and (rig == null or (rig.glide_blend < 0.05 and not rig.speed_lines.visible)), "glide melee: the glitch, the speed lines and the chase shot are gone after")
 	# --- in the way: a wall between ---
 	await _ticks(80)
 	sel.clear()

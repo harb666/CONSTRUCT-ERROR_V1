@@ -290,6 +290,15 @@
   again; after a pause it starts at the jab. The arms keep their cannons
   for the chain and go back to their weapons 0.9 s after the last melee.
   Cooldown between melees 0.12 s (was 0.3) so the combo chains.
+  Smoothness (owner asked: "lag/buggyness as the melee happens", keep it
+  epic): the glitch overlay is one pass (was two - each redrew the whole
+  character) and made once per player, reused each glide; out of a glide
+  the strike carries straight on (no windup pause after arriving: hit
+  ~0.07 s after); hit-stop slows the game to x0.08 then eases back to full
+  speed (`_hit_stop`, real time) - the weapon wheel used to reset it the
+  next frame (a one-frame hitch), it now only sets the game speed while
+  open / easing; no hit-stop online (as the wheel's slow-down); the kill's
+  blast spawns a frame after the break-apart.
 - Boss missiles knock players down (owner asked): a player in the blast is
   thrown back and up (`BossMissile.knock_speed` / `knock_up`, edge ->
   centre); within `flip_within` of the centre they turn a balled-up

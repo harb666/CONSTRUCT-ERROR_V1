@@ -7,9 +7,11 @@ extends Node3D
 ##    (glitch_glide.gdshader as the character's material_overlay);
 ##  - the model jitters and skips a few centimetres, in steps;
 ##  - a trail of pixel blocks (cyan, magenta, white) left in the air.
-## `start(player)` adds it, `stop()` fades it out (0.15 s) and puts back
-## what was there. Shared materials (one shader, warmed up behind the
-## title: Vfx.warm_up).
+## `start(player)` turns it on (made once per player, then reused: no new
+## materials or particles per glide), `stop()` fades it out (0.15 s) and
+## puts back what was there. One overlay pass (a second one redrew the whole
+## character again - a phone's frame mid-glide); shader warmed up behind
+## the title (Vfx.warm_up).
 
 const SHADER := preload("res://scripts/vfx/glitch_glide.gdshader")
 const CYAN := Color(0.0, 0.95, 1.0)
@@ -18,6 +20,8 @@ const MAGENTA := Color(1.0, 0.1, 0.85)
 var player: Node3D
 var amount := 0.0
 var fading := false
+## On (gliding, or fading out).
+var active := false
 var _mat: ShaderMaterial
 var _meshes: Array[GeometryInstance3D] = []
 var _before: Array[Material] = []
@@ -30,15 +34,20 @@ var _streaks: CPUParticles3D
 var direction := Vector3.ZERO
 
 static var started := 0
+static var _trail_mat: StandardMaterial3D
+static var _streak_mat: StandardMaterial3D
 
 
 static func start(p: Node3D) -> GlitchGlide:
 	if p == null or not p.is_inside_tree():
 		return null
-	var g := GlitchGlide.new()
-	g.name = "GlitchGlide"
-	g.player = p
-	p.add_child(g)
+	var g := p.get_node_or_null(^"GlitchGlide") as GlitchGlide
+	if g == null:
+		g = GlitchGlide.new()
+		g.name = "GlitchGlide"
+		g.player = p
+		p.add_child(g)
+	g._begin()
 	started += 1
 	return g
 
@@ -47,14 +56,8 @@ static func make_material() -> ShaderMaterial:
 	var a := ShaderMaterial.new()
 	a.shader = SHADER
 	a.set_shader_parameter("tint", CYAN)
+	a.set_shader_parameter("tint2", MAGENTA)
 	a.set_shader_parameter("shift", 0.16)
-	a.set_shader_parameter("seed", 0.0)
-	var b := ShaderMaterial.new()
-	b.shader = SHADER
-	b.set_shader_parameter("tint", MAGENTA)
-	b.set_shader_parameter("shift", -0.13)
-	b.set_shader_parameter("seed", 17.0)
-	a.next_pass = b
 	return a
 
 
@@ -71,8 +74,28 @@ static func warm_up_items() -> Array[Node3D]:
 func _ready() -> void:
 	_mat = make_material()
 	_set_amount(0.0)
+	_trail = _make_trail()
+	add_child(_trail)
+	_trail.position = Vector3.UP * 1.0
+	_streaks = _make_streaks()
+	add_child(_streaks)
+	_streaks.position = Vector3.UP * 1.0
+	set_process(false)
+
+
+## On: the overlay onto the model's meshes now (weapons change between
+## glides), the pixel trail running.
+func _begin() -> void:
+	if active and not fading:
+		return
+	if active:
+		_restore()
+	active = true
+	fading = false
 	var visual := player.get_node_or_null(^"Visual") as Node3D
 	_model = visual.get_child(0) as Node3D if visual and visual.get_child_count() > 0 else null
+	_meshes.clear()
+	_before.clear()
 	if _model:
 		_model_pos = _model.position
 		for mi: MeshInstance3D in _model.find_children("*", "MeshInstance3D", true, false):
@@ -81,13 +104,9 @@ func _ready() -> void:
 			_meshes.append(mi)
 			_before.append(mi.material_overlay)
 			mi.material_overlay = _mat
-	_trail = _make_trail()
-	add_child(_trail)
-	_trail.position = Vector3.UP * 1.0
 	_trail.emitting = true
-	_streaks = _make_streaks()
-	add_child(_streaks)
-	_streaks.position = Vector3.UP * 1.0
+	direction = Vector3.ZERO
+	set_process(true)
 
 
 static func _make_trail() -> CPUParticles3D:
@@ -107,17 +126,19 @@ static func _make_trail() -> CPUParticles3D:
 	c.scale_amount_max = 1.6
 	var q := QuadMesh.new()
 	q.size = Vector2.ONE * 0.07
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.vertex_color_use_as_albedo = true
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	# Blocks the camera flies past fade out instead of filling the screen.
-	m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
-	m.distance_fade_min_distance = 0.6
-	m.distance_fade_max_distance = 2.2
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	q.material = m
+	if _trail_mat == null:
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.vertex_color_use_as_albedo = true
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		# Blocks the camera flies past fade out instead of filling the screen.
+		m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+		m.distance_fade_min_distance = 0.6
+		m.distance_fade_max_distance = 2.2
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_trail_mat = m
+	q.material = _trail_mat
 	c.mesh = q
 	var g := Gradient.new()
 	g.offsets = PackedFloat32Array([0.0, 0.35, 0.7, 1.0])
@@ -148,15 +169,17 @@ static func _make_streaks() -> CPUParticles3D:
 	c.scale_amount_max = 1.4
 	var b := BoxMesh.new()
 	b.size = Vector3(0.025, 2.2, 0.025)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.vertex_color_use_as_albedo = true
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
-	m.distance_fade_min_distance = 0.8
-	m.distance_fade_max_distance = 2.5
-	b.material = m
+	if _streak_mat == null:
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.vertex_color_use_as_albedo = true
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+		m.distance_fade_min_distance = 0.8
+		m.distance_fade_max_distance = 2.5
+		_streak_mat = m
+	b.material = _streak_mat
 	c.mesh = b
 	var g := Gradient.new()
 	g.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
@@ -169,7 +192,6 @@ static func _make_streaks() -> CPUParticles3D:
 func _set_amount(a: float) -> void:
 	amount = a
 	_mat.set_shader_parameter("amount", a)
-	(_mat.next_pass as ShaderMaterial).set_shader_parameter("amount", a)
 
 
 func stop() -> void:
@@ -204,31 +226,27 @@ func _process(delta: float) -> void:
 		_model.position = _model_pos + j * amount
 
 
+## Off: what was there before put back (the trail's last blocks finish in
+## the air by themselves).
 func _finish() -> void:
+	_restore()
+	active = false
+	fading = false
+	_trail.emitting = false
+	_streaks.emitting = false
+	set_process(false)
+
+
+func _restore() -> void:
 	for i in _meshes.size():
 		var mi := _meshes[i]
 		if is_instance_valid(mi) and mi.material_overlay == _mat:
 			mi.material_overlay = _before[i]
 	if _model and is_instance_valid(_model):
 		_model.position = _model_pos
-	if _streaks and is_instance_valid(_streaks):
-		_streaks.queue_free()
-	# The trail's last blocks finish where they are.
-	if _trail and is_instance_valid(_trail):
-		var host: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root
-		var keep := _trail.global_transform
-		remove_child(_trail)
-		host.add_child(_trail)
-		_trail.global_transform = keep
-		get_tree().create_timer(_trail.lifetime + 0.1).timeout.connect(_trail.queue_free)
-	queue_free()
+	_meshes.clear()
+	_before.clear()
 
 
 func _exit_tree() -> void:
-	if not fading or amount > 0.0:
-		for i in _meshes.size():
-			var mi := _meshes[i]
-			if is_instance_valid(mi) and mi.material_overlay == _mat:
-				mi.material_overlay = _before[i]
-		if _model and is_instance_valid(_model):
-			_model.position = _model_pos
+	_restore()

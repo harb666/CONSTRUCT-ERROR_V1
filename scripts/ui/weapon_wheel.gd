@@ -207,7 +207,9 @@ func _process(_delta: float) -> void:
 	var ts := lerpf(1.0, slow_time_scale, _open_amount)
 	if Net.is_online():
 		ts = 1.0  # online the world can't slow down for one player
-	if absf(Engine.time_scale - ts) > 0.0001:
+	# Only while it's open or easing (closed, it leaves the game speed alone:
+	# it used to reset the melee's hit-stop on the very next frame).
+	if (_open_amount > 0.0 or prev > 0.0) and absf(Engine.time_scale - ts) > 0.0001:
 		Engine.time_scale = ts
 	if _open_amount != prev or is_open:
 		queue_redraw()

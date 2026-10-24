@@ -79,7 +79,7 @@ const MOVES := {
 @export var knock_back_speed := 9.0
 @export var stumble_time := 0.85
 ## Hit-stop: the world almost freezes for a beat as the punch lands.
-@export var hit_stop_scale := 0.05
+@export var hit_stop_scale := 0.08
 static var hit_stop_enabled := true
 ## Chest height above the feet the glide lines up with the enemy's middle.
 const CHEST := 1.1
@@ -130,6 +130,12 @@ var _player: PlayerController
 var _glitch: GlitchGlide
 var _stuck := 0.0
 var _boomed := false
+## Where the strike's timeline started (past the windup out of a glide).
+var _t0 := 0.0
+## Hit-stop: real time (us) it started, how long it holds, how long it eases.
+var _stop_at := -1
+var _stop_hold := 0.0
+var _stop_ease := 0.0
 
 
 func _ready() -> void:
@@ -335,7 +341,10 @@ func _camera(f: Callable) -> void:
 func _begin_strike() -> void:
 	from_glide = gliding
 	gliding = false
-	t = 0.0
+	# Out of a glide it arrives already cocked: the punch carries straight
+	# on from the flight (no windup pause after it lands).
+	t = _glide_skip() if from_glide else 0.0
+	_t0 = t
 	in_air = not _player.is_on_floor() or move == Move.UPPERCUT or move == Move.SLAM or move == Move.SPIN
 	_camera(func(r: CameraRig) -> void:
 		r.melee_glide(false)
@@ -345,6 +354,15 @@ func _begin_strike() -> void:
 	elif _glitch:
 		_glitch.stop()
 		_glitch = null
+
+
+func _glide_skip() -> float:
+	match move:
+		Move.SLAM:
+			return windup_time * 0.6
+		Move.SPIN:
+			return 0.1
+	return windup_time
 
 
 func _glitch_on() -> void:
@@ -389,14 +407,14 @@ func tick(delta: float) -> void:
 	var dist := to.length()
 	var dir := Vector2(to.x, to.z) / dist if dist > 0.01 else Vector2.ZERO
 	if not hit_done:
-		if t < 0.03:
+		if t < _t0 + 0.03 and not from_glide:
 			lunge = Vector2.ZERO  # a beat of anticipation
 		else:
 			var gap := maxf(dist - contact_range, 0.0)
 			lunge = dir * minf(gap / maxf(hit_time - t, 0.04), max_lunge_speed)
 		vertical = _vertical_before_hit()
 		if move == Move.SPIN:
-			spin = TAU * smoothstep(0.0, hit_time, t)
+			spin = TAU * smoothstep(_t0, hit_time, t)
 		if t >= hit_time or (t >= hit_time - 0.05 and dist <= contact_range + 0.15 and move != Move.SPIN and move != Move.SLAM):
 			_strike(dir)
 	else:
@@ -515,7 +533,11 @@ func _strike(dir2: Vector2) -> void:
 		e.apply_damage(info)
 		killed = true
 		var host: Node = tree.current_scene if tree.current_scene else tree.root
-		MissileBlast.spawn(host, at, 1.4, 0.4, false)
+		# A frame later: the kill (break-apart) and the blast don't land on
+		# the same frame.
+		tree.process_frame.connect(func() -> void:
+			if is_instance_valid(host):
+				MissileBlast.spawn(host, at, 1.4, 0.4, false), CONNECT_ONE_SHOT)
 	strikes += 1
 	if killed:
 		kills += 1
@@ -539,14 +561,31 @@ func _push(dir: Vector3) -> Vector3:
 	return (dir + Vector3.UP * 0.45).normalized()
 
 
+## Hit-stop: the game slows right down for `time` (real seconds), then
+## eases back up to full speed over twice that - a heavy, weighty hit
+## without a hard freeze and jump (the old freeze read as a hitch).
 func _hit_stop(time: float) -> void:
 	# (A teammate's punch shown here doesn't stop this device's game.)
-	if not hit_stop_enabled or time <= 0.0 or _player.is_remote:
+	# Online the world can't slow down for one player (as the weapon wheel).
+	if not hit_stop_enabled or time <= 0.0 or _player.is_remote or Net.is_online():
 		return
 	Engine.time_scale = hit_stop_scale
 	hit_stops += 1
-	_player.get_tree().create_timer(time, true, false, true).timeout.connect(func() -> void:
-		Engine.time_scale = 1.0)
+	_stop_at = Time.get_ticks_usec()
+	_stop_hold = time * 0.6
+	_stop_ease = time * 2.0
+
+
+func _process(_delta: float) -> void:
+	if _stop_at < 0:
+		return
+	var real := (Time.get_ticks_usec() - _stop_at) / 1000000.0
+	var k := clampf((real - _stop_hold) / maxf(_stop_ease, 0.001), 0.0, 1.0)
+	if k >= 1.0:
+		_stop_at = -1
+		Engine.time_scale = 1.0
+		return
+	Engine.time_scale = lerpf(hit_stop_scale, 1.0, k * k * (3.0 - 2.0 * k))
 
 
 func _end() -> void:
@@ -575,5 +614,6 @@ func cancel() -> void:
 		_end()
 	if not _prev.is_empty():
 		_give_back()
-	if Engine.time_scale != 1.0:
+	if _stop_at >= 0 or Engine.time_scale != 1.0:
+		_stop_at = -1
 		Engine.time_scale = 1.0
