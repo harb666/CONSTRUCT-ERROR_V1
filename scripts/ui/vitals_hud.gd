@@ -12,6 +12,8 @@ extends Control
 ## green -> amber at half -> red at 3 bars, lost bars dark red, its value
 ## large beside it; at 3 bars or fewer a red glow pulses round it (a layer
 ## faded in and out - the panel itself isn't redrawn for it).
+## Bitcoins (owner asked: an in-game currency): a gold coin and the count
+## under the bars, popping bigger as tokens are picked up.
 
 const HEALTH := HudStyle.HEALTH
 const ARMOUR := HudStyle.ARMOUR
@@ -38,6 +40,9 @@ var _emblem: Array[HudSpinLayer] = []
 var _shown := []
 ## The low-health glow round the bar (drawn once, faded in and out).
 var _low_glow: Control
+## The bitcoin count's pop as tokens come in.
+var _coin_pop := 0.0
+var _coin_hooked: PlayerController
 
 
 func _ready() -> void:
@@ -77,6 +82,12 @@ func _process(delta: float) -> void:
 	var drops := RecoveryDrops.get_for(get_tree()) if is_inside_tree() else null
 	if drops and not drops.collected.is_connected(_on_collected):
 		drops.collected.connect(_on_collected)
+	if player and _coin_hooked != player:
+		_coin_hooked = player
+		player.bitcoins_changed.connect(func(_t: int, added: int) -> void:
+			if added > 0:
+				_coin_pop = 1.0)
+	_coin_pop = maxf(_coin_pop - delta * 4.0, 0.0)
 	for l in _emblem:
 		l.visible = player != null
 	HudStyle.spin_layers(_emblem, _t)
@@ -98,7 +109,7 @@ func _state() -> Array:
 	var drops := get_tree().get_first_node_in_group(RecoveryDrops.GROUP) as RecoveryDrops
 	var st := [player, player.character, player.player_id, player.health, player.max_health, player.armour, player.max_armour,
 		_trail[0][0], _trail[1][0], _flash[0], _flash[1], pd != null and pd.counter_active(),
-		drops != null and drops.bonus_active(), drops.streak_bonus if drops else 0.0]
+		drops != null and drops.bonus_active(), drops.streak_bonus if drops else 0.0, player.bitcoins, snappedf(_coin_pop, 0.1)]
 	for n in get_tree().get_nodes_in_group(&"players"):
 		var mate := n as PlayerController
 		if mate == null or mate == player:
@@ -154,8 +165,15 @@ func _draw() -> void:
 	HudStyle.text(self, nf, Vector2(x0 + BAR.x + 12, BAR_Y + BAR.y - 3), "%d" % ceili(player.health), 26, hc, 0.0, 4)
 	HudStyle.seg_bar(self, Rect2(Vector2(x0, ARMOUR_Y), ARMOUR_BAR), a, ARMOUR, 20, _trail[1][0], _flash[1])
 	HudStyle.text(self, nf, Vector2(x0 + BAR.x + 12, ARMOUR_Y + ARMOUR_BAR.y + 1), "%d" % ceili(player.armour), 12, ARMOUR, 0.0, 3)
+	# Bitcoins.
+	var cs := 22.0 + 6.0 * _coin_pop
+	var cc := Vector2(x0 + 11.0, 101.0)
+	draw_texture_rect(RecoveryDrops.COIN_FACE, Rect2(cc - Vector2(cs, cs) * 0.5, Vector2(cs, cs)), false)
+	var gold := Color(1.0, 0.82, 0.3).lerp(Color.WHITE, _coin_pop * 0.6)
+	var count := "%d" % player.bitcoins
+	HudStyle.text(self, nf, Vector2(x0 + 28.0, 109.0), count, 20 + roundi(_coin_pop * 4.0), gold, 0.0, 3)
 	# Status tags.
-	var tag_x := x0
+	var tag_x := x0 + 40.0 + nf.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
 	var pd := player.get_node_or_null("PerfectDodge") as PerfectDodge
 	if pd and pd.counter_active():
 		tag_x = _tag(tag_x, "COUNTER", Color(0.55, 0.95, 1.0))
@@ -163,7 +181,7 @@ func _draw() -> void:
 	if drops and drops.bonus_active():
 		_tag(tag_x, "RECOVERY +%d%%" % roundi(drops.streak_bonus * 100.0), Color(1.0, 0.85, 0.3))
 	# Teammates (online co-op).
-	var y := 118.0
+	var y := 124.0
 	for n in get_tree().get_nodes_in_group(&"players"):
 		var mate := n as PlayerController
 		if mate == null or mate == player:

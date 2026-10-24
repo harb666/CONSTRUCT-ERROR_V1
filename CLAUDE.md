@@ -615,8 +615,8 @@
 - Pistol cannon (owner asked: unlimited bullets but "a quick cooldown so
   it's not continuous fire", clearly visible, epic): 6 cells (shots), then
   it vents for 1.1 s; left alone 0.5 s its cells refill (6 a second)
-  (`PlasmaCannon` cells / vent_time / regen). `PlasmaVent`: six cell
-  crystals turning over the gun go dark as it fires; venting, the gun flares
+  (`PlasmaCannon` cells / vent_time / regen). `PlasmaVent` (its cell
+  crystals over the gun were removed - owner asked): venting, the gun flares
   white-hot orange with energy bands crawling down it
   (`plasma_vent.gdshader` overlay), plasma jets roar out of both sides,
   sparks spray, three segmented rings of light lock round the barrel
@@ -629,17 +629,35 @@
   for the players' other weapons"): `WeaponDefinition.max_ammo` /
   `ammo_pack` - shotgun 20 / 5, machine gun 240 / 60, rocket launcher 8 / 2,
   Frost Byte 4 / 1, black hole gun 3 / 1. A pad gives a full load (and tops
-  it up when walked onto again, the pad staying); each kill also drops ammo
-  cells (a capsule in the weapon's colour with its icon over it) for the
-  local player's weapons that aren't full, emptiest first - grunt 1,
-  skirmisher / sentinel 2, boss 5 (`RecoveryDrops.drop_ammo`, the boss
-  drops no health shards, as before). Run dry, the arm switches to the
+  it up when walked onto again, the pad staying). DOOM Eternal balance
+  (owner asked: "only drop when the player melees and kills the enemy" -
+  else a weapon never runs down): only a MELEE kill drops ammo (3D bullets
+  in the weapon's colour, its icon over each) for the local player's
+  weapons that aren't full, emptiest first - grunt 2, skirmisher /
+  sentinel 3 (`RecoveryDrops.melee_ammo_packs`; the boss can't be
+  meleed); gun kills drop none. Run dry, the arm switches to the
   pistol cannon by itself and back when ammo for it is picked up
   (`WeaponLoadout` use_ammo / add_ammo, `_dry`); an empty weapon can't be
   picked in the wheel (dimmed, EMPTY, "NO AMMO - KILL ENEMIES FOR MORE").
   HUD weapon panel shows the count (red when low, flashing on pickup).
   Carried down the lift (`LevelTransfer.ammo`). Counted only on the
   player's own device (co-op).
+- Pick-ups (owner asked; `RecoveryDrops`): health = a 3D "+" cross (the old
+  crystal's size, green), armour = a 3D green shield (a lighter raised
+  boss on it), ammo = a 3D bullet in the gun's colour; all bob, spin and
+  glitch now and then (a jump sideways, a stretch and a cyan / magenta
+  flash). Magnet 3 -> 7 m (owner asked: "more magnetic", collected even
+  from an edge - they fly up / down to the player).
+- Currency (owner asked): bitcoin tokens - small gold coins with the ₿ on
+  both faces (`assets/ui/pickups/bitcoin_face.png`, made by
+  `tools/make_bitcoin_face.py`) - burst out of every robot killed, more
+  from stronger ones (grunt 4, skirmisher 7, sentinel 9, boss 30;
+  `RecoveryDrops.token_count`), same bob / spin / glitch, gone after 5 s
+  (the others 10 s); 1 each to `PlayerController.bitcoins` (only this
+  device's own player picks them up). HUD: a gold coin and the count under
+  the health / armour bars, popping as they come in. Kept through deaths
+  and down the lift (`LevelTransfer.bitcoins`); not saved between sessions
+  and nothing to spend them on yet.
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner

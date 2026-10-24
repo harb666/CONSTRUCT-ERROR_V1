@@ -16,6 +16,7 @@ static var character_id := &""
 static var weapons := {}  # "Right" / "Left" -> weapon id
 static var unlocked: Array[StringName] = []
 static var ammo := {}  # weapon id -> rounds left
+static var bitcoins := 0
 static var transfers := 0
 static var _fade: CanvasLayer
 
@@ -26,6 +27,7 @@ static func capture(player: PlayerController) -> void:
 	weapons.clear()
 	unlocked.clear()
 	ammo.clear()
+	bitcoins = player.bitcoins if player else 0
 	if player == null:
 		return
 	var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
@@ -49,6 +51,7 @@ static func start_as(character: CharacterDefinition) -> void:
 	weapons.clear()
 	unlocked.clear()
 	ammo.clear()
+	bitcoins = 0
 
 
 ## Fade out, then load `scene_path` (the next part).
@@ -79,7 +82,7 @@ static func take() -> Dictionary:
 	if not pending:
 		return {}
 	pending = false
-	return {"character": character_id, "weapons": weapons.duplicate(), "unlocked": unlocked.duplicate(), "ammo": ammo.duplicate()}
+	return {"character": character_id, "weapons": weapons.duplicate(), "unlocked": unlocked.duplicate(), "ammo": ammo.duplicate(), "bitcoins": bitcoins}
 
 
 ## Give `player` what it carried over.
@@ -87,6 +90,7 @@ static func apply(player: PlayerController, data: Dictionary) -> void:
 	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
 	if reg == null or player == null:
 		return
+	player.add_bitcoins(int(data.get("bitcoins", 0)))
 	var loadout := player.get_node_or_null("WeaponLoadout") as WeaponLoadout
 	if loadout:
 		for id in data.get("unlocked", []):

@@ -235,6 +235,20 @@ func heal(amount: float) -> float:
 	return add
 
 
+## In-game currency (owner asked): bitcoin tokens picked up (RecoveryDrops).
+## Kept through deaths and down the lift (LevelTransfer); not saved between
+## sessions yet.
+var bitcoins := 0
+signal bitcoins_changed(total: int, added: int)
+
+
+func add_bitcoins(n: int) -> void:
+	if n == 0:
+		return
+	bitcoins = maxi(bitcoins + n, 0)
+	bitcoins_changed.emit(bitcoins, n)
+
+
 func add_armour(amount: float) -> float:
 	var add := clampf(amount, 0.0, max_armour - armour)
 	armour += add

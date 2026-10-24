@@ -4438,10 +4438,10 @@ func _recovery_tests(main: Node) -> void:
 	p.health = 50.0
 	p.armour = 100.0
 	robot.apply_damage(DamageInfo.make(99.0, DamageInfo.Type.BULLET, at + Vector3.UP, Vector3.FORWARD, 1.0))
-	_check(drops.active_count() == 1, "recovery: light robot kill drops one shard (%d)" % drops.active_count())
+	_check((drops.active_count(RecoveryDrops.Kind.HEALTH) + drops.active_count(RecoveryDrops.Kind.ARMOUR)) == 1, "recovery: light robot kill drops one shard (%d)" % (drops.active_count(RecoveryDrops.Kind.HEALTH) + drops.active_count(RecoveryDrops.Kind.ARMOUR)))
 	var shard: RecoveryDrops.Shard = null
 	for s in drops._pool:
-		if s.active:
+		if s.active and s.kind != RecoveryDrops.Kind.TOKEN:
 			shard = s
 	_check(shard != null and shard.kind == RecoveryDrops.Kind.HEALTH and is_equal_approx(shard.value, drops.health_value), "recovery: it is an 8 HP health shard")
 	# Scatter + a few bounces, then it rests (at most ~2 s).
@@ -4476,7 +4476,7 @@ func _recovery_tests(main: Node) -> void:
 	p.armour = p.max_armour
 	drops.spawn(RecoveryDrops.Kind.HEALTH, p.global_position + Vector3(0, 1, 0), 8.0)
 	await _ticks(40)
-	_check(drops.active_count() == 1, "recovery: not collected while health is full")
+	_check((drops.active_count(RecoveryDrops.Kind.HEALTH) + drops.active_count(RecoveryDrops.Kind.ARMOUR)) == 1, "recovery: not collected while health is full")
 	# Expires after its lifetime.
 	for s in drops._pool:
 		s.age = drops.lifetime - 0.05
@@ -4509,7 +4509,7 @@ func _recovery_tests(main: Node) -> void:
 	drops.enemy_killed(far + Vector3(10, 0, 0), null)
 	_check(not drops.bonus_active(), "recovery: kills spread over > 5 s give no bonus")
 	# Pool cap.
-	for i in 40:
+	for i in drops.max_active + 10:
 		drops.spawn(RecoveryDrops.Kind.ARMOUR, far + Vector3(10, 1, 0), 6.0)
 	_check(drops._pool.size() <= drops.max_active and drops.active_count() == drops.max_active, "recovery: active shards capped at %d" % drops.max_active)
 
@@ -4657,12 +4657,12 @@ func _hit_feedback_tests(main: Node) -> void:
 	r.apply_damage(_shot(r, &"plasma", 2000.0, 2.0))
 	await _ticks(2)
 	_check(not r.alive and HitFeedback.chips_active() > 0 and RobotDeathSparks.active_count() > 0, "hits: death bursts sparks and scrap, electrical failure plays")
-	_check(drops.active_count() == 1, "hits: recovery shard still drops on death")
+	_check((drops.active_count(RecoveryDrops.Kind.HEALTH) + drops.active_count(RecoveryDrops.Kind.ARMOUR)) == 1, "hits: recovery shard still drops on death")
 	var g2 := _spawn_robot(main, spot + Vector3(0, 0, 5))
 	await _ticks(10)
 	g2.apply_damage(_shot(g2, &"shotgun", 99.0, 9.0))
 	await _ticks(2)
-	_check(not g2.alive and RobotDeathSparks.active_count() > 0 and drops.active_count() == 2, "hits: first robot gets the electrical death too, and its shard")
+	_check(not g2.alive and RobotDeathSparks.active_count() > 0 and (drops.active_count(RecoveryDrops.Kind.HEALTH) + drops.active_count(RecoveryDrops.Kind.ARMOUR)) == 2, "hits: first robot gets the electrical death too, and its shard")
 	await _ticks(70)
 	_check(HitFeedback.chips_active() == 0, "hits: scrap chips gone within a second")
 	g2.queue_free()
@@ -7295,8 +7295,8 @@ func _cannon_vent_tests(main: Node) -> void:
 	h.equip(h.default_weapon, "Left")
 	await _ticks(3)
 	var c := h.weapon("Right") as PlasmaCannon
-	_check(c != null and c.charge == c.cells and c.cells == 6 and c.vent_fx != null and c.vent_fx._pips.size() == 6,
-		"pistol cannon: 6 cells, shown as cell lights over the gun")
+	_check(c != null and c.charge == c.cells and c.cells == 6 and c.vent_fx != null and c.vent_fx.find_children("*", "MeshInstance3D", false, false).size() == 3,
+		"pistol cannon: 6 cells; no cell lights over the gun (owner asked), just its 3 vent rings")
 	_check(h.default_weapon.unlimited(), "pistol cannon: unlimited shots (no ammo)")
 	var v0 := c.vents
 	var aim := c.muzzle_position() + c.get_barrel_direction() * 10.0
@@ -7310,12 +7310,9 @@ func _cannon_vent_tests(main: Node) -> void:
 	_check(c.venting and shots == 6 and c.vents == v0 + 1 and not c.can_fire(), "pistol cannon: 6 shots, then it has to vent (%d)" % shots)
 	await _ticks(10)
 	var vf := c.vent_fx
-	var lit := 0
-	for pip in vf._pips:
-		lit += int(pip.material_override == vf._pip_on)
 	var overlaid := vf._meshes.size() > 0 and vf._meshes.all(func(mi: MeshInstance3D) -> bool: return mi.material_overlay == vf._overlay)
-	_check(overlaid and vf._jets.all(func(j: CPUParticles3D) -> bool: return j.emitting) and vf._rings.all(func(r: MeshInstance3D) -> bool: return r.visible) and lit == 0,
-		"pistol cannon: venting - the gun flares white-hot, plasma jets, the rings lock on, the cell lights go out")
+	_check(overlaid and vf._jets.all(func(j: CPUParticles3D) -> bool: return j.emitting) and vf._rings.all(func(r: MeshInstance3D) -> bool: return r.visible),
+		"pistol cannon: venting - the gun flares white-hot, plasma jets, the rings lock on")
 	var st := WeaponHud.status_of(c)
 	_check(st[1] == "VENTING" and st[0] > 0.05 and st[0] < 0.5, "HUD: VENTING, the bar filling as it cools (%.2f)" % st[0])
 	_check(not c.fire_at(p, aim), "pistol cannon: no shots while venting")
@@ -7375,26 +7372,40 @@ func _ammo_tests(main: Node) -> void:
 	var hud := main.get_node_or_null("UI/WeaponHud") as WeaponHud
 	if hud:
 		_check(hud.loadout() == lo, "HUD: the weapon panel reads the ammo")
-	# A kill drops ammo for it.
+	# A gun kill drops no ammo (owner asked: only melee kills, DOOM Eternal
+	# style - else a weapon never runs down), but bitcoin tokens burst out.
 	var a0 := drops.ammo_dropped
+	var t0 := drops.tokens_dropped
+	var b0 := p.bitcoins
 	var at := r.global_position
 	r.apply_damage(DamageInfo.make(9999.0, DamageInfo.Type.BULLET, at + Vector3.UP, Vector3.FORWARD, 1.0))
 	await _ticks(2)
-	var cell: RecoveryDrops.Shard = null
-	for s in drops._pool:
-		if s.active and s.kind == RecoveryDrops.Kind.AMMO:
-			cell = s
-	_check(drops.ammo_dropped == a0 + 1 and cell != null and cell.weapon == sg and cell.icon.visible and cell.icon.texture == sg.icon,
-		"ammo: the kill drops an ammo cell for the empty shotgun (its icon over it)")
+	_check(drops.ammo_dropped == a0 and drops.tokens_dropped == t0 + 4 and drops.active_count(RecoveryDrops.Kind.TOKEN) >= 4,
+		"ammo: a gun kill drops no ammo - but 4 bitcoin tokens burst out of the grunt")
 	var sk := RobotSkirmisher.new()
-	_check(RecoveryDrops.ammo_packs(sk) == 2 and RecoveryDrops.ammo_packs(r) == 1, "ammo: bigger enemies drop more (skirmisher 2, grunt 1)")
+	var sn := RobotSentinel.new()
+	var bs := RobotBoss.new()
+	_check(RecoveryDrops.token_count(bs) > RecoveryDrops.token_count(sn) and RecoveryDrops.token_count(sn) > RecoveryDrops.token_count(sk)
+		and RecoveryDrops.token_count(sk) > RecoveryDrops.token_count(r), "tokens: the stronger the enemy, the more (grunt 4, skirmisher 7, sentinel 9, boss 30)")
+	_check(RecoveryDrops.melee_ammo_packs(sk) == 3 and RecoveryDrops.melee_ammo_packs(r) == 2, "ammo: a melee kill's ammo - grunt 2 bullets, skirmisher 3")
 	sk.free()
-	await _ticks(60)
-	if cell:
-		p.global_position = cell.node.global_position - Vector3.UP * 0.6
-		p.reset_physics_interpolation()
-	await _ticks(30)
-	_check(lo.ammo_of(sg) == sg.ammo_pack and (cell == null or not cell.active), "ammo: picked up: +%d shells" % lo.ammo_of(sg))
+	sn.free()
+	bs.free()
+	await _ticks(90)
+	_check(p.bitcoins >= b0 + 4, "tokens: pulled in and picked up - the player's bitcoins (%d)" % p.bitcoins)
+	_check(drops.token_lifetime < drops.lifetime, "tokens: they go sooner than the other pick-ups")
+	# A melee kill: ammo.
+	var r2 := _spawn_robot(main, Vector3(-36, 0, -34.5))
+	await _ticks(10)
+	var mk := DamageInfo.make(9999.0, DamageInfo.Type.EXPLOSION, r2.global_position + Vector3.UP, Vector3.FORWARD, 1.0, 0.0, p)
+	mk.weapon = &"melee"
+	r2.apply_damage(mk)
+	await _ticks(2)
+	var cells := drops._pool.filter(func(s: RecoveryDrops.Shard) -> bool: return s.active and s.kind == RecoveryDrops.Kind.AMMO)
+	_check(drops.ammo_dropped == a0 + 2 and cells.size() == 2 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return s.weapon == sg and s.icon.visible),
+		"ammo: a melee kill drops ammo - 2 bullets for the empty shotgun")
+	await _ticks(90)
+	_check(lo.ammo_of(sg) == sg.ammo_pack * 2 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return not s.active), "ammo: picked up: +%d shells" % lo.ammo_of(sg))
 	await _ticks(30)
 	_check(lo.equipped("Right") == sg, "ammo: and the shotgun goes back on the arm it ran dry on")
 	# The wheel shows it; a full weapon wants none.

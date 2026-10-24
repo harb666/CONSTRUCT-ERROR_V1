@@ -4,15 +4,15 @@ extends Node3D
 ## cooldown so it's not continuous fire", "clearly visible but absolutely
 ## epic and magnificent"). Child of the PlasmaCannon, in its space (barrel
 ## along +X, muzzle at x 0.41):
-##  - cell lights: a row of glowing pips floating over the gun, one per shot
-##    left before it vents (`cells`), going dark as it fires;
 ##  - on venting: the gun flares white-hot orange with energy bands crawling
 ##    down the barrel (plasma_vent.gdshader overlay), plasma jets roar out of
 ##    both sides, a spray of sparks, and three segmented rings of light lock
 ##    round the barrel spinning against each other - the big one at the
 ##    muzzle fills up round the clock as the countdown;
 ##  - ready: the gun flashes cyan-white, the rings snap in and the muzzle
-##    ring blasts outward, the cell lights flash back on.
+##    ring blasts outward.
+## (Its cell lights over the gun were removed - owner asked; the HUD shows
+## the cells.)
 ## Its shaders are warmed up behind the title (Vfx.warm_up).
 
 const OVERLAY := preload("res://scripts/vfx/plasma_vent.gdshader")
@@ -27,9 +27,6 @@ var _overlay: ShaderMaterial
 var _meshes: Array[MeshInstance3D] = []
 var _rings: Array[MeshInstance3D] = []
 var _ring_mats: Array[ShaderMaterial] = []
-var _pips: Array[MeshInstance3D] = []
-var _pip_on: StandardMaterial3D
-var _pip_off: StandardMaterial3D
 var _jets: Array[CPUParticles3D] = []
 var _sparks: CPUParticles3D
 var _venting := false
@@ -90,22 +87,6 @@ func _ready() -> void:
 		add_child(mi)
 		_rings.append(mi)
 		_ring_mats.append(m)
-	_pip_on = _mat("pip_on", func() -> Material: return _pip_material(CYAN.lerp(Color.WHITE, 0.3))) as StandardMaterial3D
-	_pip_off = _mat("pip_off", func() -> Material: return _pip_material(Color(0.08, 0.22, 0.3))) as StandardMaterial3D
-	var crystal := SphereMesh.new()  # 4 sides, 1 ring: a little crystal
-	crystal.radial_segments = 4
-	crystal.rings = 1
-	crystal.radius = 0.024
-	crystal.height = 0.07
-	var n := cannon.cells if cannon else 6
-	for i in n:
-		var mi := MeshInstance3D.new()
-		mi.mesh = crystal
-		mi.material_override = _pip_on
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.position = Vector3(lerpf(-0.26, 0.12, float(i) / maxf(n - 1, 1)), 0.15, 0.0)
-		add_child(mi)
-		_pips.append(mi)
 	for side in [-1.0, 1.0]:
 		var j := _jet(side)
 		add_child(j)
@@ -113,14 +94,6 @@ func _ready() -> void:
 	_sparks = _make_sparks()
 	add_child(_sparks)
 	set_process(true)
-
-
-func _pip_material(col: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = col
-	m.disable_receive_shadows = true
-	return m
 
 
 func _jet(side: float) -> CPUParticles3D:
@@ -244,14 +217,6 @@ func _process(delta: float) -> void:
 	if cannon == null:
 		return
 	_turn += delta
-	# Cell lights: one per shot left (all off while venting, then on again).
-	var left := 0 if cannon.venting else int(floor(cannon.charge + 0.001))
-	for i in _pips.size():
-		var on := i < left
-		_pips[i].material_override = _pip_on if on else _pip_off
-		var pop := 1.0 + 0.8 * maxf(1.0 - _ready_t / 0.25, 0.0)
-		_pips[i].scale = Vector3.ONE * (pop if on else 0.75)
-		_pips[i].rotation.y = _turn * 2.5 + i * 0.6  # turning
 	if _venting:
 		var p := cannon.vent_progress()
 		var heat := 1.0 - p
