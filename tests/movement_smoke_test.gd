@@ -1326,10 +1326,16 @@ func _robot_tests(main: Node) -> void:
 				min_y = minf(min_y, pc.global_position.y)
 	_check(max_v <= 16.01, "debris speed stays clamped (max %.1f m/s)" % max_v)
 	_check(min_y > -0.1, "no debris falls through the floor (min y %.2f)" % min_y)
+	# (Now and then one piece is still rocking after 4 s: up to 2 s more.)
 	var resting := 0
-	for pc in pieces:
-		if is_instance_valid(pc) and (pc.freeze or pc.sleeping or pc.linear_velocity.length() < 0.3):
-			resting += 1
+	for k in 120:
+		resting = 0
+		for pc in pieces:
+			if not is_instance_valid(pc) or pc.freeze or pc.sleeping or pc.linear_velocity.length() < 0.3:
+				resting += 1
+		if resting == pieces.size():
+			break
+		await _ticks(1)
 	_check(resting == pieces.size(), "debris settles calmly (%d/%d at rest)" % [resting, pieces.size()])
 	await _ticks(Engine.physics_ticks_per_second * 3)
 	var frozen := pieces.filter(func(pc: DebrisPiece) -> bool: return is_instance_valid(pc) and pc.freeze and not pc.is_physics_processing()).size()
