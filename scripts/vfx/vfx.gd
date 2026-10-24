@@ -241,6 +241,8 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	# Toxic barrels: the blast's blobs / chunks, the slime and its fire.
 	items.append_array(ToxicBlast.warm_up_items())
 	items.append_array(ElevatorLift.warm_up_items())
+	# The glide melee's glitch (overlay + pixel trail).
+	items.append_array(GlitchGlide.warm_up_items())
 	for i in items.size():
 		root.add_child(items[i])
 		items[i].position = Vector3(i * 0.06, 0, 0)

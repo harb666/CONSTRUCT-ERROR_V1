@@ -325,7 +325,8 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 
 	# --- melee ---
 	if melee:
-		if cmd.melee_pressed and not downed and not is_dodging and on_floor:
+		# (From the air too: it glides in.)
+		if cmd.melee_pressed and not downed and not is_dodging:
 			melee.try_start()
 		melee.tick(delta)
 	var meleeing := melee != null and melee.active
@@ -361,7 +362,7 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	if downed:
 		horiz = knockdown.horiz
 	elif meleeing:
-		horiz = melee.lunge
+		horiz = Vector2(melee.glide_velocity.x, melee.glide_velocity.z) if melee.gliding else melee.lunge
 	elif is_dodging:
 		_dodge_timer -= delta
 		horiz = Vector2(_dodge_dir.x, _dodge_dir.z) * dodge_speed
@@ -382,7 +383,9 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	velocity.z = horiz.y
 
 	# --- gravity ---
-	if is_dodging and not on_floor:
+	if meleeing and melee.drives_vertical():
+		velocity.y = melee.glide_velocity.y if melee.gliding else melee.vertical
+	elif is_dodging and not on_floor:
 		velocity.y = 0.0  # flat air dash
 	elif not on_floor:
 		var g := _gravity

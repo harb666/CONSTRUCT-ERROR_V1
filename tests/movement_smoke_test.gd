@@ -974,7 +974,10 @@ func _melee_tests(main: Node) -> void:
 	_check(rig == null or cam_swing > 0.8, "melee: the camera swings round a little (%.2f)" % cam_swing)
 	await _ticks(20)
 	_check(rig == null or (rig.melee_amount() == 0.0 and absf(rig.camera.fov - rig._base_fov) < 0.01), "melee: the camera is back in place")
-	_check(h.slot("Right").target_definition() == rl, "melee: the right arm goes back to the weapon it had")
+	# (The cannon stays out for the next move of a combo, a moment.)
+	_check(h.slot("Right").target_definition() == h.default_weapon, "melee: the cannon stays out a moment for a follow-up")
+	await _ticks(50)
+	_check(h.slot("Right").target_definition() == rl, "melee: then the right arm goes back to the weapon it had")
 	var far := 0.0
 	await _ticks(40)
 	for d in root.find_children("*", "RigidBody3D", true, false):
@@ -1023,6 +1026,194 @@ func _melee_tests(main: Node) -> void:
 		bi.free()
 	PlayerMelee.hit_stop_enabled = stop_was
 	h.equip(h.default_weapon, "Right")
+	await _ticks(10)
+	await _glide_melee_tests(main)
+
+
+## Glide melee (owner asked): a locked enemy in glide reach with a clear way
+## to it is power-glided to - across the floor or up through the air - with
+## the player glitching and the camera in a low chase shot, then struck.
+## Melees one after another are all different moves (a 5-move combo that
+## switches arms), each with its own pose and camera shot.
+func _glide_melee_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h: WeaponHolder = p.get_node("WeaponHolder")
+	var sel: TargetSelector = p.get_node("Input/TargetSelector")
+	var mel := p.melee
+	var rig: CameraRig = null
+	for r in main.get_tree().get_nodes_in_group(&"camera_rigs"):
+		if (r as CameraRig).target == p:
+			rig = r
+	var pose: MeleePoseModifier = null
+	for n in p.find_children("*", "SkeletonModifier3D", true, false):
+		if n is MeleePoseModifier:
+			pose = n
+	var stop_was := PlayerMelee.hit_stop_enabled
+	PlayerMelee.hit_stop_enabled = false
+	var ai_was := RobotEnemy.ai_enabled
+	RobotEnemy.ai_enabled = false
+	var spot := Vector3(-34, 0, -34)
+	await _ticks(80)  # past the chain window: a fresh combo
+	# --- glide in along the floor ---
+	sel.clear()
+	p.global_position = spot + Vector3(0, 0.05, 12.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var g := _spawn_robot(main, spot)
+	await _ticks(15)
+	sel.tap_target(g.get_node("Targetable"))
+	await _ticks(3)
+	var p0 := p.global_position
+	_check(mel.available() and mel.find_target() == g and mel.path_clear(g), "glide melee: a locked enemy 12 m away can be meleed (glide reach %.0f m)" % mel.glide_reach)
+	_check(mel.try_start() and mel.gliding and mel.move == PlayerMelee.Move.JAB, "glide melee: MELEE sends the player gliding at it")
+	var glitch: GlitchGlide = null
+	var overlaid := false
+	var max_speed := 0.0
+	var glide_cam := 0.0
+	var wide := 0.0
+	var arrived_t := -1.0
+	var frames := 0
+	while mel.active:
+		await _ticks(1)
+		frames += 1
+		if mel.gliding:
+			max_speed = maxf(max_speed, Vector2(p.velocity.x, p.velocity.z).length())
+			var gl := p.get_node_or_null("GlitchGlide") as GlitchGlide
+			if gl:
+				glitch = gl
+				for mi: MeshInstance3D in p.find_children("*", "MeshInstance3D", true, false):
+					overlaid = overlaid or (mi.material_overlay != null and (mi.material_overlay as ShaderMaterial) != null and (mi.material_overlay as ShaderMaterial).shader == GlitchGlide.SHADER)
+			if rig:
+				glide_cam = maxf(glide_cam, rig.glide_blend)
+				wide = maxf(wide, rig.camera.fov - rig._base_fov)
+		elif arrived_t < 0.0:
+			arrived_t = frames / 60.0
+	_check(max_speed > 20.0 and arrived_t > 0.0 and arrived_t < 0.75, "glide melee: it power-glides there fast (%.0f m/s, %.2f s)" % [max_speed, arrived_t])
+	_check(glitch != null and overlaid, "glide melee: the player glitches as they glide (torn cyan / magenta bands, pixel trail)")
+	_check(rig == null or (glide_cam > 0.9 and wide > 10.0), "glide melee: the camera drops into a low, wide chase shot (fov +%.0f)" % wide)
+	_check(mel.kills >= 1 and not g.alive and p.global_position.distance_to(p0) > 9.0, "glide melee: then strikes - the grunt is blown apart (%.1f m covered)" % p.global_position.distance_to(p0))
+	await _ticks(20)
+	_check(p.get_node_or_null("GlitchGlide") == null and (rig == null or rig.glide_blend < 0.05), "glide melee: the glitch and the chase shot are gone after")
+	# --- in the way: a wall between ---
+	await _ticks(80)
+	sel.clear()
+	p.global_position = spot + Vector3(0, 0.05, 12.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var g2 := _spawn_robot(main, spot + Vector3(0, 0, 1.0))
+	var wall := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(4.0, 4.0, 0.4)
+	cs.shape = bx
+	wall.add_child(cs)
+	main.add_child(wall)
+	wall.global_position = spot + Vector3(0, 2.0, 6.0)
+	await _ticks(15)
+	sel.tap_target(g2.get_node("Targetable"))
+	await _ticks(3)
+	_check(not mel.path_clear(g2) and mel.find_target() != g2 and not mel.try_start(), "glide melee: not with something in the way")
+	wall.queue_free()
+	await _ticks(3)
+	_check(mel.path_clear(g2) and mel.find_target() == g2, "glide melee: clear again, it can")
+	# Out of glide reach: no.
+	p.global_position = spot + Vector3(0, 0.05, 1.0 + mel.glide_reach + 4.0)
+	p.reset_physics_interpolation()
+	await _ticks(3)
+	_check(mel.find_target() != g2, "glide melee: not beyond the glide reach")
+	g2.queue_free()
+	# --- up through the air at a flying enemy ---
+	sel.clear()
+	p.global_position = spot + Vector3(0, 0.05, 10.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var sn: RobotSentinel = load("res://scenes/enemies/robot_sentinel.tscn").instantiate()
+	main.add_child(sn)
+	sn.global_position = spot + Vector3(0, 4.5, 0)
+	sn.combat_enabled = false
+	await _ticks(40)
+	sel.tap_target(sn.get_node("Targetable"))
+	await _ticks(3)
+	var k0 := mel.kills
+	var top := 0.0
+	var started := mel.try_start()
+	while mel.active:
+		await _ticks(1)
+		top = maxf(top, p.global_position.y)
+	await _ticks(90)
+	_check(started and top > 2.0 and mel.kills == k0 + 1 and not sn.alive, "glide melee: up through the air to a flying sentinel and strikes it (%.1f m up)" % top)
+	_check(p.is_on_floor(), "glide melee: then drops back to the floor")
+	# --- the combo: one melee after another, all different ---
+	await _ticks(80)
+	var rl := load("res://resources/weapons/rocket_launcher.tres") as WeaponDefinition
+	var sg := load("res://resources/weapons/shotgun.tres") as WeaponDefinition
+	h.equip(rl, "Right")
+	h.equip(sg, "Left")
+	sel.clear()
+	p.global_position = spot + Vector3(2, 0.05, 15.0)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	var grunts: Array = []
+	for o in [Vector3(0, 0, 0), Vector3(-4, 0, 9), Vector3(6, 0, 4), Vector3(0, 0, 13), Vector3(7, 0, 12)]:
+		var gr := _spawn_robot(main, spot + o)
+		grunts.append(gr)
+	await _ticks(20)
+	var h0 := mel.history.size()
+	var poses: Array = []
+	var cams: Array = []
+	var arms_ok := true
+	for gr: RobotEnemy in grunts:
+		sel.clear()
+		sel.forget_last_tap()
+		sel.tap_target(gr.get_node("Targetable"))
+		await _ticks(2)
+		if not mel.try_start():
+			break
+		var arms: Array = PlayerMelee.MOVES[mel.move].arms
+		for side in ["Left", "Right"]:
+			if arms.has(side) and h.slot(side).target_definition() != h.default_weapon:
+				arms_ok = false
+		var seen := ""
+		var cam := Vector3.ZERO
+		while mel.active:
+			await _ticks(1)
+			if pose.last_weight > 0.5 and pose.last_pose != "glide":
+				seen = pose.last_pose
+			if rig and not mel.gliding:
+				var m := rig.melee_amount()
+				if m > 0.6:
+					cam = Vector3(rig.rotation.x - rig.pitch, wrapf(rig.rotation.y - rig.yaw, -PI, PI), rig.rotation.z)
+		poses.append(seen)
+		cams.append(cam)
+		await _ticks(9)
+	var moves: Array = mel.history.slice(h0)
+	_check(moves == [PlayerMelee.Move.JAB, PlayerMelee.Move.HOOK, PlayerMelee.Move.UPPERCUT, PlayerMelee.Move.SPIN, PlayerMelee.Move.SLAM],
+		"combo: five melees in a row are five different moves - %s" % [moves.map(func(m: int) -> String: return mel.move_name(m))])
+	_check(arms_ok, "combo: each move's arm(s) take the pistol cannon (the hook and spin the left, the slam both)")
+	_check(poses.size() == 5 and poses == ["CANNON JAB", "LEFT HOOK", "RISING UPPERCUT", "GLITCH SPIN", "TWIN CANNON SLAM"], "combo: each has its own full-body pose %s" % [poses])
+	var distinct := true
+	for i in cams.size():
+		for j in range(i + 1, cams.size()):
+			if (cams[i] as Vector3).distance_to(cams[j]) < 0.08:
+				distinct = false
+	_check(rig == null or (distinct and cams[2].x > 0.15 and cams[4].x < -0.3 and cams[1].z < -0.05),
+		"combo: each has its own camera shot - the uppercut from low, the slam from high, the hook tilted (%s)" % [cams])
+	_check(grunts.all(func(gr: RobotEnemy) -> bool: return not gr.alive), "combo: all five grunts down")
+	await _ticks(70)
+	_check(h.slot("Right").target_definition() == rl and h.slot("Left").target_definition() == sg, "combo: afterwards both arms go back to their weapons")
+	await _ticks(30)
+	var gx := _spawn_robot(main, p.global_position + Vector3(0, 0, -6))
+	await _ticks(10)
+	sel.clear()
+	sel.tap_target(gx.get_node("Targetable"))
+	await _ticks(2)
+	_check(mel.next_move() == PlayerMelee.Move.JAB, "combo: after a pause it starts again at the jab")
+	gx.queue_free()
+	sel.clear()
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	RobotEnemy.ai_enabled = ai_was
+	PlayerMelee.hit_stop_enabled = stop_was
 	await _ticks(10)
 
 

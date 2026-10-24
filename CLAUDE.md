@@ -251,13 +251,38 @@
   disc). Everything else on the black hole is unchanged.
 
 - Melee punch-shot (owner asked): MELEE button (F / pad X), dimmed with
-  nothing in reach (4.6 m). Right arm switches to the pistol cannon, right
-  foot steps back, coil, lunge, straight cannon punch that fires as it lands
-  (0.2 s), short hit-stop; grunts blown to pieces sent far, skirmishers 0.9
-  damage + knocked back stumbling, never the boss. Camera swings round a
-  little and back by 0.62 s (impact zoom, no shake). The right arm then goes
-  back to its previous weapon. `PlayerMelee`, `MeleePoseModifier`.
-
+  nothing to melee. The move's arm(s) switch to the pistol cannon, strike,
+  and fire it point blank as it lands; short hit-stop; grunts / sentinels
+  blown to pieces, skirmishers 0.9 damage + knocked back stumbling, never
+  the boss. `PlayerMelee`, `MeleePoseModifier`.
+  Glide melee (owner asked: "rapidly fly across and melee the enemy no
+  matter what" within a suitable distance and nothing in the way): a
+  locked enemy (either arm's lock) up to `glide_reach` 20 m away with a
+  clear way (rays from chest / head / knees / sides; only level geometry
+  blocks) - or, nothing locked, the nearest on screen - is power-glided to
+  across the floor or up through the air (30 m/s after a 0.07 s crouch,
+  ~0.45 s for 12 m), then struck; close ones (4.6 m) are struck in place
+  as before. Works from the air. Gliding the player glitches (owner asked;
+  `GlitchGlide`: `glitch_glide.gdshader` overlay tearing the body into
+  sideways-thrown cyan / magenta scan-lined bands, the model skipping a few
+  cm in steps, a pixel-block trail that fades near the camera; warmed up in
+  `Vfx.warm_up`), in a leaning glide pose with the cannon cocked.
+  Camera (owner asked: epic, fitting): during the glide a low chase shot
+  close behind and a little beside, tilted, field of view +16; through the
+  melee the view turns to the enemy (`CameraRig.melee_face`; it stays
+  facing it after); each move its own shot (`melee_shot`, `MOVES.cam`).
+  Combo (owner asked: melees one after another all different, switching
+  arms): within `chain_window` 1.2 s of the last melee the next move of
+  CHAIN plays - CANNON JAB (right; camera swings right), LEFT HOOK (left
+  arm, swung round from the side; camera left, tilted), RISING UPPERCUT
+  (right, from a crouch up through the enemy with a hop, launching it up;
+  camera low looking up), GLITCH SPIN (a full-body spin, glitching, the
+  left arm whipping round into a backfist; camera orbits), TWIN CANNON
+  SLAM (both cannons raised together and hammered down after a hop, a
+  floor shockwave; camera high looking down, bigger hit-stop) - then round
+  again; after a pause it starts at the jab. The arms keep their cannons
+  for the chain and go back to their weapons 0.9 s after the last melee.
+  Cooldown between melees 0.12 s (was 0.3) so the combo chains.
 - Boss missiles knock players down (owner asked): a player in the blast is
   thrown back and up (`BossMissile.knock_speed` / `knock_up`, edge ->
   centre); within `flip_within` of the centre they turn a balled-up
