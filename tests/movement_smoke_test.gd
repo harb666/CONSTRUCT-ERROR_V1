@@ -4459,7 +4459,9 @@ func _recovery_tests(main: Node) -> void:
 	p.global_position.y = shard.floor_y + 0.05
 	p.reset_physics_interpolation()
 	var got := [0.0]
-	var cb := func(_k: int, a: float) -> void: got[0] += a
+	var cb := func(k: int, a: float) -> void:
+		if k == RecoveryDrops.Kind.HEALTH:
+			got[0] += a
 	drops.collected.connect(cb)
 	var pulled := false
 	for i in 40:
