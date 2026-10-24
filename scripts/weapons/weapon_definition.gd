@@ -26,6 +26,16 @@ extends Resource
 
 const HEAVY_SIDE := "Right"
 
+## Ammo (owner asked: only the pistol cannon is unlimited; enemies drop
+## ammo for the rest). 0 = unlimited. A pad gives a full load; an enemy's
+## drop gives `ammo_pack` (more from bigger enemies - RecoveryDrops).
+@export var max_ammo := 0
+@export var ammo_pack := 0
+
+
+func unlimited() -> bool:
+	return max_ammo <= 0
+
 
 ## Can it go on `side`?
 func can_go_on(side: String) -> bool:

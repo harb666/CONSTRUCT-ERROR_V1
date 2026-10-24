@@ -15,6 +15,7 @@ static var pending := false
 static var character_id := &""
 static var weapons := {}  # "Right" / "Left" -> weapon id
 static var unlocked: Array[StringName] = []
+static var ammo := {}  # weapon id -> rounds left
 static var transfers := 0
 static var _fade: CanvasLayer
 
@@ -24,6 +25,7 @@ static func capture(player: PlayerController) -> void:
 	character_id = player.character.id if player and player.character else &""
 	weapons.clear()
 	unlocked.clear()
+	ammo.clear()
 	if player == null:
 		return
 	var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
@@ -36,6 +38,8 @@ static func capture(player: PlayerController) -> void:
 	if loadout:
 		for d in loadout.unlocked_weapons():
 			unlocked.append(d.id)
+			if not d.unlimited():
+				ammo[d.id] = loadout.ammo_of(d)
 
 
 ## A level picked on the level select: the player starts there as
@@ -44,6 +48,7 @@ static func start_as(character: CharacterDefinition) -> void:
 	character_id = character.id if character else &""
 	weapons.clear()
 	unlocked.clear()
+	ammo.clear()
 
 
 ## Fade out, then load `scene_path` (the next part).
@@ -74,7 +79,7 @@ static func take() -> Dictionary:
 	if not pending:
 		return {}
 	pending = false
-	return {"character": character_id, "weapons": weapons.duplicate(), "unlocked": unlocked.duplicate()}
+	return {"character": character_id, "weapons": weapons.duplicate(), "unlocked": unlocked.duplicate(), "ammo": ammo.duplicate()}
 
 
 ## Give `player` what it carried over.
@@ -86,6 +91,9 @@ static func apply(player: PlayerController, data: Dictionary) -> void:
 	if loadout:
 		for id in data.get("unlocked", []):
 			loadout.unlock(reg.find(id))
+		var am: Dictionary = data.get("ammo", {})
+		for id in am:
+			loadout.set_ammo(reg.find(id), int(am[id]))
 	var holder := player.get_node_or_null("WeaponHolder") as WeaponHolder
 	if holder:
 		var ws: Dictionary = data.get("weapons", {})

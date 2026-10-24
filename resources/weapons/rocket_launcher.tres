@@ -6,6 +6,8 @@
 
 [resource]
 script = ExtResource("1")
+max_ammo = 8
+ammo_pack = 2
 id = &"rocket_launcher"
 display_name = "Rocket Launcher"
 weapon_scene = ExtResource("2")

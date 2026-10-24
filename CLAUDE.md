@@ -593,9 +593,53 @@
   and stays on the floor stepping down as far (floor snap 0.35 -> 0.55 m).
   So low blocks up to that high (e.g. a 0.4 m block in the test arena) are
   walked onto too.
-- Testing: the player can't die (`main.gd` `players_can_die = false`; hits
-  still land, health can reach 0, no death / respawn). Owner asked for this
-  to test; set it back to true to restore dying.
+- Players die again (owner asked to remove the testing invincibility;
+  `main.gd` `players_can_die = true`). Dying puts them back at the spawn
+  with full health. (The smoke test turns deaths off for its own checks:
+  `main.no_deaths`.)
+- Falls (owner asked: "falling off edges/pools take 1 bar off"): off the
+  level, into the slime or under the Works' crusher costs one of the health
+  bar's 10 bars (`PlayerController.fell`, `HEALTH_BARS`, `fall_bars`); the
+  player comes back at the spawn keeping the rest (health / armour / the
+  dropped shards stay); on the last bar it's a death (full health back).
+- Slime splash (owner asked): falling into a slime pool / pour (Toxic Works,
+  Toxic Arena) makes a cartoon splash - a crown of fat slime blobs, a jet of
+  drops, a foam patch, three ripple rings, bubbles after (`SlimeSplash`,
+  `slime_ring.gdshader`) - and the player sinks into it for 0.32 s (held
+  there, `_plunge`) before the death wipe, so it's seen. No splash sound
+  (there's no owner sound for it).
+- Health bar (owner asked: "more visible"): 10 big chunky bars in a bright
+  frame, each with a highlight, green -> amber at half -> red at 3 bars or
+  fewer, lost bars dark red, the value large beside it; at 3 bars or fewer
+  a red glow pulses round it (`VitalsHud._health_bar`, `_low_glow`).
+- Pistol cannon (owner asked: unlimited bullets but "a quick cooldown so
+  it's not continuous fire", clearly visible, epic): 6 cells (shots), then
+  it vents for 1.1 s; left alone 0.5 s its cells refill (6 a second)
+  (`PlasmaCannon` cells / vent_time / regen). `PlasmaVent`: six cell
+  crystals turning over the gun go dark as it fires; venting, the gun flares
+  white-hot orange with energy bands crawling down it
+  (`plasma_vent.gdshader` overlay), plasma jets roar out of both sides,
+  sparks spray, three segmented rings of light lock round the barrel
+  spinning against each other - the muzzle one filling up round the clock
+  as the countdown (`vent_ring.gdshader`); ready: a cyan-white flash, the
+  rings snap in and the muzzle ring blasts outward. HUD: CELLS bar (6
+  segments), VENTING pulsing orange-white as it fills, READY flash. No new
+  sounds.
+- Ammo (owner asked: only the pistol cannon unlimited; "enemies drop ammo
+  for the players' other weapons"): `WeaponDefinition.max_ammo` /
+  `ammo_pack` - shotgun 20 / 5, machine gun 240 / 60, rocket launcher 8 / 2,
+  Frost Byte 4 / 1, black hole gun 3 / 1. A pad gives a full load (and tops
+  it up when walked onto again, the pad staying); each kill also drops ammo
+  cells (a capsule in the weapon's colour with its icon over it) for the
+  local player's weapons that aren't full, emptiest first - grunt 1,
+  skirmisher / sentinel 2, boss 5 (`RecoveryDrops.drop_ammo`, the boss
+  drops no health shards, as before). Run dry, the arm switches to the
+  pistol cannon by itself and back when ammo for it is picked up
+  (`WeaponLoadout` use_ammo / add_ammo, `_dry`); an empty weapon can't be
+  picked in the wheel (dimmed, EMPTY, "NO AMMO - KILL ENEMIES FOR MORE").
+  HUD weapon panel shows the count (red when low, flashing on pickup).
+  Carried down the lift (`LevelTransfer.ammo`). Counted only on the
+  player's own device (co-op).
 
 ## Approved save points
 - Branch `saved/approved-skirmisher-movement` (commit 536f448): the owner

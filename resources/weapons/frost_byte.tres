@@ -6,6 +6,8 @@
 
 [resource]
 script = ExtResource("1")
+max_ammo = 4
+ammo_pack = 1
 id = &"frost_byte"
 display_name = "Frost Byte"
 weapon_scene = ExtResource("2")

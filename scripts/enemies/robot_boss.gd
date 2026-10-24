@@ -1538,6 +1538,8 @@ func die(_info: DamageInfo = null) -> void:
 	# The owner's machine-death sound, right as it starts to die.
 	Sfx.play_at(get_parent(), Sfx.MACHINE_DEATH, core.global_position, death_sound_db, death_sound_near, death_sound_far)
 	death_sounds += 1
+	# A pile of ammo cells (no health shards, as before).
+	RecoveryDrops.on_enemy_killed(self, _info, false)
 	core_fx.failure()
 	_core_glow.visible = true
 	died.emit()

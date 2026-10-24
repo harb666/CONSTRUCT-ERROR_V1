@@ -7,14 +7,21 @@ extends Node3D
 ## RobotEnemy.die() calls `RecoveryDrops.on_enemy_killed(robot, info)`.
 ## Killing `streak_kills` enemies within `streak_window` s boosts shard
 ## value by `streak_bonus` for `streak_duration` s.
+## Ammo (owner asked: "enemies drop ammo for the players' other weapons"):
+## every kill also drops ammo cells - a glowing cell in the weapon's colour
+## with its icon over it, worth its `ammo_pack` - for the local player's
+## unlocked weapons that aren't full, emptiest first; how many depends on
+## the enemy (`ammo_packs`: grunt 1, skirmisher / sentinel 2, boss 5). Only
+## the local player picks them up (each device drops its own).
 
 signal collected(kind: int, amount: float)
+signal ammo_collected(definition: WeaponDefinition, amount: int)
 signal streak_started
 
-enum Kind { HEALTH, ARMOUR }
+enum Kind { HEALTH, ARMOUR, AMMO }
 
 const GROUP := &"recovery_drops"
-const COLORS := [Color(0.25, 1.0, 0.35), Color(0.3, 0.6, 1.0)]
+const COLORS := [Color(0.25, 1.0, 0.35), Color(0.3, 0.6, 1.0), Color(1.0, 0.8, 0.3)]
 
 @export var health_value := 8.0
 @export var armour_value := 6.0
@@ -36,6 +43,10 @@ var _bonus_until := -1.0
 var _clock := 0.0
 static var _mesh: Mesh
 static var _mats: Array[StandardMaterial3D] = []
+static var _cell_mesh: Mesh
+static var _cell_mats := {}
+## Ammo cells dropped (tests).
+var ammo_dropped := 0
 
 
 class Shard:
@@ -49,6 +60,9 @@ class Shard:
 	var age := 0.0
 	var active := false
 	var magnet := false
+	## Ammo: the weapon it's for, and its icon over it.
+	var weapon: WeaponDefinition
+	var icon: Sprite3D
 
 
 ## The scene's manager (created on first use).
@@ -61,11 +75,61 @@ static func get_for(tree: SceneTree) -> RecoveryDrops:
 	return m
 
 
-static func on_enemy_killed(enemy: Node3D, info: DamageInfo) -> void:
+static func on_enemy_killed(enemy: Node3D, info: DamageInfo, shards := true) -> void:
 	if enemy.is_inside_tree():
 		var m := get_for(enemy.get_tree())
 		if m:
-			m.enemy_killed(enemy.global_position, info)
+			if shards:
+				m.enemy_killed(enemy.global_position, info)
+			m.drop_ammo(enemy.global_position, ammo_packs(enemy))
+
+
+## Ammo cells an enemy drops: bigger enemies, more.
+static func ammo_packs(enemy: Node) -> int:
+	if enemy is RobotBoss:
+		return 5
+	if enemy is RobotSentinel or enemy is RobotSkirmisher:
+		return 2
+	return 1
+
+
+## Ammo cells for the local player's weapons that want it, emptiest first
+## (several cells go round them).
+func drop_ammo(at: Vector3, packs: int) -> void:
+	var player := get_tree().get_first_node_in_group(&"local_player") as PlayerController
+	var lo := player.get_node_or_null("WeaponLoadout") as WeaponLoadout if player else null
+	if lo == null:
+		return
+	var wanted := lo.ammo_wanted()
+	if wanted.is_empty():
+		return
+	for i in packs:
+		var def: WeaponDefinition = wanted[i % wanted.size()]
+		spawn_ammo(def, at + Vector3.UP * 1.0)
+
+
+func spawn_ammo(def: WeaponDefinition, at: Vector3) -> void:
+	spawn(Kind.AMMO, at, def.ammo_pack)
+	var s := _last
+	s.weapon = def
+	s.core.mesh = _cell_mesh
+	s.core.material_override = _cell_material(def.accent_color)
+	s.glow.material_override = Vfx.material("glow", def.accent_color * 0.6, BaseMaterial3D.BILLBOARD_ENABLED)
+	s.node.scale = Vector3.ONE * 1.5
+	s.icon.texture = def.icon
+	s.icon.visible = def.icon != null
+	ammo_dropped += 1
+
+
+static func _cell_material(col: Color) -> StandardMaterial3D:
+	var key := col.to_html()
+	if not _cell_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = col.lerp(Color.WHITE, 0.3)
+		m.disable_receive_shadows = true
+		_cell_mats[key] = m
+	return _cell_mats[key]
 
 
 ## Player respawn / level restart: remove every shard.
@@ -137,18 +201,26 @@ func _player_for(at: Vector3, info: DamageInfo) -> PlayerController:
 	return best
 
 
+var _last: Shard
+
+
 func spawn(kind: int, at: Vector3, value: float) -> void:
 	var s := _take()
+	_last = s
 	s.kind = kind
 	s.value = value
 	s.age = 0.0
 	s.magnet = false
 	s.active = true
+	s.weapon = null
+	s.icon.visible = false
+	s.core.mesh = _mesh
+	s.core.rotation = Vector3.ZERO
 	var a := randf() * TAU
 	s.vel = Vector3(cos(a), 0.0, sin(a)) * randf_range(1.8, 3.2) + Vector3.UP * randf_range(3.5, 4.5)
 	s.core.material_override = _mats[kind]
 	s.glow.material_override = Vfx.material("glow", COLORS[kind] * 0.55, BaseMaterial3D.BILLBOARD_ENABLED)
-	var big := 1.0 + clampf(value / (health_value if kind == Kind.HEALTH else armour_value) - 1.0, 0.0, 1.0)
+	var big := 1.0 + clampf(value / (health_value if kind == Kind.HEALTH else armour_value) - 1.0, 0.0, 1.0) if kind != Kind.AMMO else 1.0
 	s.node.scale = Vector3.ONE * big
 	s.node.global_position = at
 	s.node.visible = true
@@ -190,6 +262,13 @@ func _make() -> Shard:
 			mat.albedo_color = c.lerp(Color.WHITE, 0.35)
 			mat.disable_receive_shadows = true
 			_mats.append(mat)
+		# Ammo cell: a chunky capsule of energy.
+		var cm := CapsuleMesh.new()
+		cm.radius = 0.1
+		cm.height = 0.36
+		cm.radial_segments = 8
+		cm.rings = 2
+		_cell_mesh = cm
 	var s := Shard.new()
 	s.node = Node3D.new()
 	add_child(s.node)
@@ -203,6 +282,14 @@ func _make() -> Shard:
 	s.glow.mesh = q
 	s.glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	s.node.add_child(s.glow)
+	s.icon = Sprite3D.new()
+	s.icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	s.icon.pixel_size = 0.0022
+	s.icon.position.y = 0.5
+	s.icon.no_depth_test = false
+	s.icon.shaded = false
+	s.icon.visible = false
+	s.node.add_child(s.icon)
 	s.node.visible = false
 	return s
 
@@ -231,15 +318,21 @@ func _step(s: Shard, delta: float, players: Array) -> void:
 	var td := INF
 	for p in players:
 		var pc := p as PlayerController
-		if pc == null or _full(pc, s.kind):
+		if pc == null or _full(pc, s):
 			continue
 		var d := pos.distance_to(pc.global_position + Vector3.UP * 0.9)
 		if d < td:
 			td = d
 			target = pc
 	if target and s.age > 0.35 and td <= collect_radius:
-		var got := target.heal(s.value) if s.kind == Kind.HEALTH else target.add_armour(s.value)
-		collected.emit(s.kind, got)
+		if s.kind == Kind.AMMO:
+			var lo := target.get_node_or_null("WeaponLoadout") as WeaponLoadout
+			var n := lo.add_ammo(s.weapon, int(s.value)) if lo else 0
+			ammo_collected.emit(s.weapon, n)
+			collected.emit(s.kind, n)
+		else:
+			var got := target.heal(s.value) if s.kind == Kind.HEALTH else target.add_armour(s.value)
+			collected.emit(s.kind, got)
 		_release(s)
 		return
 	if target and s.age > 0.35 and td <= magnet_radius:
@@ -265,10 +358,16 @@ func _step(s: Shard, delta: float, players: Array) -> void:
 	# Hover bob + spin once resting; blink out over the last 2 s.
 	s.core.position.y = sin(s.age * 4.0) * 0.06
 	s.core.rotation.y = s.age * 3.0
+	if s.kind == Kind.AMMO:
+		s.core.rotation.z = 0.5  # a tilted, spinning cell
 	s.glow.scale = Vector3.ONE * (1.0 + 0.15 * sin(s.age * 7.0))
 	var left := lifetime - s.age
 	s.node.visible = left > 2.0 or fmod(left, 0.25) > 0.1
 
 
-func _full(p: PlayerController, kind: int) -> bool:
-	return p.health >= p.max_health if kind == Kind.HEALTH else p.armour >= p.max_armour
+func _full(p: PlayerController, s: Shard) -> bool:
+	if s.kind == Kind.AMMO:
+		# Only this device's own player takes ammo (its loadout is here).
+		var lo := p.get_node_or_null("WeaponLoadout") as WeaponLoadout
+		return p.is_remote or not p.is_in_group(&"local_player") or lo == null or not lo.is_unlocked(s.weapon) or lo.ammo_full(s.weapon)
+	return p.health >= p.max_health if s.kind == Kind.HEALTH else p.armour >= p.max_armour

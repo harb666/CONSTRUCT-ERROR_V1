@@ -305,6 +305,7 @@ func shot_direction(from: Vector3, target_point: Vector3) -> Vector3:
 
 
 func _shoot(shooter: Node3D, target_point: Vector3, late: float) -> void:
+	rounds_out += 1
 	var from := muzzle_position()
 	var dir := shot_direction(from, target_point)
 	var spread := deg_to_rad(lerpf(spread_deg, max_spread_deg, spin))

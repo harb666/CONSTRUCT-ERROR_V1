@@ -98,6 +98,17 @@ func shot_interval() -> float:
 	return 0.0
 
 
+## Rounds that left in the last fire_at (ammo: WeaponHolder): 1, unless the
+## weapon counts its own (the machine gun can loose several in a tick).
+var rounds_out := 0
+
+
+func take_rounds() -> int:
+	var n := maxi(rounds_out, 1)
+	rounds_out = 0
+	return n
+
+
 func next_shot_in() -> float:
 	return 0.0
 

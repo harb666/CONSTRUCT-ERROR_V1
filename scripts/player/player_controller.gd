@@ -120,6 +120,11 @@ var damage_taken := 0.0
 @export var incoming_damage_scale := 5.0
 ## Off = hits only count and flash (the old behaviour).
 @export var can_die := true
+## Falling off the level, into the slime or under the crusher costs this
+## many of the health bar's HEALTH_BARS bars (owner asked: one) - the
+## player comes back at the spawn with the rest (full again if it was the
+## last: died).
+@export var fall_bars := 1
 @export_group("")
 var health := 100.0
 var armour := 0.0
@@ -442,7 +447,10 @@ func simulate(cmd: PlayerCommand, delta: float) -> void:
 	_was_on_floor = now_on_floor
 
 	if global_position.y < -30.0:
-		respawn()
+		if is_remote:
+			respawn()
+		else:
+			fell()
 
 
 ## A prop a black hole is dragging can be pressed into the player and pin
@@ -524,28 +532,77 @@ func _do_jump(jump_velocity: float, is_air_jump: bool) -> void:
 	jumped.emit(is_air_jump)
 
 
+## The health bar's bars (VitalsHud draws this many).
+const HEALTH_BARS := 10
+## Times fallen (tests).
+var falls := 0
+
+
+## Fell off the level / into the slime / under the crusher (the levels call
+## this): one bar of health gone, back to the spawn keeping the rest - or,
+## if it was the last bar, died (back with full health). `plunge_y`: the
+## slime's surface - the player sinks into it a moment (the splash is seen)
+## before the death wipe streaks over.
+func fell(plunge_y := INF) -> void:
+	# (Just put back: a kill volume can still report the old spot.)
+	if is_remote or _respawn_pending or Engine.get_physics_frames() - _respawned_frame < 10:
+		return
+	falls += 1
+	health = maxf(health - max_health / HEALTH_BARS * fall_bars, 0.0)
+	vitals_changed.emit()
+	var dead := can_die and health <= 0.0
+	if dead:
+		died.emit()
+	respawn_wiped(not dead, plunge_y)
+
+
 ## Fell into the slime / off the level, or died: back to the spawn under
 ## the death wipe (DeathWipe, on this device's screen) - the screen streaks
 ## over, they're put back while it's covered, it streaks away. Straight
 ## back with no wipe (a teammate's character, or no wipe in the level).
-func respawn_wiped() -> void:
+## `keep_vitals`: a fall - health / armour stay as they are.
+func respawn_wiped(keep_vitals := false, plunge_y := INF) -> void:
 	if _respawn_pending:
 		return
 	var wipe := DeathWipe.find(get_tree()) if is_in_group(&"local_player") else null
 	if wipe == null:
-		respawn()
+		respawn(keep_vitals)
 		return
 	_respawn_pending = true
-	wipe.play(func() -> void:
-		_respawn_pending = false
-		if is_inside_tree():
-			respawn())
+	var go := func() -> void:
+		wipe.play(func() -> void:
+			_respawn_pending = false
+			if is_inside_tree():
+				respawn(keep_vitals))
+	if plunge_y < INF:
+		_plunge(plunge_y, go)
+	else:
+		go.call()
+
+
+## Into the slime: held there sinking for `plunge_time` (the splash is
+## seen, the camera doesn't follow it under), then the wipe.
+@export var plunge_time := 0.32
+
+
+func _plunge(surface_y: float, then: Callable) -> void:
+	set_physics_process(false)
+	velocity = Vector3.ZERO
+	var tw := create_tween()
+	tw.tween_property(self, "global_position:y", minf(global_position.y, surface_y) - 1.1, plunge_time).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	# Held there (not falling on out of the level) until it's put back.
+	tw.tween_callback(then)
 
 
 var _respawn_pending := false
 
 
-func respawn() -> void:
+var _respawned_frame := -100
+
+
+func respawn(keep_vitals := false) -> void:
+	set_physics_process(true)
+	_respawned_frame = Engine.get_physics_frames()
 	if melee:
 		melee.cancel()
 	if knockdown:
@@ -554,8 +611,10 @@ func respawn() -> void:
 	velocity = Vector3.ZERO
 	is_dodging = false
 	reset_physics_interpolation()
-	health = max_health
-	armour = minf(start_armour, max_armour)
-	vitals_changed.emit()
+	if not keep_vitals:
+		health = max_health
+		armour = minf(start_armour, max_armour)
+		vitals_changed.emit()
 	respawned.emit()
-	RecoveryDrops.clear_all(get_tree())
+	if not keep_vitals:
+		RecoveryDrops.clear_all(get_tree())

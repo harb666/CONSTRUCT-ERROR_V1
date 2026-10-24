@@ -164,14 +164,30 @@ func _add_kill_volume(n: String, box: AABB) -> Area3D:
 	cs.position = box.get_center()
 	a.add_child(cs)
 	add_child(a)
-	a.body_entered.connect(_on_kill_volume)
+	a.body_entered.connect(_on_kill_volume.bind(a))
 	return a
 
 
-## A player is sent back to their spawn; a robot or the boss dies (and
-## respawns as usual).
-func _on_kill_volume(body: Node3D) -> void:
+## A player is sent back to their spawn one health bar down (into the fluid:
+## with a slime splash, sinking in first - PlayerController.fell); a robot
+## or the boss dies (and respawns as usual).
+func _on_kill_volume(body: Node3D, area: Area3D) -> void:
 	if body is PlayerController:
-		(body as PlayerController).respawn_wiped()
+		var p := body as PlayerController
+		if area == hazard:
+			var top := _area_top(area)
+			SlimeSplash.spawn(get_tree(), Vector3(p.global_position.x, top, p.global_position.z))
+			p.fell(top)
+		else:
+			p.fell()
 	elif (body is RobotEnemy or body is RobotBoss) and body.alive:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
+
+
+## Top of a box kill volume (the fluid's surface + the skin).
+func _area_top(area: Area3D) -> float:
+	for cs: CollisionShape3D in area.find_children("*", "CollisionShape3D", false, false):
+		var bx := cs.shape as BoxShape3D
+		if bx:
+			return cs.global_position.y + bx.size.y * 0.5 - HAZARD_SKIN
+	return area.global_position.y

@@ -9,6 +9,8 @@ signal weapon_taken(player: Node, definition: WeaponDefinition)
 ## Pickup chime (a mechanical clack + rising charge), positional.
 @export var pickup_volume_db := -1.0
 var pickup_sounds := 0
+## Ammo top-ups given (tests).
+var refills := 0
 
 @export var weapon: WeaponDefinition
 @export var spin_speed := 0.6        # rad/s
@@ -84,8 +86,14 @@ func _on_body_entered(body: Node) -> void:
 	var loadout := body.get_node_or_null("WeaponLoadout") as WeaponLoadout
 	var holder := body.get_node_or_null("WeaponHolder") as WeaponHolder
 	if loadout:
-		# Already unlocked: it's in the weapon wheel; leave the pickup here.
+		# Already unlocked: it's in the weapon wheel; leave the pickup here -
+		# but it tops up that weapon's ammo (the player's own device only).
 		if loadout.is_unlocked(weapon):
+			var pc := body as PlayerController
+			if pc and not pc.is_remote and loadout.add_ammo(weapon, weapon.max_ammo) > 0:
+				refills += 1
+				Sfx.play_at(get_tree().current_scene if get_tree().current_scene else get_tree().root,
+					Sfx.WEAPON_PICKUP, global_position + Vector3.UP, pickup_volume_db - 4.0, 6.0, 40.0)
 			return
 	elif holder == null or not holder.can_equip(weapon):
 		return

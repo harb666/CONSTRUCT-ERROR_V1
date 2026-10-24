@@ -4,6 +4,10 @@ extends Weapon
 ## Fires fast cyan plasma bolts from its Muzzle_Exit (pooled PlasmaBolt, no
 ## physics body) with a muzzle flash; its own rate, damage, speed, colours and
 ## recoil are set here, so the weapon slot holds no cannon-specific logic.
+## Unlimited shots, but not continuous fire (owner asked): `cells` shots,
+## then it vents for `vent_time` (PlasmaVent shows it - cell lights over the
+## gun, the overheat flare, jets, the countdown ring); left alone a moment
+## its cells refill by themselves.
 
 ## Shots per second.
 @export var fire_rate := 4.0
@@ -22,6 +26,27 @@ extends Weapon
 @export var fire_sound_near := 5.0
 @export var fire_sound_far := 45.0
 @export var fire_sound_pitch := Vector2(0.94, 1.07)
+@export_group("Cooldown")
+## Shots before it has to vent.
+@export var cells := 6
+## Seconds venting (no fire) once they're all used.
+@export var vent_time := 1.1
+## Not firing this long, the cells start to refill...
+@export var regen_delay := 0.5
+## ...this many a second.
+@export var regen_rate := 6.0
+@export_group("")
+
+## Cells left (fractional while refilling).
+var charge := 6.0
+var venting := false
+## Times it has vented (tests).
+var vents := 0
+var vent_fx: PlasmaVent
+var _vent_left := 0.0
+var _idle := 0.0
+signal vent_started
+signal vent_ended
 
 var shots_fired := 0
 ## Shot sounds started (tests).
@@ -44,6 +69,10 @@ func _ready() -> void:
 	cel_flash.duration = 0.13
 	add_child(cel_flash)
 	cel_flash.setup(bolt_color, bolt_hot_color)
+	charge = cells
+	vent_fx = PlasmaVent.new()
+	vent_fx.name = "PlasmaVent"
+	add_child(vent_fx)
 	# 4 voices: the 0.84 s shot overlaps itself at 4 shots/s.
 	_voices = Sfx.voices(self, Sfx.PISTOL_CANNON, 4, fire_sound_db, fire_sound_near, fire_sound_far,
 		_muzzle.position if _muzzle and _muzzle.get_parent() == self else Vector3.ZERO)
@@ -51,10 +80,38 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_cool = maxf(_cool - delta, 0.0)
+	if venting:
+		_vent_left -= delta
+		if _vent_left <= 0.0:
+			venting = false
+			charge = cells
+			_idle = 0.0
+			if vent_fx:
+				vent_fx.finish()
+			vent_ended.emit()
+	else:
+		_idle += delta
+		if _idle >= regen_delay:
+			charge = minf(charge + regen_rate * delta, cells)
 
 
 func can_fire() -> bool:
-	return _cool <= 0.0
+	return _cool <= 0.0 and not venting and charge >= 1.0
+
+
+## 0 -> 1 through the vent.
+func vent_progress() -> float:
+	return clampf(1.0 - _vent_left / maxf(vent_time, 0.01), 0.0, 1.0) if venting else 1.0
+
+
+func _vent() -> void:
+	venting = true
+	vents += 1
+	_vent_left = vent_time
+	charge = 0.0
+	if vent_fx:
+		vent_fx.start()
+	vent_started.emit()
 
 
 func shot_interval() -> float:
@@ -62,7 +119,7 @@ func shot_interval() -> float:
 
 
 func next_shot_in() -> float:
-	return maxf(_cool, 0.0)
+	return maxf(_cool, _vent_left if venting else 0.0)
 
 
 func delay_next_shot(seconds: float) -> void:
@@ -77,6 +134,10 @@ func fire_at(shooter: Node3D, target_point: Vector3) -> bool:
 	if not can_fire():
 		return false
 	_cool = 1.0 / maxf(fire_rate, 0.01)
+	charge -= 1.0
+	_idle = 0.0
+	if charge < 1.0:
+		_vent()
 	var from := muzzle_position()
 	var dir := (target_point - from).normalized()
 	if dir.length_squared() < 0.5:

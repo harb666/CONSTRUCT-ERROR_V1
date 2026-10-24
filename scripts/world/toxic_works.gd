@@ -222,9 +222,10 @@ func _hide_car() -> void:
 func _connect_hazards() -> void:
 	for a in get_tree().get_nodes_in_group(&"hazard"):
 		var area := a as Area3D
-		if area and is_ancestor_of(area) and not area.body_entered.is_connected(_on_fell):
+		if area and is_ancestor_of(area) and not area.has_meta(&"hazard_hooked"):
+			area.set_meta(&"hazard_hooked", true)
 			area.collision_mask = 0xFFFFFFFF
-			area.body_entered.connect(_on_fell)
+			area.body_entered.connect(_on_hazard.bind(area))
 
 
 ## The hall fight (owner's level: collision.json "encounters"): the waves
@@ -745,12 +746,36 @@ func _wind_streaks() -> void:
 		qm.material = sm
 
 
-## In the slime or off the level: a player back to their spawn, a robot dies.
+## A hazard: the slime (pools, pours) or the crusher (its kill zone,
+## "<id>_Kill"). Into the slime a player makes a splash and sinks in first.
+func _on_hazard(body: Node3D, area: Area3D) -> void:
+	if body is PlayerController and not String(area.name).ends_with("_Kill"):
+		var p := body as PlayerController
+		var top := _area_top(area, p.global_position.y)
+		SlimeSplash.spawn(get_tree(), Vector3(p.global_position.x, top, p.global_position.z))
+		if not p.is_remote:
+			p.fell(top)
+		return
+	_on_fell(body)
+
+
+## Where a player meets a slime volume: its top (a pool's surface), or where
+## they are if that's below it (a pour, a tall column of falling slime).
+func _area_top(area: Area3D, at_y: float) -> float:
+	for cs: CollisionShape3D in area.find_children("*", "CollisionShape3D", false, false):
+		var bx := cs.shape as BoxShape3D
+		if bx:
+			return minf(cs.global_position.y + bx.size.y * 0.5, at_y)
+	return at_y
+
+
+## In the slime, under the crusher or off the level: a player back to their
+## spawn one health bar down (PlayerController.fell), a robot dies.
 func _on_fell(body: Node3D) -> void:
 	if body is PlayerController and (body as PlayerController).is_remote:
 		return
 	if body is PlayerController:
-		(body as PlayerController).respawn_wiped()
+		(body as PlayerController).fell()
 	elif (body is RobotEnemy or body is RobotBoss) and body.alive:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
 

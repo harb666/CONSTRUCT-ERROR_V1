@@ -6,6 +6,8 @@
 
 [resource]
 script = ExtResource("1")
+max_ammo = 3
+ammo_pack = 1
 id = &"black_hole_generator"
 display_name = "Black Hole Generator"
 weapon_scene = ExtResource("2")

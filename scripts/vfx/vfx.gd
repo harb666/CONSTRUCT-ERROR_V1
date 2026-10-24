@@ -244,6 +244,8 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	# The glide melee's glitch (overlay + pixel trail).
 	items.append_array(GlitchGlide.warm_up_items())
 	items.append_array(SonicBoom.warm_up_items())
+	items.append_array(SlimeSplash.warm_up_items())
+	items.append_array(PlasmaVent.warm_up_items())
 	for i in items.size():
 		root.add_child(items[i])
 		items[i].position = Vector3(i * 0.06, 0, 0)

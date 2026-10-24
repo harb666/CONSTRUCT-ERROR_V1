@@ -44,10 +44,18 @@ func _tap(tc: TouchControls, ui_pos: Vector2) -> void:
 	await _ticks(1)
 
 
+const _MAIN := preload("res://scripts/main.gd")
+
 func _run() -> void:
 	# Robots stand still for the deterministic checks; the combat test
 	# turns their AI on.
 	RobotEnemy.ai_enabled = false
+	# The weapons' own checks fire far more than a load: ammo is checked on
+	# its own (_ammo_tests).
+	WeaponLoadout.unlimited_ammo = true
+	# Players die in the game again (owner asked); these checks take hits
+	# along the way, so no one dies here - the death checks turn it on.
+	_MAIN.no_deaths = true
 	# The old test arena: these checks rely on its known layout. The game
 	# itself (scenes/main.tscn) runs in Toxic Arena, checked at the end.
 	var main: Node = load("res://scenes/test_arena.tscn").instantiate()
@@ -56,7 +64,7 @@ func _run() -> void:
 	var p: PlayerController = main.players[1]
 	var anim: CharacterAnimator = p.get_node("Visual/GrinchVisual")
 	_check(p.is_on_floor(), "player starts grounded")
-	_check(not p.can_die, "player can't die (owner's testing setting, main.players_can_die)")
+	_check(main.players_can_die and not p.can_die, "players can die in the game (owner asked to remove the testing invincibility, main.players_can_die; not in these checks)")
 	_check(anim.current_state == "Locomotion", "anim idle in Locomotion")
 
 	# Stick push picks the gait: light = walk, firmer = run, (nearly) all the
@@ -525,6 +533,9 @@ func _run() -> void:
 	await _turned_spawn_tests(main)
 	await _melee_tests(main)
 	await _frost_byte_tests(main)
+	await _cannon_vent_tests(main)
+	await _ammo_tests(main)
+	await _fall_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
 	var fake := Node3D.new()
@@ -1625,7 +1636,8 @@ func _dual_wield_tests(main: Node) -> void:
 			swaps += 1
 	var nr: int = turn_frames.Right.size()
 	var nl: int = turn_frames.Left.size()
-	_check(nr >= 6 and nl >= 6 and absi(nr - nl) <= 1 and together == 0 and swaps >= all_shots.size() - 2,
+	# (Each cannon vents after its 6 cells, so ~4 shots each in 2 s.)
+	_check(nr >= 3 and nl >= 3 and absi(nr - nl) <= 1 and together == 0 and swaps >= all_shots.size() - 2,
 		"both cannons fire at it in turn, never together (R %d / L %d shots in 2 s, %d at once, %d of %d alternate)" % [nr, nl, together, swaps, all_shots.size() - 1])
 	_check(ra.hits > ha, "the cannons' plasma hits the target")
 	# Second enemy -> LEFT cannon.
@@ -1678,7 +1690,7 @@ func _dual_wield_tests(main: Node) -> void:
 	_check(lock_r.current == ta and lock_l.current == ta, "double tap: both cannons lock the same enemy")
 	r0 = wr.shots_fired
 	l0 = wl.shots_fired
-	await _ticks(40)
+	await _ticks(100)  # (past a vent)
 	_check(wr.shots_fired > r0 and wl.shots_fired > l0, "both cannons fire at the shared target")
 	cl = await _cannon_clearance(p)
 	_check(cl.x > 0.15 and cl.y > 0.12, "no cannon clipping, shared target (%.2f / %.2f m)" % [cl.x, cl.y])
@@ -3591,10 +3603,22 @@ func _boss_stomp_tests(main: Node, boss: RobotBoss) -> void:
 	_check(saw_down and max_pitch < -1.3, "boss stomp: lands flat on its back (%.0f deg)" % rad_to_deg(-max_pitch))
 	_check(saw_tuck and not kd.active and kd.getups >= 1, "boss stomp: then quickly kips back up onto its feet")
 	await _ticks(2)
+	# (Knocked to the slime's edge: walk on safe ground - a step into the
+	# slime holds the player there sinking.)
+	await _ticks(6)
+	await _until_back(p)
+	p.global_position = p.spawn_transform.origin
+	p.reset_physics_interpolation()
+	await _ticks(4)
+	await _until_back(p)
 	Input.action_press("move_forward")
-	await _ticks(12)
+	var moved := 0.0
+	for i in 12:
+		await _ticks(1)
+		moved = maxf(moved, Vector2(p.velocity.x, p.velocity.z).length())
 	Input.action_release("move_forward")
-	_check(Vector2(p.velocity.x, p.velocity.z).length() > 2.0, "boss stomp: the player moves freely again")
+	_check(moved > 2.0, "boss stomp: the player moves freely again")
+	await _until_back(p)
 	# Jumping the wave: no knockdown.
 	boss._stomp_cd = 0.0
 	p.global_position = boss.global_position + fwd * 4.0 + Vector3.UP * 0.05
@@ -4883,6 +4907,12 @@ func _sentinel_tests() -> void:
 	_check(s.engaged and s.target == p, "sentinel: then it engages")
 	# Dodges a shot coming its way.
 	s.evade_chance = 1.0
+	# (Not mid-dash from a juke of its own, and none due while measuring.)
+	for i in 60:
+		if s._dash_t <= 0.0:
+			break
+		await _ticks(1)
+	s._juke_t = 5.0
 	s._evade_cd = 0.0
 	var d0 := s.dashes
 	var from := p.global_position + Vector3.UP * 1.2
@@ -5326,7 +5356,7 @@ func _toxic_works_tests() -> void:
 	for a in main.get_tree().get_nodes_in_group(&"hazard"):
 		if a is Area3D and String(a.name).ends_with("_Kill"):
 			crush = a
-	_check(crush != null and crush.body_entered.is_connected(tw._on_fell), "works: the crusher's pad is deadly")
+	_check(crush != null and crush.has_meta(&"hazard_hooked"), "works: the crusher's pad is deadly")
 	var blockers := main.get_tree().get_nodes_in_group(&"laser_gate").map(func(n: Node) -> String: return String(n.name))
 	_check(blockers.has("Gate_Works_Laser_Blocker") and blockers.has("Exit_Hall_Laser_Blocker"), "works: the Works gate and the exit are closed by laser gates %s" % [blockers])
 	var gfx: Dictionary = tw.gate_fx
@@ -5386,24 +5416,46 @@ func _toxic_works_tests() -> void:
 		if a is Area3D and tw.is_ancestor_of(a) and not String(a.name).ends_with("_Kill"):
 			slime = a
 			break
-	_check(slime != null and slime.body_entered.is_connected(tw._on_fell), "works: the slime volumes are live")
+	_check(slime != null and slime.has_meta(&"hazard_hooked"), "works: the slime volumes are live")
 	if slime:
 		var shape := slime.find_children("*", "CollisionShape3D", true, false)[0] as CollisionShape3D
 		var wipe := DeathWipe.find(main.get_tree())
 		var plays := wipe.plays if wipe else 0
+		var splashes := SlimeSplash.spawned
+		var could_die := p.can_die
+		p.can_die = true
+		p.health = p.max_health
+		var falls := p.falls
 		p.global_position = shape.global_position
 		p.velocity = Vector3.ZERO
 		await _ticks(4)
+		# Owner asked: a splash as they fall in, and a fall costs one of the
+		# health bar's 10 bars.
+		_check(SlimeSplash.spawned == splashes + 1, "works: a slime splash as the player falls in")
+		_check(p.falls == falls + 1 and is_equal_approx(p.health, p.max_health * 0.9), "works: the fall costs one health bar (%.0f HP left)" % p.health)
+		var y0 := p.global_position.y
+		await _ticks(14)
+		_check(p.global_position.y < y0 - 0.2 and (wipe == null or wipe.plays == plays), "works: they sink into the slime a moment first (the splash is seen)")
+		await _ticks(8)
 		# The death wipe (owner asked): the screen streaks over in the menu's
 		# glitch lines, the player is put back under it, it streaks away.
 		_check(wipe != null and wipe.plays == plays + 1 and wipe.visible and wipe.wire > 0.0 and wipe.wire < 1.0
 			and p.global_position.distance_to(p.spawn_transform.origin) > 5.0,
-			"works: falling in the slime, the screen streaks over with the glitch's blocky pixels (%.2f)" % (wipe.wire if wipe else 0.0))
+			"works: then the screen streaks over with the glitch's blocky pixels (%.2f)" % (wipe.wire if wipe else 0.0))
 		await _ticks(14)
 		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0 and wipe.wire == 1.0, "works: under it the player is put back at spawn")
+		_check(is_equal_approx(p.health, p.max_health * 0.9), "works: keeping the rest of their health (%.0f)" % p.health)
 		await _ticks(30)
 		_check(not wipe.visible and not wipe.playing() and p.global_position.distance_to(p.spawn_transform.origin) < 1.0,
 			"works: and it streaks away off the screen to show them there")
+		# The last bar: a fall then is a death - back with full health.
+		p.health = p.max_health * 0.1
+		await _ticks(5)
+		p.global_position = shape.global_position
+		p.velocity = Vector3.ZERO
+		await _ticks(80)
+		_check(p.global_position.distance_to(p.spawn_transform.origin) < 1.0 and is_equal_approx(p.health, p.max_health), "works: falling on the last bar is a death - back with full health")
+		p.can_die = could_die
 	# Flying robots' routes (FlightNav): searched on the baked grid itself
 	# (an engine route graph of it took 19 MB of the game's memory), none
 	# into the Works while its laser gate is closed.
@@ -7223,3 +7275,155 @@ func _turned_spawn_tests(main: Node) -> void:
 	RobotEnemy.ai_enabled = was_ai
 	(p.get_node("TargetLock") as TargetLock).view_camera = cam_was
 	await _ticks(3)
+
+
+## Waits (in game frames) until a player put back after a fall is there.
+func _until_back(p: PlayerController) -> void:
+	for i in 180:
+		if not p._respawn_pending:
+			return
+		await _ticks(1)
+
+
+## The pistol cannon (owner asked): unlimited, but 6 shots then a quick,
+## clearly visible vent.
+func _cannon_vent_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var h := p.get_node("WeaponHolder") as WeaponHolder
+	(p.get_node("Input/TargetSelector") as TargetSelector).clear()
+	h.equip(h.default_weapon, "Right")
+	h.equip(h.default_weapon, "Left")
+	await _ticks(3)
+	var c := h.weapon("Right") as PlasmaCannon
+	_check(c != null and c.charge == c.cells and c.cells == 6 and c.vent_fx != null and c.vent_fx._pips.size() == 6,
+		"pistol cannon: 6 cells, shown as cell lights over the gun")
+	_check(h.default_weapon.unlimited(), "pistol cannon: unlimited shots (no ammo)")
+	var v0 := c.vents
+	var aim := c.muzzle_position() + c.get_barrel_direction() * 10.0
+	var shots := 0
+	for i in 120:
+		if c.fire_at(p, aim):
+			shots += 1
+		await _ticks(1)
+		if c.venting:
+			break
+	_check(c.venting and shots == 6 and c.vents == v0 + 1 and not c.can_fire(), "pistol cannon: 6 shots, then it has to vent (%d)" % shots)
+	await _ticks(10)
+	var vf := c.vent_fx
+	var lit := 0
+	for pip in vf._pips:
+		lit += int(pip.material_override == vf._pip_on)
+	var overlaid := vf._meshes.size() > 0 and vf._meshes.all(func(mi: MeshInstance3D) -> bool: return mi.material_overlay == vf._overlay)
+	_check(overlaid and vf._jets.all(func(j: CPUParticles3D) -> bool: return j.emitting) and vf._rings.all(func(r: MeshInstance3D) -> bool: return r.visible) and lit == 0,
+		"pistol cannon: venting - the gun flares white-hot, plasma jets, the rings lock on, the cell lights go out")
+	var st := WeaponHud.status_of(c)
+	_check(st[1] == "VENTING" and st[0] > 0.05 and st[0] < 0.5, "HUD: VENTING, the bar filling as it cools (%.2f)" % st[0])
+	_check(not c.fire_at(p, aim), "pistol cannon: no shots while venting")
+	await _ticks(roundi(c.vent_time * 60.0))
+	_check(not c.venting and c.charge == c.cells and c.can_fire() and WeaponHud.status_of(c)[1] == "CELLS", "pistol cannon: back after %.1f s with all 6 cells" % c.vent_time)
+	await _ticks(25)
+	_check(vf._meshes.all(func(mi: MeshInstance3D) -> bool: return mi.material_overlay != vf._overlay) and vf._rings.all(func(r: MeshInstance3D) -> bool: return not r.visible),
+		"pistol cannon: the ready flare plays out and the vent look is gone")
+	# Let off early, the cells refill by themselves.
+	for i in 3:
+		while not c.fire_at(p, aim):
+			await _ticks(1)
+	_check(not c.venting and absf(c.charge - 3.0) < 0.01, "pistol cannon: 3 shots, 3 cells left")
+	await _ticks(70)
+	_check(c.charge == c.cells and not c.venting, "pistol cannon: left alone a moment, its cells refill")
+
+
+## Ammo (owner asked): only the pistol cannon is unlimited; enemies drop
+## ammo for the other weapons.
+func _ammo_tests(main: Node) -> void:
+	WeaponLoadout.unlimited_ammo = false
+	var p: PlayerController = main.players[1]
+	var lo := p.get_node("WeaponLoadout") as WeaponLoadout
+	var h := p.get_node("WeaponHolder") as WeaponHolder
+	var sel := p.get_node("Input/TargetSelector") as TargetSelector
+	var sg := load("res://resources/weapons/shotgun.tres") as WeaponDefinition
+	var drops := RecoveryDrops.get_for(p.get_tree())
+	drops.clear()
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var limited := reg.weapons.filter(func(w: WeaponDefinition) -> bool: return not w.unlimited())
+	_check(limited.size() == 5 and limited.all(func(w: WeaponDefinition) -> bool: return w.ammo_pack > 0 and w.ammo_pack < w.max_ammo),
+		"ammo: every weapon but the pistol cannon has ammo and a drop size")
+	for w: WeaponDefinition in reg.weapons:
+		lo.relock(w)
+	lo.unlock(sg)
+	_check(lo.ammo_of(sg) == sg.max_ammo, "ammo: a weapon comes with a full load (%d)" % lo.ammo_of(sg))
+	_check(lo.ammo_wanted().is_empty(), "ammo: full - nothing wanted")
+	var spot := Vector3(-34, 0.05, -29.5)
+	p.global_position = spot
+	p.velocity = Vector3.ZERO
+	p.rotation.y = 0.0
+	p.reset_physics_interpolation()
+	var r := _spawn_robot(main, Vector3(-34, 0, -34.5))
+	r.max_health = 500.0
+	r.health = 500.0
+	await _ticks(10)
+	_check(lo.equip("Right", sg), "ammo: the shotgun goes on")
+	await _ticks(30)
+	lo.set_ammo(sg, 1)
+	sel.clear()
+	sel.tap_target(r.get_node("Targetable"))
+	await _wall_wait(func() -> bool: return lo.ammo_of(sg) == 0, 6.0)
+	_check(lo.ammo_of(sg) == 0, "ammo: a shot uses one")
+	await _ticks(40)
+	_check(lo.equipped("Right") == h.default_weapon, "ammo: run dry, the arm switches to the pistol cannon by itself")
+	_check(not lo.equip("Right", sg), "ammo: an empty weapon can't be picked")
+	var hud := main.get_node_or_null("UI/WeaponHud") as WeaponHud
+	if hud:
+		_check(hud.loadout() == lo, "HUD: the weapon panel reads the ammo")
+	# A kill drops ammo for it.
+	var a0 := drops.ammo_dropped
+	var at := r.global_position
+	r.apply_damage(DamageInfo.make(9999.0, DamageInfo.Type.BULLET, at + Vector3.UP, Vector3.FORWARD, 1.0))
+	await _ticks(2)
+	var cell: RecoveryDrops.Shard = null
+	for s in drops._pool:
+		if s.active and s.kind == RecoveryDrops.Kind.AMMO:
+			cell = s
+	_check(drops.ammo_dropped == a0 + 1 and cell != null and cell.weapon == sg and cell.icon.visible and cell.icon.texture == sg.icon,
+		"ammo: the kill drops an ammo cell for the empty shotgun (its icon over it)")
+	var sk := RobotSkirmisher.new()
+	_check(RecoveryDrops.ammo_packs(sk) == 2 and RecoveryDrops.ammo_packs(r) == 1, "ammo: bigger enemies drop more (skirmisher 2, grunt 1)")
+	sk.free()
+	await _ticks(60)
+	if cell:
+		p.global_position = cell.node.global_position - Vector3.UP * 0.6
+		p.reset_physics_interpolation()
+	await _ticks(30)
+	_check(lo.ammo_of(sg) == sg.ammo_pack and (cell == null or not cell.active), "ammo: picked up: +%d shells" % lo.ammo_of(sg))
+	await _ticks(30)
+	_check(lo.equipped("Right") == sg, "ammo: and the shotgun goes back on the arm it ran dry on")
+	# The wheel shows it; a full weapon wants none.
+	lo.set_ammo(sg, sg.max_ammo)
+	_check(lo.ammo_wanted().is_empty(), "ammo: full again")
+	sel.clear()
+	lo.equip("Right", h.default_weapon)
+	await _ticks(30)
+	for w: WeaponDefinition in reg.weapons:
+		lo.relock(w)
+	WeaponLoadout.unlimited_ammo = true
+
+
+## Falling (owner asked): a fall costs one of the health bar's 10 bars.
+func _fall_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	_check(PlayerController.HEALTH_BARS == 10 and VitalsHud.health_color(0.25) == HudStyle.DANGER and VitalsHud.health_color(0.9) == HudStyle.HEALTH,
+		"HUD: health is 10 big bars, green, red at 3 or fewer")
+	var could := p.can_die
+	p.can_die = true
+	p.health = p.max_health
+	var f0 := p.falls
+	p.global_position = Vector3(-30, -40, -30)
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(3)
+	await _until_back(p)
+	await _ticks(3)
+	_check(p.falls == f0 + 1 and is_equal_approx(p.health, p.max_health * 0.9) and p.global_position.distance_to(p.spawn_transform.origin) < 1.0,
+		"fall: off the level - back at the spawn, one health bar down (%.0f)" % p.health)
+	p.can_die = could
+	p.health = p.max_health

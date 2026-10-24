@@ -109,12 +109,30 @@ func _on_command(cmd: PlayerCommand, _delta: float) -> void:
 			n += 1
 	if n > 0 and cmd.move.length() < 0.1 and sum.length() > 0.01:
 		player.face_yaw_when_idle(atan2(-sum.x, -sum.z))
+	var loadout := _loadout(player)
 	for side in SIDES:
 		# That arm's cannon is busy punching (PlayerMelee fires it).
 		if player.melee and player.melee.uses_arm(side):
 			continue
-		if (slots[side] as WeaponSlot).update(player):
+		var s := slots[side] as WeaponSlot
+		var def := s.current.definition if s.current and is_instance_valid(s.current) else null
+		var counted := loadout != null and def != null and not def.unlimited() and loadout.is_unlocked(def)
+		# Out of ammo (it's switching to the cannon).
+		if counted and not loadout.has_ammo(def):
+			continue
+		if s.update(player):
 			_take_turns(side)
+			var rounds := s.current.take_rounds() if s.current else 1
+			if counted:
+				loadout.use_ammo(def, rounds)
+
+
+## The player's loadout, for ammo (not for a teammate's character shown
+## here: their own device counts it).
+func _loadout(player: PlayerController) -> WeaponLoadout:
+	if player == null or player.is_remote:
+		return null
+	return player.get_node_or_null("WeaponLoadout") as WeaponLoadout
 
 
 ## Both arms on one target take turns (owner asked: "both weapons fire at

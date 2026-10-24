@@ -6,6 +6,8 @@
 
 [resource]
 script = ExtResource("1")
+max_ammo = 240
+ammo_pack = 60
 id = &"machine_gun"
 display_name = "Machine Gun"
 weapon_scene = ExtResource("2")

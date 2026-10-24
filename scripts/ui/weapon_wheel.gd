@@ -277,9 +277,15 @@ func _draw() -> void:
 				draw_arc(p, ir, 0, TAU, 40, Color(acc.r, acc.g, acc.b, (1.0 if hovered or is_eq else 0.35) * a), 5.0 if hovered else (3.0 if is_eq else 1.5), true)
 			if def.heavy:
 				_heavy_ring(p, ir, ga)
+			# Ammo (weapons that use it): the count over it; empty = dimmed,
+			# can't be picked.
+			var ammo := loadout.ammo_of(def)
 			if def.icon:
 				var s := ir * 1.75
-				draw_texture_rect(def.icon, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), false, Color(1, 1, 1, ga))
+				draw_texture_rect(def.icon, Rect2(p - Vector2(s, s) * 0.5, Vector2(s, s)), false, Color(1, 1, 1, ga * (0.3 if ammo == 0 else 1.0)))
+			if ammo >= 0:
+				var low := ammo <= ceili(def.max_ammo * 0.25)
+				_text(p + Vector2(0, -ir - 10), "EMPTY" if ammo == 0 else "%d" % ammo, 16, Color(Color(1.0, 0.35, 0.3) if low else Color.WHITE, ga))
 			if def.heavy:
 				_heavy_tag(p + Vector2(0, ir * 0.98), "HEAVY  > R" if ghost else "HEAVY", ga)
 			if is_eq:
@@ -294,7 +300,9 @@ func _draw() -> void:
 		var p: Vector2 = hover_label[0]
 		var ir: float = hover_label[1]
 		var def: WeaponDefinition = hover_label[2]
-		if hover_label[3]:
+		if loadout.ammo_of(def) == 0:
+			_text(p + Vector2(0, ir + 30), "NO AMMO - KILL ENEMIES FOR MORE", 16, Color(1.0, 0.35, 0.3, a))
+		elif hover_label[3]:
 			_hand_off_arrow(p, item_position(hover_target, def), def.accent_color, a)
 			_text(p + Vector2(0, ir + 30), "HEAVY - GOES ON RIGHT ARM", 16, Color(HEAVY_GOLD, a))
 	# Centre: what each arm holds (the hovered arm previews its new weapon).

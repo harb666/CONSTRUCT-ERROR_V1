@@ -12,9 +12,11 @@ const LEVELS := {"skyforge": "res://scenes/skyforge_arena.tscn", "works": "res:/
 @onready var debug_hud: Label = $UI/DebugHud
 
 var players := {}  # player_id -> PlayerController
-## Owner's testing setting: players can't die (hits still land and count).
-## Set back to true to restore dying / respawning.
-@export var players_can_die := false
+## Players die (owner asked to remove the testing invincibility again):
+## false = hits only land and count, no death / respawn.
+@export var players_can_die := true
+## Tests: no one dies (checks that take hits along the way).
+static var no_deaths := false
 ## This level's music (owner's; Music), starting as the players arrive.
 ## None: whatever is playing carries on (the next part of a level).
 @export var level_music: AudioStream
@@ -190,7 +192,7 @@ func spawn_player(player_id: int, is_local: bool, character: CharacterDefinition
 	hurt.name = "HitFeedback"
 	player.add_child(hurt)
 	player.add_to_group(&"players")  # enemies look for these
-	player.can_die = players_can_die
+	player.can_die = players_can_die and not no_deaths
 
 	if is_local:
 		player.add_to_group(&"local_player")

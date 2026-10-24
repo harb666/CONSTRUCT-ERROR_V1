@@ -242,12 +242,13 @@ func _process(_delta: float) -> void:
 var _camera_far := 800.0
 
 
-## Fell off the decks: a player goes back to their spawn, a robot dies.
+## Fell off the decks: a player goes back to their spawn one health bar
+## down (PlayerController.fell), a robot dies.
 func _on_fell(body: Node3D) -> void:
 	if body is PlayerController and (body as PlayerController).is_remote:
 		return
 	if body is PlayerController:
-		(body as PlayerController).respawn_wiped()
+		(body as PlayerController).fell()
 	elif (body is RobotEnemy or body is RobotBoss) and body.alive:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
 
