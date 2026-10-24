@@ -580,7 +580,11 @@
   changes (time, peaks) and names the level; only the first level after
   the page opens reports the previous session (a level change - e.g.
   Skyforge's lift down to the Works - used to show a false "LAST SESSION
-  STOPPED UNEXPECTEDLY"), shown for the first 90 s of play.
+  STOPPED UNEXPECTEDLY"), shown for the first 90 s of play. A WebGL
+  context loss (owner reported one on the first map) is caught too: the
+  session as it was then (level, time, fps, robots, debris, pick-ups out,
+  memory / graphics peaks, last events) is kept and shown next time as
+  "LAST SESSION: WEBGL CONTEXT LOST ..." (`DebugHud.describe_session`).
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

@@ -62,6 +62,7 @@ var ammo_dropped := 0
 var tokens_dropped := 0
 static var _meshes := {}
 static var _glitch_mats: Array[StandardMaterial3D] = []
+static var _glow_quad: QuadMesh
 
 
 class Shard:
@@ -146,8 +147,9 @@ func spawn_ammo(def: WeaponDefinition, at: Vector3) -> void:
 	s.weapon = def
 	s.core.mesh = _bullet_mesh(def.accent_color)
 	s.glow.material_override = Vfx.material("glow", def.accent_color * 0.6, BaseMaterial3D.BILLBOARD_ENABLED)
-	s.icon.texture = def.icon
-	s.icon.visible = def.icon != null
+	var icon := _icon_of(s)
+	icon.texture = def.icon
+	icon.visible = def.icon != null
 	ammo_dropped += 1
 
 
@@ -243,7 +245,8 @@ func spawn(kind: int, at: Vector3, value: float) -> void:
 	s.magnet = false
 	s.active = true
 	s.weapon = null
-	s.icon.visible = false
+	if s.icon:
+		s.icon.visible = false
 	s.core.mesh = _mesh_for(kind)
 	s.core.material_override = null
 	s.core.rotation = Vector3.ZERO
@@ -295,21 +298,28 @@ func _make() -> Shard:
 	s.core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	s.node.add_child(s.core)
 	s.glow = MeshInstance3D.new()
-	var q := QuadMesh.new()
-	q.size = Vector2(0.75, 0.75)
-	s.glow.mesh = q
+	if _glow_quad == null:
+		_glow_quad = QuadMesh.new()  # one for all of them
+		_glow_quad.size = Vector2(0.75, 0.75)
+	s.glow.mesh = _glow_quad
 	s.glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	s.node.add_child(s.glow)
-	s.icon = Sprite3D.new()
-	s.icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	s.icon.pixel_size = 0.0022
-	s.icon.position.y = 0.5
-	s.icon.no_depth_test = false
-	s.icon.shaded = false
-	s.icon.visible = false
-	s.node.add_child(s.icon)
 	s.node.visible = false
 	return s
+
+
+## The weapon icon over an ammo bullet (made the first time this pick-up
+## is ammo - tokens and the others never need one).
+func _icon_of(s: Shard) -> Sprite3D:
+	if s.icon == null:
+		s.icon = Sprite3D.new()
+		s.icon.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		s.icon.pixel_size = 0.0022
+		s.icon.position.y = 0.5
+		s.icon.shaded = false
+		s.icon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		s.node.add_child(s.icon)
+	return s.icon
 
 
 # --- The pick-ups' models (built once, shared) ---

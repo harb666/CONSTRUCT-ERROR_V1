@@ -59,16 +59,34 @@ func _ready() -> void:
 		_read_last = true
 		var prev = JavaScriptBridge.eval("localStorage.getItem('ce_session') || ''")
 		var d = JSON.parse_string(str(prev)) if prev != null and str(prev) != "" else null
-		if d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
-			_last_session = "LAST SESSION STOPPED UNEXPECTEDLY after %dm%02ds: level %s, fps %d, robots %d, debris %d, nodes %d, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
-				int(d.t) / 60, int(d.t) % 60, str(d.get("level", "?")), int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
-				int(d.get("nodes", 0)), str(d.get("heap", "?")), str(d.get("heap0", "?")), str(d.get("hpeak", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("res", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+		# The browser dropped the game's graphics (WebGL context lost): its
+		# session as it was then (the page itself may carry on, closed
+		# normally, so it isn't "stopped").
+		var lost = JavaScriptBridge.eval("localStorage.getItem('ce_ctxlost') || ''")
+		var dl = JSON.parse_string(str(lost)) if lost != null and str(lost) != "" else null
+		if dl is Dictionary:
+			_last_session = describe_session("LAST SESSION: WEBGL CONTEXT LOST", dl)
+		elif d is Dictionary and int(d.get("ended", 1)) == 0 and float(d.get("t", 0)) > 5.0:
+			_last_session = describe_session("LAST SESSION STOPPED UNEXPECTEDLY", d)
+		JavaScriptBridge.eval("try { localStorage.removeItem('ce_ctxlost'); } catch (e) {}")
+		JavaScriptBridge.eval("document.addEventListener('webglcontextlost', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.lost_at = s.t; s.events = localStorage.getItem('ce_events') || ''; localStorage.setItem('ce_ctxlost', JSON.stringify(s)); } catch (e) {} }, true);")
 		var ev = JavaScriptBridge.eval("localStorage.getItem('ce_events') || ''")
-		if _last_session != "" and ev != null and str(ev) != "":
+		if _last_session != "" and not (dl is Dictionary) and ev != null and str(ev) != "":
 			_last_session += ", last events: " + str(ev)
 		JavaScriptBridge.eval("try { localStorage.removeItem('ce_events'); } catch (e) {}")
 		# A normal close / refresh marks the session as ended cleanly.
 		JavaScriptBridge.eval("window.addEventListener('pagehide', function(){ try { var s = JSON.parse(localStorage.getItem('ce_session') || '{}'); s.ended = 1; localStorage.setItem('ce_session', JSON.stringify(s)); } catch (e) {} });")
+
+
+## A recorded session in words (the crash / context-loss report).
+static func describe_session(headline: String, d: Dictionary) -> String:
+	var t := float(d.get("t", 0))
+	var s := "%s after %dm%02ds: level %s, fps %d, robots %d, debris %d, nodes %d, pick-ups %s, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
+		headline, int(t) / 60, int(t) % 60, str(d.get("level", "?")), int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
+		int(d.get("nodes", 0)), str(d.get("pickups", "?")), str(d.get("heap", "?")), str(d.get("heap0", "?")), str(d.get("hpeak", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("res", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
+	if str(d.get("events", "")) != "":
+		s += ", last events: " + str(d.events)
+	return s
 
 
 func _place() -> void:
@@ -153,6 +171,7 @@ func _record(delta: float) -> void:
 	var scene := get_tree().current_scene
 	var d := {"t": snappedf(_session_t, 0.1), "level": scene.scene_file_path.get_file().get_basename() if scene else "?", "fps": Engine.get_frames_per_second(), "robots": alive,
 		"debris": DebrisPiece.active_count(), "nodes": int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+		"pickups": _pickups(),
 		"weapon": weapon, "char": player.character.display_name if player and player.character else "?", "build": _build, "ended": 0,
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
 		"vmem": snappedf(_vmem(), 1.0), "vmem0": snappedf(_vmem0, 1.0), "vpeak": snappedf(_vpeak, 1.0),
@@ -173,6 +192,11 @@ func _res() -> String:
 
 
 ## Remember a game event for the crash report (web only; saved at once).
+func _pickups() -> int:
+	var drops := get_tree().get_first_node_in_group(RecoveryDrops.GROUP) as RecoveryDrops
+	return drops.active_count() if drops else 0
+
+
 static func note(what: String) -> void:
 	if not OS.has_feature("web"):
 		return

@@ -7452,3 +7452,7 @@ func _fall_tests(main: Node) -> void:
 		"fall: off the level - back at the spawn, one health bar down (%.0f)" % p.health)
 	p.can_die = could
 	p.health = p.max_health
+	# Crash report: a lost graphics context is reported with its session.
+	var rep := DebugHud.describe_session("LAST SESSION: WEBGL CONTEXT LOST", {"t": 95.0, "level": "skyforge_arena", "pickups": 12, "events": "1m30s melee"})
+	_check(rep.begins_with("LAST SESSION: WEBGL CONTEXT LOST after 1m35s") and rep.contains("skyforge_arena") and rep.contains("pick-ups 12") and rep.contains("1m30s melee"),
+		"crash report: a WebGL context loss is reported with its level, time, pick-ups and last events")
