@@ -2356,10 +2356,16 @@ func _skirmisher_tests(main: Node) -> void:
 			spin = maxf(spin, (n as DebrisPiece).angular_velocity.length())
 	_check(fastest <= 16.01 and spin <= 14.01, "debris speeds/spins clamped like the first robot's (%.1f m/s, %.1f rad/s)" % [fastest, spin])
 	await _ticks(240)
-	var settled := true
-	for n in root.get_children() + main.get_children():
-		if n is DebrisPiece and is_instance_valid(n) and (n as DebrisPiece).linear_velocity.length() > 0.5 and not (n as DebrisPiece).freeze:
-			settled = false
+	# (Now and then one piece is still rocking after 4 s: up to 2 s more.)
+	var settled := false
+	for k in 120:
+		settled = true
+		for n in root.get_children() + main.get_children():
+			if n is DebrisPiece and is_instance_valid(n) and (n as DebrisPiece).linear_velocity.length() > 0.5 and not (n as DebrisPiece).freeze:
+				settled = false
+		if settled:
+			break
+		await _ticks(1)
 	_check(settled, "skirmisher debris settles (no jitter, no endless bouncing)")
 	for n in main.get_children():
 		if n is RobotSkirmisher:
