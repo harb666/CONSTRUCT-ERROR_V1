@@ -11,7 +11,7 @@ extends Node
 ## what if within a suitable distance and no obstructions"): a locked enemy
 ## (either arm's lock) up to `glide_reach` away with a clear way to it - or,
 ## with nothing locked, the nearest on screen - is reached by power-gliding
-## across the floor or through the air at `glide_speed`, glitching
+## across the floor or through the air at `glide_speed` (sonic), glitching
 ## (GlitchGlide) with the camera pulled wide and low beside it, then struck.
 ## Close enemies (`reach`) are struck from where the player stands, as
 ## before. It works from the air too.
@@ -55,9 +55,12 @@ const MOVES := {
 @export var reach := 4.6
 ## Glide in from this far (m, straight line) to a locked enemy.
 @export var glide_reach := 20.0
-@export var glide_speed := 30.0
+## Sonic (owner asked: "faster and dramatic, almost sonic like"): a sonic
+## boom (SonicBoom) as it launches and as it arrives, speed streaks along
+## its path (GlitchGlide), speed lines over the screen (CameraRig).
+@export var glide_speed := 55.0
 ## The crouch before it launches (s), and the longest a glide may take.
-@export var glide_launch := 0.07
+@export var glide_launch := 0.06
 @export var glide_max_time := 1.0
 ## Distance from the enemy's middle the cannon lands at (m, level).
 @export var contact_range := 1.25
@@ -126,6 +129,7 @@ var _prev := {}
 var _player: PlayerController
 var _glitch: GlitchGlide
 var _stuck := 0.0
+var _boomed := false
 
 
 func _ready() -> void:
@@ -272,6 +276,7 @@ func try_start() -> bool:
 	glide_t = 0.0
 	glide_velocity = Vector3.ZERO
 	_stuck = 0.0
+	_boomed = false
 	if gliding:
 		glides += 1
 		_glitch_on()
@@ -433,13 +438,21 @@ func _glide(delta: float) -> void:
 	if glide_t < glide_launch:
 		glide_velocity = Vector3.ZERO
 	else:
-		var k := smoothstep(glide_launch, glide_launch + 0.1, glide_t)
-		glide_velocity = to / maxf(d, 0.001) * minf(glide_speed * lerpf(0.4, 1.0, k), d / maxf(delta, 0.001))
+		var k := smoothstep(glide_launch, glide_launch + 0.05, glide_t)
+		glide_velocity = to / maxf(d, 0.001) * minf(glide_speed * lerpf(0.55, 1.0, k), d / maxf(delta, 0.001))
+		if not _boomed:
+			# Breaking the sound barrier as it launches.
+			_boomed = true
+			SonicBoom.spawn(_player.get_tree(), _player.global_position + Vector3.UP * CHEST, to, 1.0)
+	if _glitch and is_instance_valid(_glitch):
+		_glitch.direction = glide_velocity
 	# Something in the way after all (another robot, a closing door): stop
 	# and strike from here.
 	var moved := _player.get_real_velocity().length()
 	_stuck = _stuck + delta if glide_t > glide_launch + 0.1 and moved < glide_speed * 0.25 and d > 0.5 else 0.0
 	if d < 0.45 or glide_t >= glide_max_time or _stuck > 0.12:
+		if _boomed:
+			SonicBoom.spawn(_player.get_tree(), _player.global_position + Vector3.UP * CHEST, to if d > 0.05 else dir, 0.6)
 		glide_velocity = Vector3.ZERO
 		_begin_strike()
 

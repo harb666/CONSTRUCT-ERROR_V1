@@ -260,15 +260,22 @@
   locked enemy (either arm's lock) up to `glide_reach` 20 m away with a
   clear way (rays from chest / head / knees / sides; only level geometry
   blocks) - or, nothing locked, the nearest on screen - is power-glided to
-  across the floor or up through the air (30 m/s after a 0.07 s crouch,
-  ~0.45 s for 12 m), then struck; close ones (4.6 m) are struck in place
+  across the floor or up through the air (55 m/s after a 0.06 s crouch,
+  ~0.27 s for 12 m; owner asked "faster and dramatic, almost sonic like":
+  a sonic boom as it launches and a smaller one as it arrives -
+  `SonicBoom`, `sonic_ring.gdshader`: two torn cyan / magenta shock rings
+  racing out across the flight, a vapor cone flaring behind, a white
+  flash - speed streaks along its path (`GlitchGlide` SpeedStreaks) and
+  anime speed lines over the screen (`speed_lines.gdshader`, CameraRig,
+  behind the HUD), the view pinching in for the launch then flaring to
+  +26 deg), then struck; close ones (4.6 m) are struck in place
   as before. Works from the air. Gliding the player glitches (owner asked;
   `GlitchGlide`: `glitch_glide.gdshader` overlay tearing the body into
   sideways-thrown cyan / magenta scan-lined bands, the model skipping a few
   cm in steps, a pixel-block trail that fades near the camera; warmed up in
   `Vfx.warm_up`), in a leaning glide pose with the cannon cocked.
   Camera (owner asked: epic, fitting): during the glide a low chase shot
-  close behind and a little beside, tilted, field of view +16; through the
+  close behind and a little beside, tilted, field of view +26; through the
   melee the view turns to the enemy (`CameraRig.melee_face`; it stays
   facing it after); each move its own shot (`melee_shot`, `MOVES.cam`).
   Combo (owner asked: melees one after another all different, switching

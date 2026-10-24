@@ -1066,7 +1066,10 @@ func _glide_melee_tests(main: Node) -> void:
 	var p0 := p.global_position
 	_check(mel.available() and mel.find_target() == g and mel.path_clear(g), "glide melee: a locked enemy 12 m away can be meleed (glide reach %.0f m)" % mel.glide_reach)
 	_check(mel.try_start() and mel.gliding and mel.move == PlayerMelee.Move.JAB, "glide melee: MELEE sends the player gliding at it")
-	var glitch: GlitchGlide = null
+	var glitched := false
+	var booms0 := SonicBoom.spawned
+	var lines := 0.0
+	var streaking := false
 	var overlaid := false
 	var max_speed := 0.0
 	var glide_cam := 0.0
@@ -1080,20 +1083,26 @@ func _glide_melee_tests(main: Node) -> void:
 			max_speed = maxf(max_speed, Vector2(p.velocity.x, p.velocity.z).length())
 			var gl := p.get_node_or_null("GlitchGlide") as GlitchGlide
 			if gl:
-				glitch = gl
+				glitched = true
 				for mi: MeshInstance3D in p.find_children("*", "MeshInstance3D", true, false):
 					overlaid = overlaid or (mi.material_overlay != null and (mi.material_overlay as ShaderMaterial) != null and (mi.material_overlay as ShaderMaterial).shader == GlitchGlide.SHADER)
 			if rig:
 				glide_cam = maxf(glide_cam, rig.glide_blend)
 				wide = maxf(wide, rig.camera.fov - rig._base_fov)
+				if rig.speed_lines.visible:
+					lines = maxf(lines, float((rig.speed_lines.material as ShaderMaterial).get_shader_parameter("amount")))
+			var st := p.get_node_or_null("GlitchGlide/SpeedStreaks") as CPUParticles3D
+			streaking = streaking or (st != null and st.emitting)
 		elif arrived_t < 0.0:
 			arrived_t = frames / 60.0
-	_check(max_speed > 20.0 and arrived_t > 0.0 and arrived_t < 0.75, "glide melee: it power-glides there fast (%.0f m/s, %.2f s)" % [max_speed, arrived_t])
-	_check(glitch != null and overlaid, "glide melee: the player glitches as they glide (torn cyan / magenta bands, pixel trail)")
-	_check(rig == null or (glide_cam > 0.9 and wide > 10.0), "glide melee: the camera drops into a low, wide chase shot (fov +%.0f)" % wide)
+	_check(max_speed > 45.0 and arrived_t > 0.0 and arrived_t < 0.45, "glide melee: it power-glides there - sonic fast (%.0f m/s, 12 m in %.2f s)" % [max_speed, arrived_t])
+	_check(SonicBoom.spawned >= booms0 + 2, "glide melee: a sonic boom as it launches and as it arrives (%d)" % (SonicBoom.spawned - booms0))
+	_check(streaking and (rig == null or lines > 0.8), "glide melee: speed streaks along its path and speed lines over the screen (%.2f)" % lines)
+	_check(glitched and overlaid, "glide melee: the player glitches as they glide (torn cyan / magenta bands, pixel trail)")
+	_check(rig == null or (glide_cam > 0.9 and wide > 20.0), "glide melee: the camera drops into a low, wide chase shot (fov +%.0f)" % wide)
 	_check(mel.kills >= 1 and not g.alive and p.global_position.distance_to(p0) > 9.0, "glide melee: then strikes - the grunt is blown apart (%.1f m covered)" % p.global_position.distance_to(p0))
 	await _ticks(20)
-	_check(p.get_node_or_null("GlitchGlide") == null and (rig == null or rig.glide_blend < 0.05), "glide melee: the glitch and the chase shot are gone after")
+	_check(p.get_node_or_null("GlitchGlide") == null and (rig == null or (rig.glide_blend < 0.05 and not rig.speed_lines.visible)), "glide melee: the glitch, the speed lines and the chase shot are gone after")
 	# --- in the way: a wall between ---
 	await _ticks(80)
 	sel.clear()

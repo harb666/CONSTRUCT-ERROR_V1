@@ -25,6 +25,9 @@ var _model: Node3D
 var _model_pos := Vector3.ZERO
 var _jit_t := 0.0
 var _trail: CPUParticles3D
+var _streaks: CPUParticles3D
+## The flight's velocity (PlayerMelee): the speed streaks lie along it.
+var direction := Vector3.ZERO
 
 static var started := 0
 
@@ -62,7 +65,7 @@ static func warm_up_items() -> Array[Node3D]:
 	m.size = Vector3.ONE * 0.2
 	mi.mesh = m
 	mi.material_overlay = make_material()
-	return [mi, _make_trail()]
+	return [mi, _make_trail(), _make_streaks()]
 
 
 func _ready() -> void:
@@ -82,6 +85,9 @@ func _ready() -> void:
 	add_child(_trail)
 	_trail.position = Vector3.UP * 1.0
 	_trail.emitting = true
+	_streaks = _make_streaks()
+	add_child(_streaks)
+	_streaks.position = Vector3.UP * 1.0
 
 
 static func _make_trail() -> CPUParticles3D:
@@ -121,6 +127,45 @@ static func _make_trail() -> CPUParticles3D:
 	return c
 
 
+## Speed streaks (owner asked: sonic): long thin white / cyan / magenta
+## lines left in the air all round the player along the flight - from the
+## chase camera they rush past like speed lines.
+static func _make_streaks() -> CPUParticles3D:
+	var c := CPUParticles3D.new()
+	c.name = "SpeedStreaks"
+	c.amount = 48
+	c.lifetime = 0.22
+	c.local_coords = false
+	c.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	c.emission_sphere_radius = 1.1
+	c.particle_flag_align_y = true
+	c.direction = Vector3.BACK
+	c.spread = 0.0
+	c.initial_velocity_min = 1.5
+	c.initial_velocity_max = 3.0
+	c.gravity = Vector3.ZERO
+	c.scale_amount_min = 0.6
+	c.scale_amount_max = 1.4
+	var b := BoxMesh.new()
+	b.size = Vector3(0.025, 2.2, 0.025)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.vertex_color_use_as_albedo = true
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	m.distance_fade_min_distance = 0.8
+	m.distance_fade_max_distance = 2.5
+	b.material = m
+	c.mesh = b
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	g.colors = PackedColorArray([Color(1, 1, 1, 1), CYAN, Color(MAGENTA, 0.0)])
+	c.color_ramp = g
+	c.emitting = false
+	return c
+
+
 func _set_amount(a: float) -> void:
 	amount = a
 	_mat.set_shader_parameter("amount", a)
@@ -131,6 +176,8 @@ func stop() -> void:
 	fading = true
 	if _trail:
 		_trail.emitting = false
+	if _streaks:
+		_streaks.emitting = false
 
 
 func _process(delta: float) -> void:
@@ -141,6 +188,12 @@ func _process(delta: float) -> void:
 			return
 	else:
 		_set_amount(minf(amount + delta / 0.06, 1.0))
+	# Streaks only once it's flying, lying back along the flight.
+	if _streaks and not fading:
+		var speed := direction.length()
+		_streaks.emitting = speed > 5.0
+		if speed > 5.0:
+			_streaks.direction = global_basis.inverse() * (-direction / speed)
 	# The model jumps a few cm, in steps (and now and then further).
 	_jit_t -= delta
 	if _model and _jit_t <= 0.0:
@@ -158,6 +211,8 @@ func _finish() -> void:
 			mi.material_overlay = _before[i]
 	if _model and is_instance_valid(_model):
 		_model.position = _model_pos
+	if _streaks and is_instance_valid(_streaks):
+		_streaks.queue_free()
 	# The trail's last blocks finish where they are.
 	if _trail and is_instance_valid(_trail):
 		var host: Node = get_tree().current_scene if get_tree().current_scene else get_tree().root

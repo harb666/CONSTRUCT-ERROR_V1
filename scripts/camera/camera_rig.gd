@@ -43,11 +43,19 @@ var _impact_strength := 1.0
 @export var glide_yaw := 0.32
 @export var glide_pitch := 0.16
 @export var glide_back := -0.7
-@export var glide_fov := 16.0
-@export var glide_roll := 0.06
+## Sonic (owner asked: "faster and dramatic, almost sonic like"): the view
+## pinches in for the launch, then flares wide; anime speed lines streak
+## across the screen (speed_lines.gdshader) while it flies.
+@export var glide_fov := 26.0
+@export var glide_launch_pinch := 8.0
+@export var glide_roll := 0.09
 @export var face_rate := 7.0
 var glide_blend := 0.0
 var _gliding := false
+var _launch_t := 99.0
+var speed_lines: ColorRect
+var _lines_mat: ShaderMaterial
+var _warm_frames := 2
 var _face_yaw := 0.0
 var _facing := false
 var _kick_t := 99.0
@@ -79,6 +87,7 @@ func _ready() -> void:
 			arm.add_excluded_object(target.get_rid())
 	camera.current = true
 	_base_fov = camera.fov
+	_make_speed_lines()
 	_update_transform()
 
 
@@ -111,7 +120,26 @@ func melee_shot(cam: Dictionary, length: float) -> void:
 
 
 func melee_glide(on: bool) -> void:
+	if on and not _gliding:
+		_launch_t = 0.0
 	_gliding = on
+
+
+## The speed-lines overlay (drawn behind the HUD, over the world). Shown
+## for a couple of frames at the start so its shader is ready.
+func _make_speed_lines() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "SpeedLines"
+	layer.layer = -1
+	add_child(layer)
+	speed_lines = ColorRect.new()
+	speed_lines.set_anchors_preset(Control.PRESET_FULL_RECT)
+	speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lines_mat = ShaderMaterial.new()
+	_lines_mat.shader = preload("res://scripts/vfx/speed_lines.gdshader")
+	_lines_mat.set_shader_parameter("amount", 0.0)
+	speed_lines.material = _lines_mat
+	layer.add_child(speed_lines)
 
 
 ## Turn the view towards `face` (the yaw the player faces the enemy at)
@@ -141,7 +169,18 @@ func kick(strength := 1.0) -> void:
 
 func _process(delta: float) -> void:
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, delta * aim_offset_rate * 0.5)
-	glide_blend = move_toward(glide_blend, 1.0 if _gliding else 0.0, delta * (7.0 if _gliding else 4.0))
+	glide_blend = move_toward(glide_blend, 1.0 if _gliding else 0.0, delta * (10.0 if _gliding else 6.0))
+	_launch_t += delta
+	if speed_lines:
+		var amount := smoothstep(0.0, 1.0, glide_blend)
+		_lines_mat.set_shader_parameter("amount", amount)
+		var vs := get_viewport().get_visible_rect().size
+		_lines_mat.set_shader_parameter("aspect", Vector2(vs.x / maxf(vs.y, 1.0), 1.0))
+		if _warm_frames > 0:
+			_warm_frames -= 1
+			speed_lines.visible = true
+		else:
+			speed_lines.visible = amount > 0.01
 	if _facing:
 		yaw = lerp_angle(yaw, _face_yaw, 1.0 - exp(-face_rate * delta))
 	_melee_t += delta
@@ -162,7 +201,8 @@ func _process(delta: float) -> void:
 		var g := smoothstep(0.0, 1.0, glide_blend)
 		arm.spring_length = distance - float(_shot.get("close", melee_close)) * m + glide_back * g
 		var hk := 1.0 - clampf(_melee_hit_t / melee_impact_time, 0.0, 1.0)
-		camera.fov = _base_fov - float(_shot.get("fov", melee_impact_fov)) * _impact_strength * hk * hk + glide_fov * g
+		var pinch := (1.0 - smoothstep(0.0, 0.1, _launch_t)) * glide_launch_pinch if _gliding else 0.0
+		camera.fov = _base_fov - float(_shot.get("fov", melee_impact_fov)) * _impact_strength * hk * hk + glide_fov * g - pinch
 	elif camera.h_offset != 0.0 or camera.fov != _base_fov or arm.spring_length != distance:
 		arm.spring_length = distance
 		camera.h_offset = 0.0
