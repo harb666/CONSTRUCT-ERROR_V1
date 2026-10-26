@@ -20,8 +20,12 @@ extends Resource
 ## Surfaces whose material name contains this become opaque ("" = none).
 @export var opaque_material_hint := ""
 
-static var _cache := {}
-static var _opaque := {}
+## The sealed copy of a mesh / opaque copy of a material is kept on the
+## source itself (meta), so it lives exactly as long as the source: a level
+## change frees the old level's models and their copies with them (a static
+## cache keyed by instance kept every load's copies - ~9 MB more graphics
+## memory per level change).
+const _META := &"_mesh_caps"
 
 
 ## Seal every matching mesh under `root`. Returns how many meshes changed.
@@ -30,11 +34,15 @@ func apply(root: Node) -> int:
 	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
 		if not (mi.mesh is ArrayMesh):
 			continue
-		var key := "%s|%d" % [resource_path, mi.mesh.get_instance_id()]
-		if not _cache.has(key):
-			_cache[key] = _build(mi.mesh as ArrayMesh, caps.get(mi.name, {}))
-		if _cache[key] != mi.mesh:
-			mi.mesh = _cache[key]
+		var built := _built(mi.mesh)
+		if not built.has(resource_path):
+			var b := _build(mi.mesh as ArrayMesh, caps.get(mi.name, {}))
+			# Unchanged: remember that (not the mesh itself - it would hold itself).
+			built[resource_path] = null if b == mi.mesh else b
+			if b != mi.mesh:
+				_built(b)[resource_path] = null  # already sealed
+		if built[resource_path] != null:
+			mi.mesh = built[resource_path]
 			n += 1
 	return n
 
@@ -162,12 +170,20 @@ static func _offset(idx: PackedInt32Array, base: int) -> PackedInt32Array:
 func _material(m: Material) -> Material:
 	if m == null or opaque_material_hint == "" or not m.resource_name.contains(opaque_material_hint):
 		return m
-	if not _opaque.has(m):
+	var built := _built(m)
+	if not built.has(&"opaque"):
 		var o := m.duplicate() as Material
 		if o is BaseMaterial3D:
 			var b := o as BaseMaterial3D
 			b.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
 			b.albedo_color.a = 1.0
 			b.cull_mode = BaseMaterial3D.CULL_DISABLED
-		_opaque[m] = o
-	return _opaque[m]
+		built[&"opaque"] = o
+	return built[&"opaque"]
+
+
+## What's been made from `res` (kept on it): key -> copy.
+static func _built(res: Resource) -> Dictionary:
+	if not res.has_meta(_META):
+		res.set_meta(_META, {})
+	return res.get_meta(_META)

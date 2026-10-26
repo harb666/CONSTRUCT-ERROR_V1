@@ -81,6 +81,7 @@ func _ready() -> void:
 ## whichever camera is showing (the arrival's, or the player's).
 func _warm_up_level() -> void:
 	await get_tree().process_frame
+	DebugHud.note("arrived %s" % scene_file_path.get_file().get_basename())
 	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6)
 
 

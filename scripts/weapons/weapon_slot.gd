@@ -44,8 +44,10 @@ var _socket_bone := -1
 
 const DEFAULT_SOCKET_OFFSET := 0.05
 const DEFAULT_ARM_END := 0.34
-## Trimmed copies of weapon meshes, shared: key -> ArrayMesh.
-static var _trim_cache := {}
+## Trimmed copies of a weapon mesh are kept on the mesh itself (meta: key
+## -> ArrayMesh, null = nothing to trim), shared, and freed with it when a
+## level change unloads the weapon (a static cache kept every load's copies).
+const _TRIM_META := &"_trimmed"
 
 ## Switching state: 0 = idle, 1 = retracting the old weapon, 2 = the new one
 ## materialising. `switch_scale` shrinks/grows the weapon about its mount.
@@ -366,11 +368,15 @@ func _trim_rear() -> void:
 		if not (mi.mesh is ArrayMesh):
 			continue
 		var xf := to_socket * current._local_xf(mi)
-		var key := "%d|%s|%.4f" % [mi.mesh.get_rid().get_id(), xf, limit]
-		if not _trim_cache.has(key):
-			_trim_cache[key] = _trimmed_mesh(mi.mesh as ArrayMesh, xf, limit)
-		var m: ArrayMesh = _trim_cache[key]
-		if m != mi.mesh:
+		var key := "%s|%.4f" % [xf, limit]
+		if not mi.mesh.has_meta(_TRIM_META):
+			mi.mesh.set_meta(_TRIM_META, {})
+		var cache: Dictionary = mi.mesh.get_meta(_TRIM_META)
+		if not cache.has(key):
+			var t := _trimmed_mesh(mi.mesh as ArrayMesh, xf, limit)
+			cache[key] = null if t == mi.mesh else t
+		var m: ArrayMesh = cache[key]
+		if m != null and m != mi.mesh:
 			mi.mesh = m
 			trimmed = true
 	if trimmed:

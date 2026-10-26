@@ -60,8 +60,9 @@ var sections: Array[BreakSection] = []
 signal piece_detached(piece: DebrisPiece, section: BreakSection, joint_position: Vector3)
 
 var skeleton: Skeleton3D
-## Mesh -> its outermost vertices along 26 directions (mesh space).
-static var _outline_cache := {}
+## A mesh's outermost vertices along 26 directions (mesh space), kept on
+## the mesh (meta), so they go with it when a level change unloads it.
+const _OUTLINE_META := &"_outline"
 var _by_name := {}
 ## Section name -> Skeleton3D currently carrying it (original or a piece's).
 var _carrier := {}
@@ -347,9 +348,8 @@ static var _outline_dirs: Array[Vector3] = []
 ## first time per mesh (every vertex), so skirmishers work it out while the
 ## level loads (`RobotSkirmisher._warm_outlines`).
 static func outline_of(mesh: Mesh, skin: Skin, sk: Skeleton3D) -> Dictionary:
-	var key := mesh.get_instance_id()
-	if _outline_cache.has(key):
-		return _outline_cache[key]
+	if mesh.has_meta(_OUTLINE_META):
+		return mesh.get_meta(_OUTLINE_META)
 	if _outline_dirs.is_empty():
 		for x in [-1, 0, 1]:
 			for y in [-1, 0, 1]:
@@ -404,12 +404,12 @@ static func outline_of(mesh: Mesh, skin: Skin, sk: Skeleton3D) -> Dictionary:
 	var out := {}
 	for b in best:
 		out[b] = PackedVector3Array(best[b])
-	_outline_cache[key] = out
+	mesh.set_meta(_OUTLINE_META, out)
 	return out
 
 
 static func has_outline(mesh: Mesh) -> bool:
-	return _outline_cache.has(mesh.get_instance_id())
+	return mesh.has_meta(_OUTLINE_META)
 
 
 func _joint_position(s: BreakSection, sk: Skeleton3D) -> Vector3:

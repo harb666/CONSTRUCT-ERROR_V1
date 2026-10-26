@@ -585,6 +585,14 @@
   session as it was then (level, time, fps, robots, debris, pick-ups out,
   memory / graphics peaks, last events) is kept and shown next time as
   "LAST SESSION: WEBGL CONTEXT LOST ..." (`DebugHud.describe_session`).
+  Its last events name level loads ("loading <level>", "arrived <level>").
+- Level changes free the old level's models (owner reported context losses
+  when loading levels): the sealed (`MeshCaps`), trimmed (`WeaponSlot`)
+  copies of meshes / materials and break-apart outlines are kept on the
+  source mesh / material (meta), not in static caches keyed by instance -
+  those kept every load's copies (~9 MB more graphics memory each level
+  change). The menus' wire copies of the previews (`WireMesh`) are dropped
+  when the menus close.
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 

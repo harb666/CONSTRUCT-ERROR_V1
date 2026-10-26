@@ -109,6 +109,12 @@ var skip_title := false:
 			_activate("start")
 
 
+## Menus closed: their wire copies of the character previews go too (~9 MB
+## of graphics memory the levels don't use; made again if the menus reopen).
+func _exit_tree() -> void:
+	WireMesh._cache.clear()
+
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP

@@ -71,6 +71,7 @@ static func go(tree: SceneTree, scene_path: String, player: PlayerController = n
 ## scene change keeps both in memory for a moment - too much for iPhone
 ## Safari, which then kills the page).
 static func swap(tree: SceneTree, scene_path: String) -> void:
+	DebugHud.note("loading " + scene_path.get_file().get_basename())
 	tree.unload_current_scene()
 	var t := tree.create_timer(0.1, true, false, true)
 	t.timeout.connect(func() -> void: tree.change_scene_to_file(scene_path))
