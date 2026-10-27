@@ -593,6 +593,14 @@
   those kept every load's copies (~9 MB more graphics memory each level
   change). The menus' wire copies of the previews (`WireMesh`) are dropped
   when the menus close.
+- Loading screen start-up watch (owner: "won't load past this screen", a
+  full bar): after the download the game sets itself up in one go - the
+  page is frozen ~15 s on a PC, longer on a phone - so the moment the bar
+  fills it says "Downloaded. Starting the game ..." with a seconds count,
+  then any engine / browser error, graphics refused / lost, or (90 s+)
+  what to try. A start that never finished (`ce_boot` left in
+  localStorage) is named on the next visit. In `export_presets.cfg`
+  `html/head_include` (no double quotes / backslashes in that JS).
 - iPhone / iPad draw at 2x pixel ratio, not their screens' 3x (crash
   hunting: less GPU work and memory; a little softer). `?dpr=3` = full.
 
