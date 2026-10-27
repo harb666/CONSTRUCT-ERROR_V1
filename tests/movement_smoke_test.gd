@@ -975,6 +975,9 @@ func _melee_tests(main: Node) -> void:
 			shot_ok = pc.fire_sounds > shots0 and pc.cel_flash.flashes > cel0
 		if killed_at < 0.0 and is_instance_valid(g) and not g.alive:
 			killed_at = mel.strike_t
+	# Seen as the melee ends: the waits below (hit-stop eases back in real
+	# time) can outlast the cannon's hold on a fast machine.
+	var cannon_out := h.slot("Right").target_definition() == h.default_weapon
 	_check(mel.strikes == 1 and killed_at >= 0.12 and killed_at <= 0.22, "melee: the punch lands quickly (%.2f s) and kills the grunt" % killed_at)
 	_check(p.global_position.distance_to(p0) > 1.5, "melee: lunges in to the enemy (%.1f m)" % p.global_position.distance_to(p0))
 	_check(max_w > 0.95, "melee: full-body punch pose plays (weight %.2f)" % max_w)
@@ -986,7 +989,7 @@ func _melee_tests(main: Node) -> void:
 	await _ticks(20)
 	_check(rig == null or (rig.melee_amount() == 0.0 and absf(rig.camera.fov - rig._base_fov) < 0.01), "melee: the camera is back in place")
 	# (The cannon stays out for the next move of a combo, a moment.)
-	_check(h.slot("Right").target_definition() == h.default_weapon, "melee: the cannon stays out a moment for a follow-up")
+	_check(cannon_out, "melee: the cannon stays out a moment for a follow-up")
 	await _ticks(50)
 	_check(h.slot("Right").target_definition() == rl, "melee: then the right arm goes back to the weapon it had")
 	var far := 0.0
