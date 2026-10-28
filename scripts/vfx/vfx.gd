@@ -247,14 +247,125 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
+	items.append_array(_library_items())
+	# A grid in view (anything off screen isn't drawn, so nothing is made).
 	for i in items.size():
 		root.add_child(items[i])
-		items[i].position = Vector3(i * 0.06, 0, 0)
+		items[i].position = Vector3((i % 24) * 0.06, (i / 24) * 0.06, 0)
 		items[i].scale = Vector3.ONE * 0.05
 		items[i].visible = true
 	fire.set_process(false)
 	_warm_up_robots(root)
-	root.get_tree().create_timer(seconds, true).timeout.connect(root.queue_free)
+	# Anything a lamp reaches (the Toxic Works has 7) is drawn with other
+	# shader versions (lit, plus a second, additive pass), made the first
+	# time it's lit - mid-fight. A faint lamp on the warm-up switches on after
+	# a few frames, so both kinds are made here.
+	var lamp := OmniLight3D.new()
+	lamp.name = "Lamp"
+	lamp.position = Vector3(0.7, 0.3, 0.2)
+	lamp.omni_range = 3.0
+	lamp.light_energy = 0.02
+	lamp.visible = false
+	root.add_child(lamp)
+	_finish_warm_up(root, lamp, seconds)
+
+
+## Frames, not a timer: a phone can spend seconds on one warm-up frame (that
+## is the point), and a timer would then let the lamp's frames be skipped.
+static func _finish_warm_up(root: Node3D, lamp: OmniLight3D, seconds: float) -> void:
+	var tree := root.get_tree()
+	var t0 := Time.get_ticks_msec()
+	for i in 3:
+		await tree.process_frame
+	if is_instance_valid(lamp):
+		lamp.visible = true
+	for i in 3:
+		await tree.process_frame
+	var left := seconds - (Time.get_ticks_msec() - t0) / 1000.0
+	if left > 0.0:
+		await tree.create_timer(left, true).timeout
+	if is_instance_valid(root):
+		root.queue_free()
+
+
+## A level just loaded, under the black cover: its camera looks round all
+## six ways from `at` (wide, seeing everything) for a frame each, so every
+## part of the level - lit by its lamps or not - has its shaders made now,
+## not the first time it comes into view mid-fight (a phone freezes then).
+static func sweep_level(scene: Node3D, at: Vector3) -> void:
+	var view := scene.get_viewport()
+	var prev := view.get_camera_3d()
+	var cam := Camera3D.new()
+	cam.name = "ShaderSweep"
+	cam.fov = 100.0
+	cam.near = 0.05
+	cam.far = 4000.0
+	scene.add_child(cam)
+	cam.global_position = at
+	cam.make_current()
+	for dir: Vector3 in [Vector3.FORWARD, Vector3.RIGHT, Vector3.BACK, Vector3.LEFT, Vector3.UP, Vector3.DOWN]:
+		var up := Vector3.BACK if absf(dir.y) > 0.5 else Vector3.UP
+		cam.look_at(at + dir, up)
+		await scene.get_tree().process_frame
+	await scene.get_tree().process_frame
+	if is_instance_valid(prev):
+		prev.make_current()
+	cam.queue_free()
+
+
+## Every kind of material drawn in play (WarmUpLibrary, recorded), kept
+## loaded from the first warm-up on so their shaders stay made.
+const LIBRARY := "res://assets/vfx/warm_up_library.tres"
+static var _library: WarmUpLibrary
+static var _white: ImageTexture
+
+
+static func _library_items() -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	if _library == null and ResourceLoader.exists(LIBRARY):
+		_library = load(LIBRARY) as WarmUpLibrary
+	if _library == null:
+		return out
+	var quad := QuadMesh.new()
+	# Each also as a one-item batch (how particles are drawn: other shader
+	# versions, lit ones too).
+	var batch := MultiMesh.new()
+	batch.transform_format = MultiMesh.TRANSFORM_3D
+	batch.use_colors = true
+	batch.use_custom_data = true
+	batch.mesh = quad
+	batch.instance_count = 1
+	for m in _library.materials:
+		if m is ParticleProcessMaterial:
+			continue
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.material_override = m
+		out.append(mi)
+		var mm := MultiMeshInstance3D.new()
+		mm.multimesh = batch
+		mm.material_override = m
+		out.append(mm)
+	if _white == null:
+		var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		_white = ImageTexture.create_from_image(img)
+	for d: Dictionary in _library.sprites:
+		var sp: GeometryInstance3D
+		if d.get("label", false):
+			var l := Label3D.new()
+			l.text = "W"
+			sp = l
+		else:
+			var s3 := Sprite3D.new()
+			s3.texture = _white
+			s3.transparent = d.get("transparent", true)
+			sp = s3
+		for k in ["billboard", "shaded", "double_sided", "no_depth_test", "fixed_size", "alpha_cut", "texture_filter"]:
+			if d.has(k):
+				sp.set(k, d[k])
+		out.append(sp)
+	return out
 
 
 ## The robots a level can spawn later (a wave's first sentinel, grunt or

@@ -6064,6 +6064,12 @@ func _front_end_tests() -> void:
 	# tiny behind the title (shaders ready), inert and in no group.
 	var warm_in_play := get_nodes_in_group(&"enemies").filter(func(n: Node) -> bool: return n.get_parent() != null and n.get_parent().name == &"Robots")
 	_check(Vfx.robots_warmed >= 3 and warm_in_play.is_empty(), "front end: the robots' set-up and shaders are prepared behind the title (%d), none of them in play" % Vfx.robots_warmed)
+	# Freeze fix: every kind of material drawn in play (the recorded library)
+	# is drawn behind the title too - unlit, then by a faint lamp - and kept.
+	var wu: Node = main._menu_camera.get_node_or_null("ShaderWarmUp")
+	var lib_n: int = Vfx._library.materials.size() if Vfx._library else 0
+	_check(lib_n >= 60 and wu != null and wu.get_child_count() > lib_n * 2 and wu.get_node_or_null("Lamp") is OmniLight3D,
+		"front end: the play materials' library (%d kinds) is drawn behind the title with a lamp" % lib_n)
 	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
 	var cam_from: Vector3 = main._menu_camera.global_position
 	_check(not fe.loaded and fe._buttons.has("start"), "front end: TAP TO START is up while the arena is still loading")

@@ -57,11 +57,12 @@ func _ready() -> void:
 		var def := roster.find(carried["character"]) if roster else null
 		var p := spawn_player(_local_id(), true, def)
 		LevelTransfer.apply(p, carried)
-		LevelTransfer.fade_in(get_tree())
 		_warm_up_level.call_deferred()
 		if level_music:
 			Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)
 		_net_ready(p)
+		if StressTest.fx_soak():
+			StressTest.start_fx_soak(self, p)
 		return
 	# Joined someone's room: their level, straight to the character select.
 	var rejoin := Net.instance != null and Net.instance.rejoin_select and get_tree().current_scene == self
@@ -82,7 +83,17 @@ func _ready() -> void:
 func _warm_up_level() -> void:
 	await get_tree().process_frame
 	DebugHud.note("arrived %s" % scene_file_path.get_file().get_basename())
+	# The whole level is looked over (all its shaders made) before the black
+	# cover lifts; held still meanwhile (not online: the host runs the world).
+	var hold := not Net.is_online() and not get_tree().paused
+	if hold:
+		get_tree().paused = true
+	var p := players.get(_local_id()) as PlayerController
+	await Vfx.sweep_level(self, p.global_position + Vector3.UP * 1.6 if p else Vector3.UP * 2.0)
+	if hold:
+		get_tree().paused = false
 	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6)
+	LevelTransfer.fade_in(get_tree())
 
 
 ## This device's player number: 1 offline / hosting, the room's slot when
@@ -130,6 +141,16 @@ func open_front_end() -> void:
 	layer.add_child(front_end)
 	front_end.deployed.connect(_on_deployed)
 	front_end.tree_exited.connect(layer.queue_free)
+	# ?fxsoak=1 (test only): straight through the menus into this level.
+	if StressTest.fx_soak():
+		var fe := front_end
+		var pick := StressTest._param("fxlevel")
+		get_tree().create_timer(4.0, true).timeout.connect(func() -> void:
+			fe.press_start()
+			if pick != "":
+				fe.press_next()
+				fe.press_level(pick)
+			get_tree().create_timer(2.0, true).timeout.connect(fe.press_deploy))
 
 
 func _on_deployed(character: CharacterDefinition) -> void:
@@ -158,6 +179,8 @@ func _on_deployed(character: CharacterDefinition) -> void:
 		StressTest.start_melee_soak(self, local)
 	if StressTest.frost_soak():
 		StressTest.start_frost_soak(self, local)
+	if StressTest.fx_soak():
+		StressTest.start_fx_soak(self, local)
 	if _menu_camera:
 		_menu_camera.queue_free()
 		_menu_camera = null

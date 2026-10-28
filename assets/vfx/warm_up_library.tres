@@ -1,0 +1,1036 @@
+[gd_resource type="Resource" script_class="WarmUpLibrary" format=4]
+
+[ext_resource type="Shader" path="res://scripts/world/grid.gdshader" id="1_kwdvl"]
+[ext_resource type="Shader" path="res://scripts/vfx/hologram.gdshader" id="2_eega2"]
+[ext_resource type="Shader" path="res://scripts/vfx/black_hole_portal.gdshader" id="3_27myc"]
+[ext_resource type="Shader" path="res://scripts/vfx/gravity_distortion.gdshader" id="4_rxge7"]
+[ext_resource type="Shader" path="res://scripts/vfx/plasma_conduit.gdshader" id="5_r66tr"]
+[ext_resource type="Shader" path="res://scripts/vfx/worn_armour.gdshader" id="6_s8kkb"]
+[ext_resource type="Shader" path="res://scripts/enemies/boss_cables.gdshader" id="7_v2vs6"]
+[ext_resource type="Shader" path="res://scripts/vfx/boss_armour.gdshader" id="8_cqp0f"]
+[ext_resource type="Shader" path="res://scripts/vfx/sentinel_plasma_gas.gdshader" id="9_5b6fa"]
+[ext_resource type="Shader" path="res://scripts/vfx/sentinel_plasma_core.gdshader" id="10_540rp"]
+[ext_resource type="Shader" path="res://scripts/vfx/sentinel_eye_glow.gdshader" id="11_f4tln"]
+[ext_resource type="Shader" path="res://scripts/vfx/plasma_trail.gdshader" id="12_bsvnp"]
+[ext_resource type="Shader" path="res://scripts/vfx/booster_flare.gdshader" id="13_pxe53"]
+[ext_resource type="Shader" path="res://scripts/vfx/cel_flash.gdshader" id="14_njocm"]
+[ext_resource type="Shader" path="res://scripts/vfx/toon_flash.gdshader" id="15_o8nt8"]
+[ext_resource type="Shader" path="res://scripts/vfx/toon_ring.gdshader" id="16_10vs7"]
+[ext_resource type="Shader" path="res://scripts/vfx/smoke_trail.gdshader" id="17_0k6c8"]
+[ext_resource type="Shader" path="res://scripts/vfx/scorch_mul.gdshader" id="18_v1ykn"]
+[ext_resource type="Shader" path="res://scripts/vfx/toon_puff.gdshader" id="19_5t6to"]
+[ext_resource type="Shader" path="res://scripts/vfx/glitch_glide.gdshader" id="20_0eayk"]
+[ext_resource type="Shader" path="res://scripts/vfx/sonic_ring.gdshader" id="21_d60ei"]
+[ext_resource type="Shader" path="res://scripts/vfx/frost_vortex.gdshader" id="22_v6klj"]
+[ext_resource type="Shader" path="res://scripts/vfx/frost_spiral.gdshader" id="23_vtf5e"]
+[ext_resource type="Shader" path="res://scripts/vfx/frost_floor.gdshader" id="24_h3t1b"]
+[ext_resource type="Shader" path="res://scripts/vfx/ice_coat.gdshader" id="25_yeiru"]
+[ext_resource type="Shader" path="res://scripts/vfx/magma_stream.gdshader" id="26_slebj"]
+[ext_resource type="Shader" path="res://scripts/vfx/rail_helix.gdshader" id="27_vxk58"]
+[ext_resource type="Shader" path="res://scripts/vfx/fire_bolt.gdshader" id="28_fpqcw"]
+[ext_resource type="Shader" path="res://scripts/vfx/magma_splat.gdshader" id="29_qj3c6"]
+[ext_resource type="Shader" path="res://scripts/vfx/barrel_heat_glow.gdshader" id="30_fpsxh"]
+[ext_resource type="Shader" path="res://scripts/vfx/flash_mix.gdshader" id="31_2pf7s"]
+[ext_resource type="Shader" path="res://scripts/vfx/plasma_vent.gdshader" id="32_4hwmk"]
+[ext_resource type="Shader" path="res://scripts/vfx/vent_ring.gdshader" id="33_yf5yx"]
+[ext_resource type="Shader" path="res://scripts/vfx/slime_ring.gdshader" id="34_8kb31"]
+[ext_resource type="Shader" path="res://levels/skyforge_arena/fx/godot/cloud_layer.gdshader" id="35_7naov"]
+[ext_resource type="Shader" path="res://scripts/vfx/toxic_slime.gdshader" id="36_otkaf"]
+[ext_resource type="Shader" path="res://scripts/vfx/toxic_fire.gdshader" id="37_mvrt5"]
+[ext_resource type="Shader" path="res://scripts/vfx/wind_streak.gdshader" id="38_dtpmv"]
+[ext_resource type="Shader" path="res://scripts/vfx/laser_beam.gdshader" id="39_0ysco"]
+[ext_resource type="Shader" path="res://scripts/vfx/laser_flare.gdshader" id="40_f3mch"]
+[ext_resource type="Shader" path="res://scripts/vfx/laser_field.gdshader" id="41_ucbyc"]
+[ext_resource type="Shader" path="res://levels/slime_arena/fx/godot/fog_sheet.gdshader" id="42_s4ijq"]
+[ext_resource type="Shader" path="res://levels/slime_arena/fx/godot/tube_bubbles.gdshader" id="43_7jpbu"]
+[ext_resource type="Shader" path="res://scripts/world/lift_deck.gdshader" id="44_o1mhj"]
+[ext_resource type="Script" path="res://scripts/vfx/warm_up_library.gd" id="45_8j4nc"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7fj23"]
+render_priority = 0
+shader = ExtResource("1_kwdvl")
+shader_parameter/color_a = Color(0.55, 0.57, 0.6, 1)
+shader_parameter/color_b = Color(0.484, 0.50159997, 0.528, 1)
+shader_parameter/cell = 2.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_l24ug"]
+render_priority = 0
+shader = ExtResource("2_eega2")
+shader_parameter/color = Color(0.804, 0.47500002, 1, 1)
+shader_parameter/line_y = 1.2393611907958983
+shader_parameter/band = null
+shader_parameter/coat = null
+shader_parameter/strength = 1.0
+
+[sub_resource type="Image" id="Image_26qng"]
+data = {
+"data": PackedByteArray("/////////////////////////////////////////////////////////////////////////////////////w=="),
+"format": "RGBA8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_wjbdr"]
+image = SubResource("Image_26qng")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oe0da"]
+resource_name = "BakedMaterial"
+cull_mode = 2
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 1.0
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ck1we"]
+resource_name = "black_hole_blackoutside"
+transparency = 4
+albedo_color = Color(0, 0, 0, 1)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 1.0
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_exc7k"]
+resource_name = "black_hole_light3"
+transparency = 2
+alpha_scissor_threshold = 0.7969548
+alpha_antialiasing_mode = 0
+albedo_texture = SubResource("ImageTexture_wjbdr")
+roughness = 0.8308566
+emission_enabled = true
+emission = Color(0.48452926, 0.48452926, 0.48452926, 1)
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_inld3"]
+resource_name = "black_hole_distortion"
+transparency = 4
+albedo_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7nedx"]
+resource_name = "ring"
+transparency = 4
+albedo_color = Color(0.735357, 0.735357, 0.735357, 1)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 1.0
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pwqkj"]
+render_priority = -1
+shader = ExtResource("3_27myc")
+shader_parameter/atlas = SubResource("ImageTexture_wjbdr")
+shader_parameter/ramp = SubResource("ImageTexture_wjbdr")
+shader_parameter/cell_a = 53.0
+shader_parameter/cell_b = 21.0
+shader_parameter/mix_b = 0.5000000000000001
+shader_parameter/alpha = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_l0aqf"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+albedo_color = Color(0.95, 0.8, 1, 0.78974134)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_keep_scale = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_q5anw"]
+render_priority = -2
+shader = ExtResource("4_rxge7")
+shader_parameter/strength = 0.3
+shader_parameter/swirl = 1.2
+shader_parameter/spin_speed = 0.9
+shader_parameter/tint = null
+shader_parameter/tint_amount = 0.06
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_6tue5"]
+resource_name = "Containment_Graphite_Metal"
+cull_mode = 2
+albedo_color = Color(0.20598418, 0.22935726, 0.23209421, 1)
+metallic = 0.8
+roughness = 0.36
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uq8to"]
+resource_name = "Containment_Purple_Channels"
+albedo_color = Color(0.6651851, 0.12835404, 0.8209799, 1)
+metallic = 0.5
+roughness = 0.24
+emission_enabled = true
+emission = Color(0.58383155, 0.07016479, 0.76737565, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a5jsi"]
+resource_name = "Muzzle_Crown_Armour_Metal"
+albedo_color = Color(0.58383155, 0.6262097, 0.5563933, 1)
+metallic = 0.75
+roughness = 0.34
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_e2pj7"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dmokt"]
+transparency = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4ao7m"]
+resource_name = "Energy_Orb_Translucent_Yellow"
+transparency = 1
+cull_mode = 2
+albedo_color = Color(1, 1, 1, 0.42)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness = 0.3
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+emission_enabled = true
+emission = Color(0.58383155, 0.58383155, 0.58383155, 1)
+emission_energy_multiplier = 0.6293707
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+normal_enabled = true
+normal_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4qjej"]
+resource_name = "Energy_Orb_Translucent_Yellow"
+transparency = 4
+cull_mode = 2
+albedo_color = Color(1, 1, 1, 0.42)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness = 0.3
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+emission_enabled = true
+emission = Color(0.58383155, 0.58383155, 0.58383155, 1)
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+normal_enabled = true
+normal_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_8be7q"]
+render_priority = 0
+shader = ExtResource("5_r66tr")
+shader_parameter/albedo_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/emission_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/base_alpha = 0.58
+shader_parameter/base_emission = 0.6651851
+shader_parameter/energy = 0.0
+shader_parameter/strength = 1.0
+shader_parameter/flow_phase = 0.525
+shader_parameter/overload = 0.0
+shader_parameter/plasma_yellow = null
+shader_parameter/plasma_hot = null
+shader_parameter/start_x = 0.31
+shader_parameter/end_x = 0.77
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tusam"]
+resource_name = "BakedMaterial"
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 1.0
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+normal_enabled = true
+normal_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_s0wtp"]
+vertex_color_use_as_albedo = true
+metallic = 0.55
+roughness = 0.38
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vs1qq"]
+render_priority = 0
+shader = ExtResource("6_s8kkb")
+shader_parameter/albedo_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/normal_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/wear = null
+shader_parameter/noise_scale = null
+shader_parameter/restyle = null
+shader_parameter/box_min = null
+shader_parameter/box_size = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1kcj2"]
+resource_name = "Visor_Emissive"
+albedo_color = Color(1, 0.42358288, 0.38109186, 1)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+roughness = 0.4
+emission_enabled = true
+emission = Color(1, 0.05, 0.02, 1)
+emission_energy_multiplier = 1.05
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vht8e"]
+render_priority = 0
+shader = ExtResource("7_v2vs6")
+shader_parameter/power = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_00sr5"]
+render_priority = 0
+shader = ExtResource("8_cqp0f")
+shader_parameter/albedo_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/normal_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/orm_tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/inner_shade = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mw7ia"]
+resource_name = "Hidden_Dark_Mechanical_Interior"
+cull_mode = 2
+albedo_color = Color(0.11207495, 0.12315822, 0.1428257, 1)
+metallic = 0.65
+roughness = 0.8
+metadata/extras = {
+"activate_opacity_on_detachment": 1.0
+}
+metadata/_mesh_caps = {
+&"opaque": SubResource("StandardMaterial3D_mw7ia")
+}
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_whrx1"]
+resource_name = "Hidden_Dark_Mechanical_Interior"
+transparency = 4
+cull_mode = 2
+albedo_color = Color(0.11207495, 0.12315822, 0.1428257, 0)
+metallic = 0.65
+roughness = 0.8
+metadata/extras = {
+"activate_opacity_on_detachment": 1.0
+}
+metadata/_mesh_caps = {
+&"opaque": SubResource("StandardMaterial3D_mw7ia")
+}
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_10pcv"]
+render_priority = -1
+shader = ExtResource("9_5b6fa")
+shader_parameter/centre = null
+shader_parameter/energy = 0.85
+shader_parameter/deep = null
+shader_parameter/bright = null
+shader_parameter/hot = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_m70ol"]
+render_priority = -1
+shader = ExtResource("10_540rp")
+shader_parameter/energy = 0.85
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ok3yg"]
+resource_name = "Neon_Lime_Antenna_Tip"
+cull_mode = 2
+albedo_color = Color(0.5370987, 1, 0.15170372, 1)
+metallic = 0.05
+roughness = 0.25
+emission_enabled = true
+emission = Color(0.5657284, 1, 0.15170372, 1)
+emission_energy_multiplier = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qk6ll"]
+resource_name = "Optic_Socket_Brushed_Titanium"
+cull_mode = 2
+albedo_color = Color(0.38109186, 0.4100209, 0.43662706, 1)
+metallic = 0.96
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i34kr"]
+resource_name = "Yellow_Plasma_Gas"
+transparency = 4
+albedo_texture = SubResource("ImageTexture_wjbdr")
+roughness = 0.5
+emission_enabled = true
+emission = Color(1, 0.8962439, 0.11207495, 1)
+emission_energy_multiplier = 1.4
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_k6vpi"]
+resource_name = "Wing_Symbol_Plate_2"
+cull_mode = 2
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 0.45
+roughness = 0.34
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5gi4m"]
+render_priority = 0
+shader = ExtResource("11_f4tln")
+shader_parameter/core_color = null
+shader_parameter/glow_color = null
+shader_parameter/size = 0.546
+shader_parameter/energy = 0.85
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_a248p"]
+render_priority = 0
+shader = ExtResource("12_bsvnp")
+shader_parameter/pts = PackedVector4Array(2.1184566, 3.0911376, -12.736081, 0.78333336, 2.1935177, 3.090309, -12.6704035, 0.76666665, 2.274291, 3.096526, -12.6637945, 0.75, 2.3518066, 3.0984173, -12.620119, 0.73333335, 2.4169545, 3.086275, -12.459067, 0.71666664, 2.4748392, 3.06728, -12.2415905, 0.7, 2.5462565, 3.0636394, -12.15325, 0.68333334, 2.6414063, 3.08398, -12.262501, 0.6666667, 2.731956, 3.0983388, -12.321959, 0.65, 2.8030171, 3.0935242, -12.2238865, 0.6333333, 2.854522, 3.0713747, -11.9851465, 0.6166667, 2.9560921, 3.0943189, -12.112956, 0.6, 3.021989, 3.0857215, -11.984193, 0.5833333, 3.0859227, 3.0760212, -11.847065, 0.56666666, 3.1684499, 3.0816164, -11.8334875, 0.55, 3.2073166, 3.0533776, -11.547385, 0.53333336, 3.3100142, 3.0746934, -11.656833, 0.51666665, 3.3755085, 3.0676792, -11.540373, 0.5, 3.4321826, 3.0547361, -11.377706, 0.48333332, 3.5395095, 3.077586, -11.497277, 0.46666667, 3.59967, 3.067365, -11.356662, 0.45, 3.6781774, 3.0697448, -11.314988, 0.43333334, 3.7606876, 3.0745986, -11.292315, 0.41666666, 3.8119512, 3.0595672, -11.115386, 0.4, 3.8556728, 3.0405612, -10.908835, 0.38333333, 3.9267929, 3.0388865, -10.8364315, 0.36666667, 4.0341005, 3.0585935, -10.927535, 0.35, 4.085402, 3.045195, -10.765329, 0.33333334, 4.149727, 3.0397086, -10.663864, 0.31666666, 4.2398787, 3.0487475, -10.672242, 0.3, 4.2714443, 3.025677, -10.438584, 0.28333333, 4.343185, 3.025084, -10.3728895, 0.26666668, 4.4290714, 3.0319836, -10.362449, 0.25, 4.5068173, 3.0344834, -10.318814, 0.23333333, 4.5557246, 3.022431, -10.167371, 0.21666667, 4.624685, 3.0207796, -10.092761, 0.2, 4.7057037, 3.0250857, -10.061609, 0.18333334, 4.775744, 3.024072, -9.991061, 0.16666667, 4.7997365, 3.0015852, -9.764359, 0.15, 4.8975067, 3.013898, -9.790253, 0.13333334, 4.94443, 3.0028257, -9.646829, 0.11666667, 5.0113306, 3.0010912, -9.570603, 0.1, 5.0661683, 2.9941816, -9.457288, 0.083333336, 5.113442, 2.9867191, -9.34667, 0.06666667, 4.9158425, 2.9472764, -9.354795, 0.05, 4.735174, 2.9140794, -9.396145, 0.033333335, 4.5443044, 2.8800197, -9.388328, 0.016666668, 4.3698792, 2.8537858, -9.409709, 0)
+shader_parameter/count = 9
+shader_parameter/lifetime = 0.85
+shader_parameter/head_width = 0.169
+shader_parameter/max_width = 0.7150000000000001
+shader_parameter/intensity = 1.0
+shader_parameter/core_color = null
+shader_parameter/glow_color = null
+shader_parameter/tail_color = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jvptg"]
+render_priority = 0
+shader = ExtResource("13_pxe53")
+shader_parameter/core_color = null
+shader_parameter/glow_color = null
+shader_parameter/size = 0.546
+shader_parameter/throttle = 0.44940330187479655
+shader_parameter/intensity = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y0hfn"]
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(0.85, 1, 0.35, 1)
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_uxvoe"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pneob"]
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+disable_receive_shadows = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nbp6n"]
+render_priority = 0
+shader = ExtResource("14_njocm")
+shader_parameter/hot = Color(1, 1, 0.95, 1)
+shader_parameter/mid = Color(1, 0.92499995, 0.625, 1)
+shader_parameter/outer = Color(1, 0.55, 0.1, 1)
+shader_parameter/ink = Color(0.38, 0.209, 0.038, 1)
+shader_parameter/burn = Color(1, 0.92499995, 0.625, 1)
+shader_parameter/shape = 0
+shader_parameter/spikes = 10.0
+shader_parameter/seed = 94.98263001441956
+shader_parameter/progress = 0.0
+shader_parameter/boil_fps = null
+
+[sub_resource type="Shader" id="Shader_81x60"]
+code = "shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_back, skip_vertex_transform;
+uniform vec3 tint : source_color;
+uniform float strength = 0.4;
+void vertex() {
+	VERTEX = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	NORMAL = normalize((MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+}
+void fragment() {
+	float rim = 1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+	ALBEDO = tint * strength * (0.18 + 0.82 * rim * rim);
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jnboe"]
+render_priority = 0
+shader = SubResource("Shader_81x60")
+shader_parameter/tint = Color(1, 1, 0.92, 1)
+shader_parameter/strength = 0.8959999999999999
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hr5kd"]
+render_priority = 0
+shader = ExtResource("15_o8nt8")
+shader_parameter/color = Color(1, 0.25, 0.18, 1)
+shader_parameter/hot = Color(1, 1, 0.95, 1)
+shader_parameter/rim = Color(0.3, 0.075, 0.054000005, 1)
+shader_parameter/shape = 0
+shader_parameter/spikes = 10.0
+shader_parameter/seed = 10.690108686685562
+shader_parameter/fade = 1.0
+shader_parameter/core = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sfcjq"]
+render_priority = 0
+shader = ExtResource("16_10vs7")
+shader_parameter/fill_color = Color(1, 0.625, 0.59000003, 1)
+shader_parameter/rim_color = Color(0.3, 0.075, 0.054000005, 1)
+shader_parameter/width = 0.16
+shader_parameter/progress = 0.0
+shader_parameter/fade = 1.0
+shader_parameter/seed = 49.82847571372986
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hfsq7"]
+render_priority = 0
+shader = ExtResource("17_0k6c8")
+shader_parameter/pts = PackedVector4Array(-25.785954, 3.9446306, -23.427338, 1, -25.524452, 4.0310116, -23.050547, 0.98333335, -25.262678, 4.1174827, -22.673367, 0.95, -25.000284, 4.2041583, -22.29529, 0.9166667, -24.736935, 4.2911496, -21.915836, 0.8833333, -24.366602, 4.484063, -21.388058, 0.85, -24.258183, 4.9319286, -21.265837, 0.8, -24.14894, 5.3831997, -21.142685, 0.76666665, -24.034779, 5.836165, -21.014498, 0.73333335, -23.90993, 6.288174, -20.875492, 0.7, -23.783783, 6.744881, -20.73504, 0.6666667, -23.648392, 7.2018495, -20.585194, 0.6333333, -23.505175, 7.6604223, -20.427355, 0.6, -23.360155, 8.124771, -20.267527, 0.56666666, -23.199104, 8.585447, -20.091497, 0.53333336, -23.035429, 9.052152, -19.91264, 0.5, -22.861526, 9.519344, -19.723356, 0.46666667, -22.67799, 9.987822, -19.524235, 0.43333334, -22.488306, 10.460292, -19.318747, 0.4, -22.283735, 10.9295025, -19.098171, 0.36666667, -22.075365, 11.40513, -18.87356, 0.33333334, -21.848692, 11.873528, -18.630463, 0.3, -21.618612, 12.348964, -18.383713, 0.26666668, -21.369217, 12.81472, -18.117477, 0.23333333, -21.115486, 13.286448, -17.846664, 0.2, -20.842253, 13.746324, -17.556202, 0.16666667, -20.562618, 14.208988, -17.259125, 0.13333334, -20.265621, 14.659971, -16.944557, 0.1, -19.958754, 15.107525, -16.619959, 0.06666667, -19.638342, 15.545749, -16.281702, 0.033333335, -4.602496, 5.9604645e-08, -32.752533, 2.1, -4.602496, 5.9604645e-08, -32.752533, 2.0833333, -4.602496, 5.9604645e-08, -32.752533, 2.0666666, -4.602496, 5.9604645e-08, -32.752533, 2.05, -4.602496, 5.9604645e-08, -32.752533, 2.0333333, -4.602496, 5.9604645e-08, -32.752533, 2.0166667, -4.602496, 5.9604645e-08, -32.752533, 2, -4.602496, 5.9604645e-08, -32.752533, 1.9833333, -4.602496, 5.9604645e-08, -32.752533, 1.95, -4.602496, 5.9604645e-08, -32.752533, 1.9166666, -4.602496, 5.9604645e-08, -32.752533, 1.8833333, -4.602496, 5.9604645e-08, -32.752533, 1.85, -4.602496, 5.9604645e-08, -32.752533, 1.8166667, -4.602496, 5.9604645e-08, -32.752533, 1.7833333, -4.602496, 5.9604645e-08, -32.752533, 1.75, -4.602496, 5.9604645e-08, -32.752533, 1.7166667, -4.602496, 5.9604645e-08, -32.752533, 1.6833333, -4.602496, 5.9604645e-08, -32.752533, 1.65, -4.602496, 5.9604645e-08, -32.752533, 1.6166667, -4.602496, 5.9604645e-08, -32.752533, 1.5833334, -4.602496, 5.9604645e-08, -32.752533, 1.55, -4.602496, 5.9604645e-08, -32.752533, 1.5166667, -4.602496, 5.9604645e-08, -32.752533, 1.4833333, -4.602496, 5.9604645e-08, -32.752533, 1.45, -4.602496, 5.9604645e-08, -32.752533, 1.4166666, -4.602496, 5.9604645e-08, -32.752533, 1.3833333, -4.602496, 5.9604645e-08, -32.752533, 1.35, -4.602496, 5.9604645e-08, -32.752533, 1.3166667, -4.602496, 5.9604645e-08, -32.752533, 1.2833333, -4.602496, 5.9604645e-08, -32.752533, 1.25, -4.602496, 5.9604645e-08, -32.752533, 1.2166667, -4.602496, 5.9604645e-08, -32.752533, 1.1833333, -4.602496, 5.9604645e-08, -32.752533, 1.15, -4.602496, 5.9604645e-08, -32.752533, 1.1166667, -4.602496, 5.9604645e-08, -32.752533, 1.0833334, -4.602496, 5.9604645e-08, -32.752533, 1.05, -4.602496, 5.9604645e-08, -32.752533, 1.0166667, -4.602496, 5.9604645e-08, -32.752533, 0.98333335, -4.602496, 5.9604645e-08, -32.752533, 0.95, -4.602496, 5.9604645e-08, -32.752533, 0.9166667, -4.602496, 5.9604645e-08, -32.752533, 0.8833333, -4.602496, 5.9604645e-08, -32.752533, 0.85)
+shader_parameter/seeds = PackedFloat32Array(0.61557543, 0.12594612, 0.9813983, 0.11409449, 0.6929794, 0.7201574, 0.5147878, 0.4919082, 0.5406193, 0.3060489, 0.8240822, 0.44821826, 0.47950163, 0.10694757, 0.81149334, 0.58509237, 0.21104074, 0.561124, 0.44732696, 0.27531648, 0.83795696, 0.57181454, 0.77501464, 0.49879724, 0.9550382, 0.62574154, 0.085593015, 0.86785567, 0.47239175, 0.8588992, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924, 0.68324924)
+shader_parameter/count = 2
+shader_parameter/lifetime = 2.6
+shader_parameter/start_width = 0.8
+shader_parameter/end_width = 3.2
+shader_parameter/emitting = true
+shader_parameter/smoke_color = Color(0.62, 0.6, 0.58, 1)
+shader_parameter/hot_color = Color(1, 0.62, 0.25, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_63c5x"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.1, 0.05, 0.6892249)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_itkxx"]
+render_priority = 0
+shader = ExtResource("18_v1ykn")
+shader_parameter/tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/strength = 0.85
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mu8ni"]
+render_priority = 0
+shader = ExtResource("19_5t6to")
+shader_parameter/smoke_color = null
+shader_parameter/fire_hot = null
+shader_parameter/fire_mid = null
+shader_parameter/fire_cool = null
+shader_parameter/heat = 1.0
+shader_parameter/progress = 0.0
+shader_parameter/smoothness = null
+shader_parameter/deformation = null
+shader_parameter/cell_scale = null
+shader_parameter/seed = 17.99611747264862
+shader_parameter/alpha = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_b0qal"]
+render_priority = 0
+shader = ExtResource("20_0eayk")
+shader_parameter/tint = Color(0, 0.95, 1, 1)
+shader_parameter/tint2 = Color(1, 0.1, 0.85, 1)
+shader_parameter/amount = 0.0
+shader_parameter/shift = 0.16
+shader_parameter/seed = null
+shader_parameter/bands = null
+shader_parameter/torn = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cs61o"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+billboard_mode = 1
+distance_fade_mode = 1
+distance_fade_min_distance = 0.6
+distance_fade_max_distance = 2.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wbh0o"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+distance_fade_mode = 1
+distance_fade_min_distance = 0.8
+distance_fade_max_distance = 2.5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qxjq8"]
+render_priority = 0
+shader = ExtResource("21_d60ei")
+shader_parameter/core = null
+shader_parameter/edge = null
+shader_parameter/edge2 = null
+shader_parameter/amount = 0.0
+shader_parameter/width = 0.16
+shader_parameter/cone = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_h1us5"]
+render_priority = 0
+shader = ExtResource("22_v6klj")
+shader_parameter/front = 0.06
+shader_parameter/fade = 1.0
+shader_parameter/twist = null
+shader_parameter/spin_speed = null
+shader_parameter/seed = 14.527732133865356
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ym4xw"]
+render_priority = 0
+shader = ExtResource("23_vtf5e")
+shader_parameter/front = 0.04
+shader_parameter/fade = 1.0
+shader_parameter/spin = 0.0
+shader_parameter/seed = 5.8004856
+shader_parameter/white = null
+shader_parameter/ice = null
+shader_parameter/deep = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7tnux"]
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.82, 0.95, 1, 0.85)
+roughness = 0.05
+emission_enabled = true
+emission = Color(0.5, 0.85, 1, 1)
+emission_energy_multiplier = 0.8
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vswq0"]
+render_priority = 0
+shader = ExtResource("24_h3t1b")
+shader_parameter/seed = 13.921304047107697
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_078el"]
+render_priority = 0
+shader = ExtResource("25_yeiru")
+shader_parameter/thickness = 0.045
+shader_parameter/amount = 0.0
+shader_parameter/frost = 0.12
+shader_parameter/melt = null
+shader_parameter/ice_color = null
+shader_parameter/deep_color = null
+shader_parameter/scale = 7.0
+shader_parameter/seed = 25.476083159446716
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1x2mr"]
+transparency = 1
+cull_mode = 2
+albedo_color = Color(0.78, 0.93, 1, 0.72)
+roughness = 0.05
+emission_enabled = true
+emission = Color(0.45, 0.75, 1, 1)
+emission_energy_multiplier = 0.35
+rim_enabled = true
+rim_tint = 0.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ut0bn"]
+albedo_color = Color(0.1, 0.8, 0.45, 1)
+metallic = 0.35
+roughness = 0.3
+emission_enabled = true
+emission = Color(0.1, 0.8, 0.45, 1)
+emission_energy_multiplier = 0.5
+rim_enabled = true
+rim = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5oruh"]
+transparency = 2
+alpha_scissor_threshold = 0.5
+alpha_antialiasing_mode = 0
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 0.35
+roughness = 0.3
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_energy_multiplier = 0.35
+emission_texture = SubResource("ImageTexture_wjbdr")
+rim_enabled = true
+rim = 0.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_i6bh8"]
+shading_mode = 0
+albedo_color = Color(0.25, 0.9625, 1, 1)
+disable_receive_shadows = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_1yxdq"]
+render_priority = 0
+shader = ExtResource("26_slebj")
+shader_parameter/color = Color(1, 0.36, 0.03, 1)
+shader_parameter/hot = Color(1, 0.85, 0.5, 1)
+shader_parameter/rim = Color(0.5, 0.18, 0.015, 1)
+shader_parameter/core = 1.0
+shader_parameter/seed = 23.236115276813507
+shader_parameter/head = 0.0
+shader_parameter/head_pos = Vector3(6.515545, 0.9152392, 12.964095)
+shader_parameter/width = 0.3
+shader_parameter/fade = 1.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_jadvu"]
+render_priority = 0
+shader = ExtResource("27_vxk58")
+shader_parameter/color = Color(1, 0.36, 0.03, 0.95)
+shader_parameter/hot = Color(1, 0.85, 0.5, 1)
+shader_parameter/head = 0.011
+shader_parameter/fade = 1.0
+shader_parameter/expand = 0.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pus2u"]
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7vgsn"]
+render_priority = 0
+shader = ExtResource("28_fpqcw")
+shader_parameter/color = Color(1, 0.5805, 0.24149999, 1)
+shader_parameter/hot = Color(1, 1, 0.92, 1)
+shader_parameter/rim = Color(0.65, 0.234, 0.019499999, 1)
+shader_parameter/core = 1.0
+shader_parameter/head = 0.0
+shader_parameter/head_pos = Vector3(6.515545, 0.9152392, 12.964095)
+shader_parameter/width = 0.055
+shader_parameter/jag = 0.15
+shader_parameter/rejag = 0.035
+shader_parameter/seed = 74.765944480896
+shader_parameter/fade = 1.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_n51lv"]
+render_priority = 0
+shader = ExtResource("29_qj3c6")
+shader_parameter/color = null
+shader_parameter/hot = null
+shader_parameter/rim = null
+shader_parameter/char_color = null
+shader_parameter/heat = 1.0
+shader_parameter/fade = 1.0
+shader_parameter/grow = 0.35
+shader_parameter/seed = 29.850027561187744
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_gvtdg"]
+render_priority = 0
+shader = ExtResource("30_fpsxh")
+shader_parameter/heat = 0.018000000000000002
+shader_parameter/strength = 1.0
+shader_parameter/flicker = -0.004092001832158942
+shader_parameter/front_x = 0.9700000071525574
+shader_parameter/reach = null
+shader_parameter/emission_tex = SubResource("ImageTexture_wjbdr")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_gdslv"]
+render_priority = 0
+shader = ExtResource("31_2pf7s")
+shader_parameter/tex = SubResource("ImageTexture_wjbdr")
+shader_parameter/color = Color(1, 0.5, 0.1, 1)
+shader_parameter/hot_color = null
+shader_parameter/fade = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_aclya"]
+transparency = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_mode = 1
+billboard_keep_scale = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_na1ky"]
+transparency = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.85, 1, 0.28)
+disable_receive_shadows = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hodta"]
+transparency = 1
+cull_mode = 2
+depth_draw_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.55, 0.95, 0.24)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_84rne"]
+resource_name = "Turbulent_Stellar_Plasma"
+transparency = 4
+cull_mode = 2
+albedo_color = Color(1, 1, 1, 0.42)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+emission_enabled = true
+emission = Color(0.50638646, 0.11207495, 0.20598418, 1)
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pq0px"]
+render_priority = 0
+shader = ExtResource("32_4hwmk")
+shader_parameter/color = Color(0.2, 0.85, 1, 1)
+shader_parameter/hot = Color(1, 0.5, 0.15, 1)
+shader_parameter/heat = null
+shader_parameter/flash = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_a5m5a"]
+render_priority = 0
+shader = ExtResource("33_yf5yx")
+shader_parameter/color = Color(0.2, 0.85, 1, 1)
+shader_parameter/hot = Color(1, 0.5, 0.15, 1)
+shader_parameter/amount = null
+shader_parameter/progress = null
+shader_parameter/heat = null
+shader_parameter/segments = 10.0
+shader_parameter/spin = null
+shader_parameter/width = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yrb1m"]
+render_priority = 2
+transparency = 1
+blend_mode = 1
+cull_mode = 2
+depth_draw_mode = 2
+no_depth_test = true
+shading_mode = 0
+albedo_color = Color(1, 0.55, 0.45, 0.99463516)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+disable_receive_shadows = true
+billboard_keep_scale = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2tdom"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+disable_receive_shadows = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_rc6v3"]
+render_priority = 0
+shader = ExtResource("34_8kb31")
+shader_parameter/color = Color(0.45, 1, 0.15, 1)
+shader_parameter/amount = 1.0
+shader_parameter/width = null
+shader_parameter/disc = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ase1i"]
+transparency = 1
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_4a2vv"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7pebd"]
+render_priority = 0
+shader = ExtResource("35_7naov")
+shader_parameter/color = Color(0.6, 1, 0.32, 1)
+shader_parameter/shade = Color(0.12, 0.34, 0.12, 1)
+shader_parameter/glow = Color(0.85, 1, 0.45, 1)
+shader_parameter/opacity = 0.88
+shader_parameter/coverage = 0.4
+shader_parameter/scale = 0.008
+shader_parameter/scroll = Vector2(0.004, 0.0015)
+shader_parameter/center = Vector2(0, 0)
+shader_parameter/radius = 760.0
+shader_parameter/inner = 0.55
+shader_parameter/seed = 0.0
+shader_parameter/sun_dir = Vector3(0.08649709, 0.1218959, -0.98876673)
+shader_parameter/soft_distance = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qswax"]
+transparency = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_texture = SubResource("ImageTexture_wjbdr")
+billboard_mode = 1
+billboard_keep_scale = true
+proximity_fade_enabled = true
+proximity_fade_distance = 4.0
+distance_fade_mode = 1
+distance_fade_min_distance = 1.5
+distance_fade_max_distance = 9.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_es6hf"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_11m0h"]
+resource_name = "Weapon_Opaque_Yellow_Lights"
+cull_mode = 2
+albedo_texture = SubResource("ImageTexture_wjbdr")
+metallic = 1.0
+metallic_texture = SubResource("ImageTexture_wjbdr")
+metallic_texture_channel = 2
+roughness_texture = SubResource("ImageTexture_wjbdr")
+roughness_texture_channel = 1
+emission_enabled = true
+emission = Color(1, 1, 1, 1)
+emission_operator = 1
+emission_texture = SubResource("ImageTexture_wjbdr")
+normal_enabled = true
+normal_texture = SubResource("ImageTexture_wjbdr")
+metadata/_gltf_primary_texture_coord = 0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ifb2w"]
+shading_mode = 0
+albedo_color = Color(0.45, 1, 0.15, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_f66yy"]
+render_priority = 0
+shader = ExtResource("36_otkaf")
+shader_parameter/core_color = null
+shader_parameter/body_color = null
+shader_parameter/deep_color = null
+shader_parameter/rim_color = null
+shader_parameter/burn = 1.0
+shader_parameter/fade = 1.0
+shader_parameter/grow = 0.25285144540974436
+shader_parameter/seed = 19.630335569381714
+shader_parameter/droplets = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hvqvp"]
+render_priority = 0
+shader = ExtResource("37_mvrt5")
+shader_parameter/hot_color = null
+shader_parameter/mid_color = null
+shader_parameter/body_color = null
+shader_parameter/rim_color = null
+shader_parameter/burn = 1.0
+shader_parameter/fade = null
+shader_parameter/seed = 31.669962406158447
+shader_parameter/speed = 0.913680514118763
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_2gka5"]
+render_priority = 0
+shader = ExtResource("38_dtpmv")
+shader_parameter/color = Color(0.85, 1, 0.8, 0.28)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_bs0ja"]
+render_priority = 0
+shader = ExtResource("39_0ysco")
+shader_parameter/core_color = null
+shader_parameter/glow_color = null
+shader_parameter/width = null
+shader_parameter/length = 12.1
+shader_parameter/intensity = null
+shader_parameter/thin = null
+shader_parameter/axis = Vector3(1, 0, 0)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_iv7li"]
+render_priority = 0
+shader = ExtResource("40_f3mch")
+shader_parameter/color = null
+shader_parameter/intensity = null
+shader_parameter/size = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xuub3"]
+render_priority = 0
+shader = ExtResource("41_ucbyc")
+shader_parameter/color = null
+shader_parameter/size = Vector2(12.1, 5.936207)
+shader_parameter/intensity = null
+shader_parameter/wipe = null
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y1m32"]
+blend_mode = 1
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 0.55, 0.45, 1)
+albedo_texture = SubResource("ImageTexture_wjbdr")
+billboard_mode = 3
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_w0dc0"]
+render_priority = 0
+shader = ExtResource("42_s4ijq")
+shader_parameter/color = Color(0.6, 1, 0.25, 1)
+shader_parameter/opacity = 0.3
+shader_parameter/scroll = Vector2(0.02, 0.01)
+shader_parameter/scale = null
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ruhd7"]
+render_priority = -1
+shader = ExtResource("43_7jpbu")
+shader_parameter/size_range = Vector2(0.07, 0.34)
+shader_parameter/speed_range = Vector2(0.9, 2.4)
+shader_parameter/wobble = 0.14
+shader_parameter/nozzles = 0.7
+shader_parameter/tint = Color(0.82, 1, 0.7, 1)
+shader_parameter/alpha = 0.85
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_f1d0e"]
+render_priority = 0
+shader = ExtResource("44_o1mhj")
+shader_parameter/metal = null
+shader_parameter/metal_dark = null
+shader_parameter/groove = null
+shader_parameter/neon = null
+shader_parameter/power = 1.0
+shader_parameter/alert = 0.0
+
+[resource]
+script = ExtResource("45_8j4nc")
+materials = Array[Material]([SubResource("ShaderMaterial_7fj23"), SubResource("ShaderMaterial_l24ug"), SubResource("StandardMaterial3D_oe0da"), SubResource("StandardMaterial3D_ck1we"), SubResource("StandardMaterial3D_exc7k"), SubResource("StandardMaterial3D_inld3"), SubResource("StandardMaterial3D_7nedx"), SubResource("ShaderMaterial_pwqkj"), SubResource("StandardMaterial3D_l0aqf"), SubResource("ShaderMaterial_q5anw"), SubResource("StandardMaterial3D_6tue5"), SubResource("StandardMaterial3D_uq8to"), SubResource("StandardMaterial3D_a5jsi"), SubResource("StandardMaterial3D_e2pj7"), SubResource("StandardMaterial3D_dmokt"), SubResource("StandardMaterial3D_4ao7m"), SubResource("StandardMaterial3D_4qjej"), SubResource("ShaderMaterial_8be7q"), SubResource("StandardMaterial3D_tusam"), SubResource("StandardMaterial3D_s0wtp"), SubResource("ShaderMaterial_vs1qq"), SubResource("StandardMaterial3D_1kcj2"), SubResource("ShaderMaterial_vht8e"), SubResource("ShaderMaterial_00sr5"), SubResource("StandardMaterial3D_whrx1"), SubResource("ShaderMaterial_10pcv"), SubResource("ShaderMaterial_m70ol"), SubResource("StandardMaterial3D_ok3yg"), SubResource("StandardMaterial3D_qk6ll"), SubResource("StandardMaterial3D_i34kr"), SubResource("StandardMaterial3D_k6vpi"), SubResource("ShaderMaterial_5gi4m"), SubResource("ShaderMaterial_a248p"), SubResource("ShaderMaterial_jvptg"), SubResource("StandardMaterial3D_y0hfn"), SubResource("StandardMaterial3D_uxvoe"), SubResource("StandardMaterial3D_pneob"), SubResource("ShaderMaterial_nbp6n"), SubResource("ShaderMaterial_jnboe"), SubResource("ShaderMaterial_hr5kd"), SubResource("ShaderMaterial_sfcjq"), SubResource("ShaderMaterial_hfsq7"), SubResource("StandardMaterial3D_63c5x"), SubResource("ShaderMaterial_itkxx"), SubResource("ShaderMaterial_mu8ni"), SubResource("ShaderMaterial_b0qal"), SubResource("StandardMaterial3D_cs61o"), SubResource("StandardMaterial3D_wbh0o"), SubResource("ShaderMaterial_qxjq8"), SubResource("ShaderMaterial_h1us5"), SubResource("ShaderMaterial_ym4xw"), SubResource("StandardMaterial3D_7tnux"), SubResource("ShaderMaterial_vswq0"), SubResource("ShaderMaterial_078el"), SubResource("StandardMaterial3D_1x2mr"), SubResource("StandardMaterial3D_ut0bn"), SubResource("StandardMaterial3D_5oruh"), SubResource("StandardMaterial3D_i6bh8"), SubResource("ShaderMaterial_1yxdq"), SubResource("ShaderMaterial_jadvu"), SubResource("StandardMaterial3D_pus2u"), SubResource("ShaderMaterial_7vgsn"), SubResource("ShaderMaterial_n51lv"), SubResource("ShaderMaterial_gvtdg"), SubResource("ShaderMaterial_gdslv"), SubResource("StandardMaterial3D_aclya"), SubResource("StandardMaterial3D_na1ky"), SubResource("StandardMaterial3D_hodta"), SubResource("StandardMaterial3D_84rne"), SubResource("ShaderMaterial_pq0px"), SubResource("ShaderMaterial_a5m5a"), SubResource("StandardMaterial3D_yrb1m"), SubResource("StandardMaterial3D_2tdom"), SubResource("ShaderMaterial_rc6v3"), SubResource("StandardMaterial3D_ase1i"), SubResource("StandardMaterial3D_4a2vv"), SubResource("ShaderMaterial_7pebd"), SubResource("StandardMaterial3D_qswax"), SubResource("StandardMaterial3D_es6hf"), SubResource("StandardMaterial3D_11m0h"), SubResource("StandardMaterial3D_ifb2w"), SubResource("ShaderMaterial_f66yy"), SubResource("ShaderMaterial_hvqvp"), SubResource("ShaderMaterial_2gka5"), SubResource("ShaderMaterial_bs0ja"), SubResource("ShaderMaterial_iv7li"), SubResource("ShaderMaterial_xuub3"), SubResource("StandardMaterial3D_y1m32"), SubResource("ShaderMaterial_w0dc0"), SubResource("ShaderMaterial_ruhd7"), SubResource("ShaderMaterial_f1d0e")])
+keys = PackedStringArray("S:res://scripts/world/grid.gdshader", "S:res://scripts/vfx/hologram.gdshader", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=true|normal_texture|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=2|alpha_antialiasing_mode=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "S:res://scripts/vfx/black_hole_portal.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/gravity_distortion.gdshader", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=true|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=true|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=true|normal_texture|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=true|normal_texture|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "S:res://scripts/vfx/plasma_conduit.gdshader", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=true|normal_texture|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/worn_armour.gdshader", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "S:res://scripts/enemies/boss_cables.gdshader", "S:res://scripts/vfx/boss_armour.gdshader", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/sentinel_plasma_gas.gdshader", "S:res://scripts/vfx/sentinel_plasma_core.gdshader", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=false|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "S:res://scripts/vfx/sentinel_eye_glow.gdshader", "S:res://scripts/vfx/plasma_trail.gdshader", "S:res://scripts/vfx/booster_flare.gdshader", "StandardMaterial3D|transparency=0|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=false|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=false|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/cel_flash.gdshader", "S:2953986149", "S:res://scripts/vfx/toon_flash.gdshader", "S:res://scripts/vfx/toon_ring.gdshader", "S:res://scripts/vfx/smoke_trail.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=1|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/scorch_mul.gdshader", "S:res://scripts/vfx/toon_puff.gdshader", "S:res://scripts/vfx/glitch_glide.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=1|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=1|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=1|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/sonic_ring.gdshader", "S:res://scripts/vfx/frost_vortex.gdshader", "S:res://scripts/vfx/frost_spiral.gdshader", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/frost_floor.gdshader", "S:res://scripts/vfx/ice_coat.gdshader", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=true|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|normal_enabled=false|bent_normal_enabled=false|rim_enabled=true|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=2|alpha_antialiasing_mode=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=0|emission_on_uv2=false|emission_texture|normal_enabled=false|bent_normal_enabled=false|rim_enabled=true|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/magma_stream.gdshader", "S:res://scripts/vfx/rail_helix.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=1|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/fire_bolt.gdshader", "S:res://scripts/vfx/magma_splat.gdshader", "S:res://scripts/vfx/barrel_heat_glow.gdshader", "S:res://scripts/vfx/flash_mix.gdshader", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=1|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=2|depth_draw_mode=2|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=4|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture_channel=0|roughness_texture_channel=0|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=false|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "S:res://scripts/vfx/plasma_vent.gdshader", "S:res://scripts/vfx/vent_ring.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=2|depth_draw_mode=2|no_depth_test=true|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=true|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/slime_ring.gdshader", "StandardMaterial3D|transparency=1|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=false|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=false|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://levels/skyforge_arena/fx/godot/cloud_layer.gdshader", "StandardMaterial3D|transparency=1|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=1|billboard_keep_scale=true|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=true|distance_fade_mode=1|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=2|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=1|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|metallic_texture|metallic_texture_channel=2|roughness_texture|roughness_texture_channel=1|emission_enabled=true|emission_operator=1|emission_on_uv2=false|emission_texture|normal_enabled=true|normal_texture|bent_normal_enabled=false|rim_enabled=false|clearcoat_enabled=false|anisotropy_enabled=false|ao_enabled=false|ao_on_uv2=false|ao_texture_channel=0|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|subsurf_scatter_enabled=false|subsurf_scatter_skin_mode=false|subsurf_scatter_transmittance_enabled=false|backlight_enabled=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1|metadata/_gltf_primary_texture_coord=0", "StandardMaterial3D|transparency=0|blend_mode=0|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=false|vertex_color_is_srgb=false|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=0|billboard_keep_scale=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://scripts/vfx/toxic_slime.gdshader", "S:res://scripts/vfx/toxic_fire.gdshader", "S:res://scripts/vfx/wind_streak.gdshader", "S:res://scripts/vfx/laser_beam.gdshader", "S:res://scripts/vfx/laser_flare.gdshader", "S:res://scripts/vfx/laser_field.gdshader", "StandardMaterial3D|transparency=0|blend_mode=1|cull_mode=0|depth_draw_mode=0|no_depth_test=false|depth_test=0|shading_mode=0|diffuse_mode=0|specular_mode=0|disable_ambient_light=false|disable_fog=false|disable_specular_occlusion=false|vertex_color_use_as_albedo=true|vertex_color_is_srgb=false|albedo_texture|albedo_texture_force_srgb=false|albedo_texture_msdf=false|heightmap_enabled=false|heightmap_deep_parallax=false|heightmap_flip_tangent=false|heightmap_flip_binormal=false|heightmap_flip_texture=false|refraction_enabled=false|refraction_texture_channel=0|detail_enabled=false|detail_blend_mode=0|detail_uv_layer=0|uv1_triplanar=false|uv1_world_triplanar=false|uv2_triplanar=false|uv2_world_triplanar=false|texture_filter=3|texture_repeat=true|disable_receive_shadows=false|shadow_to_opacity=false|billboard_mode=3|billboard_keep_scale=false|particles_anim_h_frames=1|particles_anim_v_frames=1|particles_anim_loop=false|grow=false|fixed_size=false|use_point_size=false|use_particle_trails=false|use_z_clip_scale=false|use_fov_override=false|proximity_fade_enabled=false|distance_fade_mode=0|stencil_mode=0|stencil_flags=0|stencil_compare=0|stencil_reference=1", "S:res://levels/slime_arena/fx/godot/fog_sheet.gdshader", "S:res://levels/slime_arena/fx/godot/tube_bubbles.gdshader", "S:res://scripts/world/lift_deck.gdshader")
+seen = PackedStringArray("battle_arena @MeshInstance3D@2", "battle_arena output_unwrapped", "battle_arena output_unwrapped", "battle_arena black hole_black hole blackoutside_0", "battle_arena black hole_black hole light3_0", "battle_arena black hole_black hole distortion_0", "battle_arena black hole_ring_ring_0", "battle_arena Portal", "battle_arena @MeshInstance3D@70", "battle_arena ChamberLens", "battle_arena Front_Muzzle_Deep_Bore", "battle_arena Front_Muzzle_Deep_Bore", "battle_arena Front_Muzzle_Deep_Bore", "battle_arena @CPUParticles3D@114", "battle_arena @CPUParticles3D@116", "battle_arena Yellow_Energy_Orb", "battle_arena Yellow_Energy_Orb", "battle_arena Yellow_Forward_Energy_Conduits", "battle_arena Chaingun_Barrel_Rotor", "battle_arena MissileMesh", "battle_arena Rocket_Launcher_Housing", "battle_arena Reactor_Core", "battle_arena @MeshInstance3D@312", "battle_arena output_unwrapped", "battle_arena @MeshInstance3D@353", "battle_arena WholeBody", "battle_arena WholeBody", "battle_arena WholeBody", "battle_arena WholeBody", "battle_arena WholeBody", "battle_arena WholeBody", "battle_arena EyeGlow", "battle_arena PlasmaTrail", "battle_arena Flare", "battle_arena Sparks", "battle_arena VentJet", "battle_arena VentSparks", "battle_arena @MeshInstance3D@340", "battle_arena output_unwrapped", "battle_arena @MeshInstance3D@450", "battle_arena @MeshInstance3D@452", "battle_arena @MeshInstance3D@483", "battle_arena @MeshInstance3D@225", "battle_arena @MeshInstance3D@495", "battle_arena @MeshInstance3D@496", "battle_arena output_unwrapped", "battle_arena PixelTrail", "battle_arena SpeedStreaks", "battle_arena @MeshInstance3D@539", "battle_arena @MeshInstance3D@576", "battle_arena @MeshInstance3D@577", "battle_arena @CPUParticles3D@579", "battle_arena @MeshInstance3D@584", "battle_arena WholeBody", "battle_arena @MeshInstance3D@607", "battle_arena @MeshInstance3D@805", "battle_arena @MeshInstance3D@808", "battle_arena @MeshInstance3D@808", "battle_arena @MeshInstance3D@1390", "battle_arena @MeshInstance3D@1391", "battle_arena @MultiMeshInstance3D@1392", "battle_arena @MeshInstance3D@1393", "battle_arena @MeshInstance3D@1456", "battle_arena Weapon_Body", "battle_arena @MeshInstance3D@1713", "battle_arena @MultiMeshInstance3D@2086", "battle_arena @MeshInstance3D@39", "battle_arena @MeshInstance3D@27", "battle_arena @MeshInstance3D@27", "battle_arena Mesh", "battle_arena @MeshInstance3D@2580", "battle_arena @MeshInstance3D@294", "battle_arena @CPUParticles3D@2621", "battle_arena @MeshInstance3D@2624", "skyforge_arena @CPUParticles3D@2680", "skyforge_arena @CPUParticles3D@2681", "skyforge_arena @MeshInstance3D@2685", "skyforge_arena @MultiMeshInstance3D@2688", "skyforge_arena @MultiMeshInstance3D@2691", "skyforge_arena Weapon_Body", "skyforge_arena @CPUParticles3D@5042", "skyforge_arena @MeshInstance3D@5047", "skyforge_arena @MeshInstance3D@5048", "toxic_works @CPUParticles3D@5230", "toxic_works Beams", "toxic_works Flares", "toxic_works Field", "toxic_works Sparks", "toxic_works @MeshInstance3D@5216", "toxic_works @MeshInstance3D@5221", "toxic_works @MeshInstance3D@5256")
+sprites = Array[Dictionary]([{
+"alpha_cut": 0,
+"billboard": 1,
+"double_sided": true,
+"fixed_size": false,
+"label": false,
+"no_depth_test": false,
+"shaded": false,
+"texture_filter": 3,
+"transparent": true
+}])

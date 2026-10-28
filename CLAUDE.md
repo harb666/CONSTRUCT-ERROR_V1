@@ -593,6 +593,27 @@
   those kept every load's copies (~9 MB more graphics memory each level
   change). The menus' wire copies of the previews (`WireMesh`) are dropped
   when the menus close.
+- No shader freezes in play (owner: "extremely laggy ... parts completely
+  freeze for over 5 seconds"): a phone makes a material's shaders (5
+  programs each, ~0.1-0.3 s apiece on an iPhone) the first time it's
+  drawn, and Godot drops them again once the last material of that kind is
+  gone - so first glides, shotgun blasts, shatters etc. froze, and could
+  freeze again later. Measured in the browser with `?fxsoak=1` (test only:
+  every effect set off in turn, "FXSOAK <step>" printed; the browser test
+  counts WebGL program links per step; `&fxlevel=level2` goes through the
+  level select, `&fxdelay=` seconds before it starts): 106 programs were
+  made mid-play in the Works, now 5.
+  Now: `WarmUpLibrary` (`assets/vfx/warm_up_library.tres`, recorded by
+  `tools/collect_warm_up_materials.gd` playing the fxsoak in each level -
+  re-run it after adding an effect) holds one material of every kind drawn
+  in play; `Vfx.warm_up` draws them all tiny with the other warm-up items,
+  first unlit, then with a faint lamp (the Works' 7 lamps make lit + extra
+  pass versions), each also as a one-item batch (particles' versions), and
+  keeps the library loaded. Costs load time instead: more programs are made
+  behind the title and the level-change cover (~750 vs ~450 at start-up). After a level change the
+  camera also looks round all six ways under the black cover
+  (`Vfx.sweep_level`, game held still offline) so every part of the level
+  has its shaders made before the cover lifts.
 - Loading screen start-up watch (owner: "won't load past this screen", a
   full bar): after the download the game sets itself up in one go - the
   page is frozen ~15 s on a PC, longer on a phone - so the moment the bar
