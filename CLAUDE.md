@@ -609,11 +609,16 @@
   in play; `Vfx.warm_up` draws them all tiny with the other warm-up items,
   first unlit, then with a faint lamp (the Works' 7 lamps make lit + extra
   pass versions), each also as a one-item batch (particles' versions), and
-  keeps the library loaded. Costs load time instead: more programs are made
-  behind the title and the level-change cover (~750 vs ~450 at start-up). After a level change the
-  camera also looks round all six ways under the black cover
-  (`Vfx.sweep_level`, game held still offline) so every part of the level
-  has its shaders made before the cover lifts.
+  keeps the library loaded. Costs load time instead. After a level change
+  the camera also looks round under the black cover (`Vfx.sweep_level`:
+  8 ways at 3 heights + up / down, 60 deg views, a frame each; game held
+  still offline - the lift sits at its floor spot until it runs again) so
+  every part of the level has its shaders made before the cover lifts.
+  Spread out (owner: "WebGL context lost" on the title with dfa331e - it
+  made ~545 programs in one frame): warm-up items are shown
+  `Vfx.WARM_PER_FRAME` (3) a frame, the robots one a frame, and the faint
+  lamp / one-item batches (lit versions) only in levels with lamps
+  (`Vfx.has_lamps`: the Works), not on the test arena's title.
 - Loading screen start-up watch (owner: "won't load past this screen", a
   full bar): after the download the game sets itself up in one go - the
   page is frozen ~15 s on a PC, longer on a phone - so the moment the bar

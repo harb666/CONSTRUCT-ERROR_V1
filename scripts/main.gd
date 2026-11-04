@@ -85,15 +85,28 @@ func _warm_up_level() -> void:
 	DebugHud.note("arrived %s" % scene_file_path.get_file().get_basename())
 	# The whole level is looked over (all its shaders made) before the black
 	# cover lifts; held still meanwhile (not online: the host runs the world).
-	var hold := not Net.is_online() and not get_tree().paused
-	if hold:
+	_holding = not Net.is_online() and not get_tree().paused
+	if _holding:
 		get_tree().paused = true
 	var p := players.get(_local_id()) as PlayerController
 	await Vfx.sweep_level(self, p.global_position + Vector3.UP * 1.6 if p else Vector3.UP * 2.0)
-	if hold:
+	if _holding:
+		_holding = false
 		get_tree().paused = false
-	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6)
+	# The effects (a few a frame) as the cover lifts.
+	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6, Vfx.has_lamps(self))
 	LevelTransfer.fade_in(get_tree())
+
+
+## Held still for the level's look-round (`_warm_up_level`).
+var _holding := false
+
+
+func _exit_tree() -> void:
+	# Gone mid look-round: never leave the game paused.
+	if _holding:
+		_holding = false
+		get_tree().paused = false
 
 
 ## This device's player number: 1 offline / hosting, the room's slot when
@@ -124,7 +137,7 @@ func open_front_end() -> void:
 	add_child(_menu_camera)
 	_menu_camera.make_current()
 	# Prepare the cartoon effects' shaders behind the title screen.
-	Vfx.warm_up(_menu_camera, 1.5)
+	Vfx.warm_up(_menu_camera, 1.5, Vfx.has_lamps(self))
 	var layer := CanvasLayer.new()
 	layer.name = "FrontEndLayer"
 	layer.layer = 20

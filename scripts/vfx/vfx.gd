@@ -202,14 +202,20 @@ static func curve(points: Array) -> Curve:
 ## Draws one of each cartoon effect material for a moment just in front of
 ## `cam` (hidden behind the title screen), so phones prepare their shaders
 ## before the match rather than stuttering the first time one is used.
-static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
+static func warm_up(cam: Camera3D, seconds := 1.0, lit := false) -> void:
 	if cam == null:
 		return
 	var root := Node3D.new()
 	root.name = "ShaderWarmUp"
-	cam.add_child(root)
-	# Tiny, in a bottom corner, under the title screen's dark backdrop.
-	root.position = Vector3(-2.4, -1.4, -3.0)
+	# In the level, kept in front of whichever camera is showing (`_follow`):
+	# a camera can go before it's done (the Works' arrival shot's does).
+	var tree := cam.get_tree()
+	var level: Node = cam
+	while level.get_parent() and level.get_parent() != tree.root:
+		level = level.get_parent()
+	level.add_child(root)
+	root.top_level = true
+	_follow(root)
 	var items: Array[Node3D] = []
 	var fire := ToonPuff.new()
 	fire.top_level = false
@@ -247,70 +253,131 @@ static func warm_up(cam: Camera3D, seconds := 1.0) -> void:
 	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
-	items.append_array(_library_items())
-	# A grid in view (anything off screen isn't drawn, so nothing is made).
+	items.append_array(_library_items(lit))
+	# A grid in view (anything off screen isn't drawn, so nothing is made),
+	# all hidden at first: they're shown a few a frame (below).
 	for i in items.size():
 		root.add_child(items[i])
 		items[i].position = Vector3((i % 24) * 0.06, (i / 24) * 0.06, 0)
 		items[i].scale = Vector3.ONE * 0.05
-		items[i].visible = true
+		items[i].visible = false
 	fire.set_process(false)
-	_warm_up_robots(root)
+	var t0 := Time.get_ticks_msec()
+	# The robots first, one a frame.
+	for i in WARM_ROBOTS.size():
+		_warm_up_robot(root, i)
+		await tree.process_frame
+		if not _follow(root):
+			return
+	await _show_a_few(root, items)
 	# Anything a lamp reaches (the Toxic Works has 7) is drawn with other
 	# shader versions (lit, plus a second, additive pass), made the first
-	# time it's lit - mid-fight. A faint lamp on the warm-up switches on after
-	# a few frames, so both kinds are made here.
-	var lamp := OmniLight3D.new()
-	lamp.name = "Lamp"
-	lamp.position = Vector3(0.7, 0.3, 0.2)
-	lamp.omni_range = 3.0
-	lamp.light_energy = 0.02
-	lamp.visible = false
-	root.add_child(lamp)
-	_finish_warm_up(root, lamp, seconds)
-
-
-## Frames, not a timer: a phone can spend seconds on one warm-up frame (that
-## is the point), and a timer would then let the lamp's frames be skipped.
-static func _finish_warm_up(root: Node3D, lamp: OmniLight3D, seconds: float) -> void:
-	var tree := root.get_tree()
-	var t0 := Time.get_ticks_msec()
-	for i in 3:
+	# time it's lit - mid-fight. Levels with lamps (`lit`) show it all again
+	# by a faint lamp.
+	if lit and is_instance_valid(root):
+		var lamp := OmniLight3D.new()
+		lamp.name = "Lamp"
+		lamp.position = Vector3(0.7, 0.3, 0.2)
+		lamp.omni_range = 3.0
+		lamp.light_energy = 0.02
+		root.add_child(lamp)
+		for it in items:
+			it.visible = false
+		var robots := root.get_node_or_null("Robots") as Node3D
+		if robots:
+			robots.visible = false
 		await tree.process_frame
-	if is_instance_valid(lamp):
-		lamp.visible = true
-	for i in 3:
+		if robots and is_instance_valid(robots):
+			robots.visible = true
+		await _show_a_few(root, items)
+	# At least `seconds` in all, following the camera.
+	while is_instance_valid(root) and Time.get_ticks_msec() - t0 < seconds * 1000.0:
 		await tree.process_frame
-	var left := seconds - (Time.get_ticks_msec() - t0) / 1000.0
-	if left > 0.0:
-		await tree.create_timer(left, true).timeout
+		if not _follow(root):
+			return
 	if is_instance_valid(root):
 		root.queue_free()
 
 
-## A level just loaded, under the black cover: its camera looks round all
-## six ways from `at` (wide, seeing everything) for a frame each, so every
-## part of the level - lit by its lamps or not - has its shaders made now,
-## not the first time it comes into view mid-fight (a phone freezes then).
+## Where the warm-up sits in front of the camera.
+const WARM_SPOT := Vector3(-2.4, -1.4, -3.0)
+## Warm-up items first drawn per frame. A phone makes their shaders in that
+## frame, and the whole set at once (hundreds of programs) made iPhones drop
+## the graphics on the title screen (WebGL context lost; owner reported).
+const WARM_PER_FRAME := 3
+
+
+## Show `items` a few a frame (each stays drawn).
+static func _show_a_few(root: Node3D, items: Array[Node3D]) -> void:
+	var tree := root.get_tree()
+	for i in range(0, items.size(), WARM_PER_FRAME):
+		for k in range(i, mini(i + WARM_PER_FRAME, items.size())):
+			if is_instance_valid(items[k]):
+				items[k].visible = true
+		await tree.process_frame
+		if not _follow(root):
+			return
+	await tree.process_frame
+
+
+## The warm-up stays in front of whichever camera is showing: tiny, in a
+## bottom corner (under the title screen's dark backdrop). False once it's
+## gone (the level went).
+static func _follow(root: Variant) -> bool:
+	if not is_instance_valid(root) or not (root as Node3D).is_inside_tree():
+		return false
+	var r := root as Node3D
+	var now := r.get_viewport().get_camera_3d()
+	if now:
+		r.global_transform = now.global_transform * Transform3D(Basis.IDENTITY, WARM_SPOT)
+	return true
+
+
+## A level just loaded, under the black cover: its camera looks round from
+## `at` - 8 ways at 3 heights, then up and down, a frame each - so every
+## part of the level (lit by its lamps or not) has its shaders made now, not
+## the first time it comes into view mid-fight (a phone freezes then). Narrow
+## views, so each frame only makes a few (a whole level's in one frame made
+## iPhones drop the graphics).
 static func sweep_level(scene: Node3D, at: Vector3) -> void:
 	var view := scene.get_viewport()
 	var prev := view.get_camera_3d()
 	var cam := Camera3D.new()
 	cam.name = "ShaderSweep"
-	cam.fov = 100.0
+	cam.fov = 60.0
 	cam.near = 0.05
 	cam.far = 4000.0
 	scene.add_child(cam)
 	cam.global_position = at
 	cam.make_current()
-	for dir: Vector3 in [Vector3.FORWARD, Vector3.RIGHT, Vector3.BACK, Vector3.LEFT, Vector3.UP, Vector3.DOWN]:
-		var up := Vector3.BACK if absf(dir.y) > 0.5 else Vector3.UP
+	var dirs: Array[Vector3] = []
+	for pitch in [-0.6, 0.0, 0.6]:
+		for k in 8:
+			var yaw := TAU * k / 8.0
+			dirs.append(Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch)))
+	dirs.append_array([Vector3.UP, Vector3.DOWN])
+	var tree := scene.get_tree()
+	for dir in dirs:
+		if not is_instance_valid(cam) or not cam.is_inside_tree():
+			return
+		var up := Vector3.BACK if absf(dir.y) > 0.9 else Vector3.UP
 		cam.look_at(at + dir, up)
-		await scene.get_tree().process_frame
-	await scene.get_tree().process_frame
+		await tree.process_frame
+	await tree.process_frame
+	if not is_instance_valid(cam):
+		return
 	if is_instance_valid(prev):
 		prev.make_current()
 	cam.queue_free()
+
+
+## The level has lamps (visible omni / spot lights that light something):
+## then things are also drawn in their lit versions.
+static func has_lamps(scene: Node) -> bool:
+	for l: Light3D in scene.find_children("*", "Light3D", true, false):
+		if not (l is DirectionalLight3D) and l.is_visible_in_tree() and l.light_energy > 0.0 and l.light_cull_mask != 0:
+			return true
+	return false
 
 
 ## Every kind of material drawn in play (WarmUpLibrary, recorded), kept
@@ -320,15 +387,15 @@ static var _library: WarmUpLibrary
 static var _white: ImageTexture
 
 
-static func _library_items() -> Array[Node3D]:
+static func _library_items(lit := false) -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	if _library == null and ResourceLoader.exists(LIBRARY):
 		_library = load(LIBRARY) as WarmUpLibrary
 	if _library == null:
 		return out
 	var quad := QuadMesh.new()
-	# Each also as a one-item batch (how particles are drawn: other shader
-	# versions, lit ones too).
+	# Lit (levels with lamps): each also as a one-item batch (how particles
+	# are drawn: their lit versions differ).
 	var batch := MultiMesh.new()
 	batch.transform_format = MultiMesh.TRANSFORM_3D
 	batch.use_colors = true
@@ -342,6 +409,8 @@ static func _library_items() -> Array[Node3D]:
 		mi.mesh = quad
 		mi.material_override = m
 		out.append(mi)
+		if not lit:
+			continue
 		var mm := MultiMeshInstance3D.new()
 		mm.multimesh = batch
 		mm.material_override = m
@@ -369,7 +438,7 @@ static func _library_items() -> Array[Node3D]:
 
 
 ## The robots a level can spawn later (a wave's first sentinel, grunt or
-## skirmisher): one of each set up and drawn tiny with the rest, inert (no
+## skirmisher): one of each (robot `i` here) set up and drawn tiny with the rest, inert (no
 ## AI, no physics, in no group), so their one-off set-up and their shaders
 ## are done here, not as the first one teleports in mid-fight (on phones a
 ## new shader stalls the game). Their materials are kept, so the compiled
@@ -383,32 +452,33 @@ static var _robot_materials: Array[Material] = []
 static var robots_warmed := 0
 
 
-static func _warm_up_robots(root: Node3D) -> void:
-	var holder := Node3D.new()
-	holder.name = "Robots"
-	root.add_child(holder)
-	holder.position = Vector3(0.0, 0.0, -0.5)
-	holder.scale = Vector3.ONE * 0.06
-	for i in WARM_ROBOTS.size():
-		var r := (load(WARM_ROBOTS[i]) as PackedScene).instantiate() as Node3D
-		r.process_mode = Node.PROCESS_MODE_DISABLED
-		holder.add_child(r)
-		r.position = Vector3(i * 2.5, 0.0, 0.0)
-		for n in [r] + r.find_children("*", "", true, false):
-			for g in (n as Node).get_groups():
-				if not String(g).begins_with("_"):
-					(n as Node).remove_from_group(g)
-		for mi: MeshInstance3D in r.find_children("*", "MeshInstance3D", true, false):
-			for m in [mi.material_override, mi.material_overlay]:
-				if m and not _robot_materials.has(m):
-					_robot_materials.append(m)
-			for si in mi.get_surface_override_material_count():
-				var sm := mi.get_surface_override_material(si)
-				if sm and not _robot_materials.has(sm):
-					_robot_materials.append(sm)
-			if mi.mesh:
-				for si in mi.mesh.get_surface_count():
-					var mm := mi.mesh.surface_get_material(si)
-					if mm and not _robot_materials.has(mm):
-						_robot_materials.append(mm)
-		robots_warmed += 1
+static func _warm_up_robot(root: Node3D, i: int) -> void:
+	var holder := root.get_node_or_null("Robots") as Node3D
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = "Robots"
+		root.add_child(holder)
+		holder.position = Vector3(0.0, 0.0, -0.5)
+		holder.scale = Vector3.ONE * 0.06
+	var r := (load(WARM_ROBOTS[i]) as PackedScene).instantiate() as Node3D
+	r.process_mode = Node.PROCESS_MODE_DISABLED
+	holder.add_child(r)
+	r.position = Vector3(i * 2.5, 0.0, 0.0)
+	for n in [r] + r.find_children("*", "", true, false):
+		for g in (n as Node).get_groups():
+			if not String(g).begins_with("_"):
+				(n as Node).remove_from_group(g)
+	for mi: MeshInstance3D in r.find_children("*", "MeshInstance3D", true, false):
+		for m in [mi.material_override, mi.material_overlay]:
+			if m and not _robot_materials.has(m):
+				_robot_materials.append(m)
+		for si in mi.get_surface_override_material_count():
+			var sm := mi.get_surface_override_material(si)
+			if sm and not _robot_materials.has(sm):
+				_robot_materials.append(sm)
+		if mi.mesh:
+			for si in mi.mesh.get_surface_count():
+				var mm := mi.mesh.surface_get_material(si)
+				if mm and not _robot_materials.has(mm):
+					_robot_materials.append(mm)
+	robots_warmed += 1

@@ -5314,6 +5314,12 @@ func _level_flow_tests() -> void:
 	var want := flow.next_level
 	main.queue_free()
 	await _ticks(80)
+	# (Held still while it looks round the level under the black cover.)
+	var held := 0
+	while root.get_tree().paused and held < 300:
+		held += 1
+		await _ticks(1)
+	await _ticks(2)
 	var next := root.get_tree().current_scene
 	_check(next != null and next.scene_file_path == want, "flow: the next part of the level is loaded (%s)" % (next.scene_file_path if next else "-"))
 	var np: PlayerController = next.players.get(1) if next and next.get(&"players") is Dictionary else null
@@ -6066,10 +6072,16 @@ func _front_end_tests() -> void:
 	_check(Vfx.robots_warmed >= 3 and warm_in_play.is_empty(), "front end: the robots' set-up and shaders are prepared behind the title (%d), none of them in play" % Vfx.robots_warmed)
 	# Freeze fix: every kind of material drawn in play (the recorded library)
 	# is drawn behind the title too - unlit, then by a faint lamp - and kept.
-	var wu: Node = main._menu_camera.get_node_or_null("ShaderWarmUp")
+	var wu: Node = main.get_node_or_null("ShaderWarmUp")
 	var lib_n: int = Vfx._library.materials.size() if Vfx._library else 0
-	_check(lib_n >= 60 and wu != null and wu.get_child_count() > lib_n * 2 and wu.get_node_or_null("Lamp") is OmniLight3D,
-		"front end: the play materials' library (%d kinds) is drawn behind the title with a lamp" % lib_n)
+	var shown := 0
+	if wu:
+		for c in wu.get_children():
+			if c is GeometryInstance3D and c.visible:
+				shown += 1
+	_check(lib_n >= 60 and wu != null and wu.get_child_count() > lib_n and shown <= Vfx.WARM_PER_FRAME * 3,
+		"front end: the play materials' library (%d kinds) is drawn behind the title, a few a frame (%d shown so far)" % [lib_n, shown])
+	_check(not Vfx.has_lamps(main) and wu.get_node_or_null("Lamp") == null, "front end: no lamp-lit versions in the test arena (it has no lamps)")
 	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
 	var cam_from: Vector3 = main._menu_camera.global_position
 	_check(not fe.loaded and fe._buttons.has("start"), "front end: TAP TO START is up while the arena is still loading")
