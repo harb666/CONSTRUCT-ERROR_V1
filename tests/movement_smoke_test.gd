@@ -5316,10 +5316,12 @@ func _level_flow_tests() -> void:
 	await _ticks(80)
 	# (Held still while it looks round the level under the black cover.)
 	var held := 0
-	while root.get_tree().paused and held < 300:
+	while root.get_tree().paused and held < 1200:
 		held += 1
 		await _ticks(1)
 	await _ticks(2)
+	_check(held > 0 and Vfx.warming == 0 and not Vfx.sweeping,
+		"flow: the next part is held under the black cover until its look-round and warm-up are done (%d frames)" % held)
 	var next := root.get_tree().current_scene
 	_check(next != null and next.scene_file_path == want, "flow: the next part of the level is loaded (%s)" % (next.scene_file_path if next else "-"))
 	var np: PlayerController = next.players.get(1) if next and next.get(&"players") is Dictionary else null

@@ -89,13 +89,43 @@ func _warm_up_level() -> void:
 	if _holding:
 		get_tree().paused = true
 	var p := players.get(_local_id()) as PlayerController
+	_preparing += 1
+	_show_preparing()
 	await Vfx.sweep_level(self, p.global_position + Vector3.UP * 1.6 if p else Vector3.UP * 2.0)
+	# Then the effects (a few a frame), all before the cover lifts: shown
+	# half made, the level ran at ~1 fps with the warm-up's shapes in view
+	# (owner's screenshot in the Works).
+	await Vfx.warm_up(get_viewport().get_camera_3d(), 0.3, Vfx.has_lamps(self))
+	_preparing -= 1
 	if _holding:
 		_holding = false
 		get_tree().paused = false
-	# The effects (a few a frame) as the cover lifts.
-	Vfx.warm_up(get_viewport().get_camera_3d(), 0.6, Vfx.has_lamps(self))
 	LevelTransfer.fade_in(get_tree())
+	if StressTest.fx_soak():
+		print("FXSOAK arrived")
+
+
+func _finish_warm_up_covered() -> void:
+	LevelTransfer.cover(get_tree())
+	_preparing += 1
+	_show_preparing()
+	while is_inside_tree() and Vfx.warming > 0:
+		await get_tree().process_frame
+	_preparing -= 1
+	if is_inside_tree():
+		LevelTransfer.fade_in(get_tree())
+
+
+## "PREPARING nn%" on the black cover while a level gets ready.
+func _show_preparing() -> void:
+	while is_inside_tree() and _preparing > 0:
+		var k := 0.2 * Vfx.sweep_progress if Vfx.sweeping else (0.2 + 0.8 * Vfx.progress if Vfx.warming > 0 else 0.0)
+		LevelTransfer.cover_text(get_tree(), "PREPARING  %d%%" % int(k * 100.0))
+		await get_tree().process_frame
+
+
+## Above 0 while a level gets ready under the black cover.
+var _preparing := 0
 
 
 ## Held still for the level's look-round (`_warm_up_level`).
@@ -176,6 +206,10 @@ func _on_deployed(character: CharacterDefinition) -> void:
 		LevelTransfer.start_as(character)
 		Net.go_to_level(get_tree(), level)
 		return
+	# The title's warm-up not done yet: it finishes behind a black cover
+	# (its shapes and half-made shaders would show in play).
+	if Vfx.warming > 0:
+		_finish_warm_up_covered()
 	# Menu music out, the level's in.
 	if level_music:
 		Music.play(get_tree(), level_music, Music.LEVEL_DB, 2.0)

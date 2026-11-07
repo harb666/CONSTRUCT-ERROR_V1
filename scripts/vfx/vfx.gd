@@ -205,6 +205,22 @@ static func curve(points: Array) -> Curve:
 static func warm_up(cam: Camera3D, seconds := 1.0, lit := false) -> void:
 	if cam == null:
 		return
+	warming += 1
+	progress = 0.0
+	await _warm(cam, seconds, lit)
+	warming -= 1
+	if warming == 0:
+		progress = 1.0
+
+
+## Warm-ups still running, and how far the latest is (0-1): a level isn't
+## shown until its warm-up is done (main.gd), or its half-made shaders cost
+## seconds a frame in play and its items (some place their own shapes) show.
+static var warming := 0
+static var progress := 1.0
+
+
+static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	var root := Node3D.new()
 	root.name = "ShaderWarmUp"
 	# In the level, kept in front of whichever camera is showing (`_follow`):
@@ -262,14 +278,13 @@ static func warm_up(cam: Camera3D, seconds := 1.0, lit := false) -> void:
 		items[i].scale = Vector3.ONE * 0.05
 		items[i].visible = false
 	fire.set_process(false)
-	var t0 := Time.get_ticks_msec()
 	# The robots first, one a frame.
 	for i in WARM_ROBOTS.size():
 		_warm_up_robot(root, i)
 		await tree.process_frame
 		if not _follow(root):
 			return
-	await _show_a_few(root, items)
+	await _show_a_few(root, items, 0.0, 0.5 if lit else 1.0)
 	# Anything a lamp reaches (the Toxic Works has 7) is drawn with other
 	# shader versions (lit, plus a second, additive pass), made the first
 	# time it's lit - mid-fight. Levels with lamps (`lit`) show it all again
@@ -289,9 +304,9 @@ static func warm_up(cam: Camera3D, seconds := 1.0, lit := false) -> void:
 		await tree.process_frame
 		if robots and is_instance_valid(robots):
 			robots.visible = true
-		await _show_a_few(root, items)
-	# At least `seconds` in all, following the camera.
-	while is_instance_valid(root) and Time.get_ticks_msec() - t0 < seconds * 1000.0:
+		await _show_a_few(root, items, 0.5, 1.0)
+	# A moment more (`seconds` at 60 fps), following the camera.
+	for i in ceili(seconds * 60.0):
 		await tree.process_frame
 		if not _follow(root):
 			return
@@ -308,9 +323,10 @@ const WARM_PER_FRAME := 3
 
 
 ## Show `items` a few a frame (each stays drawn).
-static func _show_a_few(root: Node3D, items: Array[Node3D]) -> void:
+static func _show_a_few(root: Node3D, items: Array[Node3D], from := 0.0, to := 1.0) -> void:
 	var tree := root.get_tree()
 	for i in range(0, items.size(), WARM_PER_FRAME):
+		progress = lerpf(from, to, float(i) / maxf(items.size(), 1.0))
 		for k in range(i, mini(i + WARM_PER_FRAME, items.size())):
 			if is_instance_valid(items[k]):
 				items[k].visible = true
@@ -340,6 +356,19 @@ static func _follow(root: Variant) -> bool:
 ## views, so each frame only makes a few (a whole level's in one frame made
 ## iPhones drop the graphics).
 static func sweep_level(scene: Node3D, at: Vector3) -> void:
+	sweeping = true
+	sweep_progress = 0.0
+	await _sweep(scene, at)
+	sweeping = false
+	sweep_progress = 1.0
+
+
+## A level's look-round running, and how far it is (0-1).
+static var sweeping := false
+static var sweep_progress := 1.0
+
+
+static func _sweep(scene: Node3D, at: Vector3) -> void:
 	var view := scene.get_viewport()
 	var prev := view.get_camera_3d()
 	var cam := Camera3D.new()
@@ -357,7 +386,9 @@ static func sweep_level(scene: Node3D, at: Vector3) -> void:
 			dirs.append(Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch)))
 	dirs.append_array([Vector3.UP, Vector3.DOWN])
 	var tree := scene.get_tree()
-	for dir in dirs:
+	for i in dirs.size():
+		var dir := dirs[i]
+		sweep_progress = float(i) / dirs.size()
 		if not is_instance_valid(cam) or not cam.is_inside_tree():
 			return
 		var up := Vector3.BACK if absf(dir.y) > 0.9 else Vector3.UP

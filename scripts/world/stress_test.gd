@@ -184,10 +184,16 @@ static func start_fx_soak(main: Node, player: PlayerController) -> void:
 		if is_instance_valid(e):
 			sel._set_side(side, e.get_node("Targetable"))
 	var wait := func(t: float) -> void:
-		await tree.create_timer(t).timeout
+		await tree.create_timer(t, false).timeout
 	const GRUNT := "res://scenes/enemies/robot_enemy.tscn"
 	const SKIRM := "res://scenes/enemies/robot_skirmisher.tscn"
 	const SENT := "res://scenes/enemies/robot_sentinel.tscn"
+	# Only once the level is revealed (prepared under the paused cover).
+	for i in 3:
+		await tree.process_frame
+	while tree.paused or Vfx.warming > 0 or Vfx.sweeping:
+		await tree.process_frame
+	step.call("revealed")
 	await wait.call(float(_param("fxdelay")) if _param("fxdelay") != "" else 3.0)
 	step.call("start")
 	await wait.call(3.0)

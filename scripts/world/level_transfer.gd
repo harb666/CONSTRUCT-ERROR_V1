@@ -108,10 +108,36 @@ static func apply(player: PlayerController, data: Dictionary) -> void:
 				holder.equip(def, side)
 
 
+## The black cover straight away (a level preparing behind it).
+static func cover(tree: SceneTree) -> void:
+	_fade_rect(tree).color.a = 1.0
+
+
+## A line on the black cover ("PREPARING 40%"), "" to clear it.
+static func cover_text(tree: SceneTree, text: String) -> void:
+	var rect := _fade_rect(tree)
+	var l := rect.get_node_or_null("Note") as Label
+	if l == null:
+		l = Label.new()
+		l.name = "Note"
+		l.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		l.offset_top = -64.0
+		l.offset_bottom = -24.0
+		l.offset_left = -200.0
+		l.offset_right = 200.0
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_font_override(&"font", HudStyle.label_font())
+		l.add_theme_font_size_override(&"font_size", 20)
+		l.add_theme_color_override(&"font_color", HudStyle.CYAN)
+		rect.add_child(l)
+	l.text = text
+
+
 ## Fade back in (the new part is ready).
 static func fade_in(tree: SceneTree) -> void:
 	if _fade == null or not is_instance_valid(_fade):
 		return
+	cover_text(tree, "")
 	var rect := _fade.get_child(0) as ColorRect
 	var layer := _fade
 	var tw := rect.create_tween()

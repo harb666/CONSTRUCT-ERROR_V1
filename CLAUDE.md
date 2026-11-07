@@ -619,6 +619,13 @@
   `Vfx.WARM_PER_FRAME` (3) a frame, the robots one a frame, and the faint
   lamp / one-item batches (lit versions) only in levels with lamps
   (`Vfx.has_lamps`: the Works), not on the test arena's title.
+  Under cover (owner: the Works "froze from lagging", FPS 1, the warm-up's
+  shapes in view): after a level change the game stays paused under the
+  black cover through the look-round AND the warm-up (`Vfx.warming`,
+  `Vfx.sweeping`), with "PREPARING nn%" on the cover
+  (`LevelTransfer.cover_text`, main `_show_preparing`), then fades in. A
+  DEPLOY on the title's own level before its warm-up is done finishes it
+  under a short black cover too (main `_finish_warm_up_covered`).
 - Loading screen start-up watch (owner: "won't load past this screen", a
   full bar): after the download the game sets itself up in one go - the
   page is frozen ~15 s on a PC, longer on a phone - so the moment the bar
