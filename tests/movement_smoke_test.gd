@@ -6013,7 +6013,8 @@ func _harbinger_tests() -> void:
 
 
 ## Lager: playable like the Grinch (same player, her model), the others'
-## size, rigid gauntlets with weapons at their lens ends, her hair on its own
+## size, rigid gauntlets, built-in cannons cut off (sealed stumps the weapons
+## plug into), her hair on its own
 ## springing bones, soles flat, picked in the front end.
 func _lager_tests() -> void:
 	var roster := CharacterRoster.load_default()
@@ -6094,9 +6095,10 @@ func _lager_tests() -> void:
 		if weights[i] > 0.5 and String(mi.skin.get_bind_name(bones[i])).begins_with("Hair_"):
 			hair_verts += 1
 	_check(hair_verts > 1000, "lager: hanging hair weighted to the hair bones (%d vertices)" % hair_verts)
-	# Arm ends: each lens face measured separately (asymmetric elbow joints).
+	# Arm ends: cannons cut off, each stump measured separately (asymmetric
+	# elbow joints), sealed.
 	var holder := p.get_node("WeaponHolder") as WeaponHolder
-	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.039), "lager: each arm's lens end measured separately")
+	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.04), "lager: each arm's stump measured separately")
 	var furthest := {"Left": -INF, "Right": -INF}
 	for side in ["Left", "Right"]:
 		var fa := sk.get_bone_global_rest(sk.find_bone("mixamorig_%sForeArm" % side))
@@ -6106,8 +6108,10 @@ func _lager_tests() -> void:
 			var v := verts[i]
 			if v.x * (1.0 if side == "Left" else -1.0) > 0.5 and v.y > 0.9:
 				furthest[side] = maxf(furthest[side], (v - fa.origin).dot(ax))
-	_check(absf(furthest.Left - 0.05 - holder.slot("Left").arm_end_offset()) < 0.02 and absf(furthest.Right - 0.05 - holder.slot("Right").arm_end_offset()) < 0.02,
-		"lager: weapons plug in at the gauntlets' lens faces (%.3f / %.3f m past the elbows)" % [furthest.Left, furthest.Right])
+	_check(furthest.Left < 0.323 and furthest.Right < 0.363 and absf(furthest.Left - 0.05 - holder.slot("Left").arm_end_offset()) < 0.01
+		and absf(furthest.Right - 0.05 - holder.slot("Right").arm_end_offset()) < 0.01,
+		"lager: built-in cannons cut off at the waffle gauntlets, weapons plug in there (%.3f / %.3f m past the elbows)" % [furthest.Left, furthest.Right])
+	_check(vis.mesh_caps != null and vis.mesh_caps.caps.size() > 0 and ldef.preview_caps == vis.mesh_caps, "lager: arm stumps sealed (caps, in play and on the preview)")
 	# Every weapon mounts on both arms (heavy weapons: the right arm only).
 	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
 	var mounted := 0
@@ -6130,7 +6134,7 @@ func _lager_tests() -> void:
 					print("  %s %s rear %.3f vs end %.3f" % [def.id, side, box.position.x, sl.trim_x()])
 		if ok:
 			mounted += 1
-	_check(mounted == reg.weapons.size(), "lager: every weapon mounts on her arms at the gauntlet ends (%d/%d)" % [mounted, reg.weapons.size()])
+	_check(mounted == reg.weapons.size(), "lager: every weapon mounts on her arm stumps (%d/%d)" % [mounted, reg.weapons.size()])
 	holder.unequip("Left")
 	holder.equip(reg.find(&"default_cannon"), "Right")
 	# Soles flat on the ground while standing.

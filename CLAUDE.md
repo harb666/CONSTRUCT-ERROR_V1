@@ -219,7 +219,7 @@
   angle is corrected in her clips so her soles sit flat; her clips play a
   little slower (longer legs) so her feet don't slide. Her halo is a
   glowing blue electric ring (owner asked; shader-only, light on memory).
-- Lager (owner's Waffle Warrior model, owner asked; third on character
+- Lager (owner's Waffle Warrior model - she's a waffle; owner asked; third on character
   select, gold accent; `resources/characters/lager.tres`,
   `scenes/characters/lager_visual.tscn`) plays exactly like the Grinch.
   Built by `tools/build_lager.py` from the untouched upload
@@ -227,8 +227,12 @@
   changed. Already the others' size (1.7 m, hips 0.82 m), not rescaled.
   Arms (owner: "sort out the arms and rig"): her waffle gauntlets were
   30-80 % weighted to the hand bones (bent like rubber); now rigid on the
-  forearms, weapons plugging in at their glowing lens ends (`arm_end_offset`
-  0.418, right +0.039: her elbow joints aren't symmetric). Animations (owner:
+  forearms. Her built-in cannons (dark ring, gold barrel, glowing lens) are
+  cut off where the waffle gauntlets end (owner asked, as for the other
+  two: `CUT` 0.318 / 0.358 m past the elbows), the openings sealed as dark
+  stumps (`lager_caps.res`, `tools/build_mesh_caps.gd`), and the weapons
+  plug in there (`arm_end_offset` 0.268, right +0.04: her elbow joints
+  aren't symmetric). Animations (owner:
   "the same animations the other characters have"): her own Running /
   Walking / RunFast kept; the rest retargeted from Harbinger's (bone
   directions lined up, world rotations copied, hips scaled), feet levelled

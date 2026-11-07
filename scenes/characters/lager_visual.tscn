@@ -1,16 +1,18 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/character/character_animator.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/characters/lager/lager.glb" id="2"]
 [ext_resource type="Script" path="res://scripts/character/hair_springs.gd" id="3"]
+[ext_resource type="Resource" path="res://assets/characters/lager/lager_caps.res" id="4"]
 
 [node name="LagerVisual" type="Node3D"]
 script = ExtResource("1")
+mesh_caps = ExtResource("4")
 walk_rate = 1.06
 run_rate = 0.99
 sprint_rate = 1.1
-arm_end_offset = 0.418
-arm_end_right_extra = 0.039
+arm_end_offset = 0.268
+arm_end_right_extra = 0.04
 
 [node name="Model" parent="." instance=ExtResource("2")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)

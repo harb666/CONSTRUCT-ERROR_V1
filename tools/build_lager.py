@@ -42,7 +42,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 from build_harbinger import (read_glb, write_glb, accessor, Writer, qmul, qmat, mat_q,
-                             sample, Rig, sole_normal)
+                             sample, Rig, sole_normal, clip_mesh)
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SRC = os.path.join(ROOT, "assets/characters/lager/source/lager_source.glb")
@@ -62,6 +62,10 @@ DIR_CHILD = {"Hips": "Spine", "Spine": "Spine1", "Spine1": "Spine2", "Spine2": "
 for s in ("Left", "Right"):
     DIR_CHILD.update({s + "Shoulder": s + "Arm", s + "Arm": s + "ForeArm", s + "ForeArm": s + "Hand",
                       s + "UpLeg": s + "Leg", s + "Leg": s + "Foot"})
+# Arm ends: distance (m) from each forearm joint along the forearm where the
+# waffle gauntlet ends and the built-in cannon (dark ring, gold barrel,
+# glowing lens) begins (measured from the texture colours along the arm).
+CUT = {"Left": float(os.environ.get("CUT_L", 0.318)), "Right": float(os.environ.get("CUT_R", 0.358))}
 HAND_BONES = {"Left": ["mixamorig:LeftHand", "Bone_029", "Bone_020", "Bone_019"],
               "Right": ["mixamorig:RightHand", "Bone_030", "Bone_025", "Bone_024"]}
 
@@ -292,7 +296,26 @@ def build_prep():
     W = accessor(js, b, at["WEIGHTS_0"]).astype(np.float64)
     I = accessor(js, b, prim["indices"]).reshape(-1, 3).astype(np.int64)
 
-    # 1. Rigid gauntlets.
+    # 1. Arm ends: the built-in cannons cut off at the end of the waffle
+    # gauntlets (crossing triangles clipped exactly, so the rim is clean);
+    # tools/build_mesh_caps.gd seals the openings into stumps.
+    for side, sx in (("Left", 1.0), ("Right", -1.0)):
+        fa = dst.bind_of(MIX + side + "ForeArm")[:3, 3]
+        hd = dst.bind_of(MIX + side + "Hand")[:3, 3]
+        ax = (hd - fa) / np.linalg.norm(hd - fa)
+        d = (P - fa) @ ax
+        rad = np.linalg.norm(P - fa - np.outer(d, ax), axis=1)
+        region = (P[:, 0] * sx > 0.4) & (d > 0.2) & (rad < 0.25)
+        P, N, UV, J, W, I, removed = clip_mesh(P, N, UV, J, W, I, d - CUT[side], region)
+        print("%s arm end: cannon cut %.3f m past the elbow, %d triangles removed/clipped" % (side, CUT[side], removed))
+    used = np.zeros(len(P), bool)
+    used[I.ravel()] = True
+    remap = -np.ones(len(P), np.int64)
+    remap[used] = np.arange(used.sum())
+    P, N, UV, J, W = P[used], N[used], UV[used], J[used], W[used]
+    I = remap[I]
+
+    # 1b. Rigid gauntlets.
     for side, names in HAND_BONES.items():
         fa = jindex[MIX + side + "ForeArm"]
         ids = [jindex[n] for n in names]

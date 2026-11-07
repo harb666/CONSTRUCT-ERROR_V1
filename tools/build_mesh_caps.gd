@@ -25,6 +25,7 @@ const STRAY_MARGIN := 0.012
 const MODELS := [
 	["res://assets/characters/grinch/grinch.glb", "res://assets/characters/grinch/grinch_caps.res", "", Vector2(0.7422, 0.584), ""],
 	["res://assets/characters/harbinger/harbinger.glb", "res://assets/characters/harbinger/harbinger_caps.res", "", Vector2(0.5586, 0.1523), ""],
+	["res://assets/characters/lager/lager.glb", "res://assets/characters/lager/lager_caps.res", "", Vector2(0.2965, 0.3342), ""],
 	["res://assets/characters/robot/robot_enemy.glb", "res://assets/characters/robot/robot_caps.res", "Interior", Vector2.ZERO, "Interior"],
 ]
 

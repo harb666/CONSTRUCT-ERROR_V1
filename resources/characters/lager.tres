@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="CharacterDefinition" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/character/character_definition.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2"]
+[ext_resource type="Resource" path="res://assets/characters/lager/lager_caps.res" id="4"]
 [ext_resource type="Texture2D" path="res://assets/ui/characters/lager_portrait.png" id="5"]
 [ext_resource type="Texture2D" path="res://assets/ui/characters/lager_banner.png" id="7"]
 
@@ -15,5 +16,6 @@ portrait = ExtResource("5")
 banner = ExtResource("7")
 accent_color = Color(1, 0.72, 0.2, 1)
 preview_model_path = "res://assets/characters/lager/lager.glb"
+preview_caps = ExtResource("4")
 preview_animation = "Idle 9"
 preview_extra_path = "res://scenes/characters/lager_hair.tscn"
