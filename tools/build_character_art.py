@@ -9,6 +9,11 @@ untouched, not imported):
   cyan frame and name plate around it), transparent outside the slant,
   1024 px wide.
 - <id>_portrait.png: a square around the face (HUD corner ring, squad rows).
+
+Lager's banner (lager_banner.png) is the bare art on black, slanted less
+steeply than the cards: the card's slanted shape (same aspect and slant as
+the others) is cut from inside it, full width from its top, without
+stretching or shearing the art (CUT_FROM_ART).
 """
 import os
 import numpy as np
@@ -27,12 +32,17 @@ INSET = 6.0
 # The left edge has a bevel highlight in the frame: cut a little further in.
 LEFT_INSET = 16.0
 # Face squares (x, y, size) in banner pixels.
-FACES = {"grinch": (612, 34, 500), "harbinger": (545, 34, 500)}
+FACES = {"grinch": (612, 34, 500), "harbinger": (545, 34, 500), "lager": (880, 110, 500)}
+# Art-only banners: id -> (x0, y0, height) of the card's bounding box in
+# the source (its width = height * the cards' aspect).
+CUT_FROM_ART = {"lager": (10, 12, 613)}
 WIDTH = 1024
 PORTRAIT = 256
 
 
 def build(cid):
+    if cid in CUT_FROM_ART:
+        return build_cut(cid)
     im = Image.open(os.path.join(SRC, cid + "_banner.png")).convert("RGB")
     a = np.asarray(im).astype(np.float32)
     h, w, _ = a.shape
@@ -53,6 +63,29 @@ def build(cid):
     print(cid, "banner", out.size, "slant (share of the width)", round(-SLOPE * (BOTTOM - TOP) / (x1 - x0), 4))
 
 
+def build_cut(cid):
+    im = Image.open(os.path.join(SRC, cid + "_banner.png")).convert("RGB")
+    x0, y0, hc = CUT_FROM_ART[cid]
+    aspect = 1024.0 / 291.0
+    # The cards' slant share, from the shared template above.
+    slant = -SLOPE * (BOTTOM - TOP) / (int(np.ceil(RIGHT_B + SLOPE * TOP - INSET)) + 1 - int(LEFT_B + SLOPE * BOTTOM + LEFT_INSET))
+    wc = hc * aspect
+    sw = slant * wc
+    a = np.asarray(im.crop((x0, y0, x0 + int(round(wc)), y0 + hc))).astype(np.float32)
+    h, w, _ = a.shape
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+    left = sw * (1.0 - y / h)
+    right = w - sw * y / h
+    alpha = np.clip(x - left + 0.5, 0, 1) * np.clip(right - x + 0.5, 0, 1)
+    out = Image.fromarray(np.dstack([a, alpha * 255]).astype(np.uint8), "RGBA")
+    out = out.resize((WIDTH, round(WIDTH / aspect)), Image.LANCZOS)
+    out.save(os.path.join(OUT, cid + "_banner.png"))
+    fx, fy, fs = FACES[cid]
+    im.crop((fx, fy, fx + fs, fy + fs)).resize((PORTRAIT, PORTRAIT), Image.LANCZOS).save(os.path.join(OUT, cid + "_portrait.png"))
+    print(cid, "banner", out.size, "slant", round(slant, 4))
+
+
 if __name__ == "__main__":
-    for cid in FACES:
+    import sys
+    for cid in (sys.argv[1:] or FACES):
         build(cid)

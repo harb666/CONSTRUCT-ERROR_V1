@@ -219,6 +219,27 @@
   angle is corrected in her clips so her soles sit flat; her clips play a
   little slower (longer legs) so her feet don't slide. Her halo is a
   glowing blue electric ring (owner asked; shader-only, light on memory).
+- Lager (owner's Waffle Warrior model, owner asked; third on character
+  select, gold accent; `resources/characters/lager.tres`,
+  `scenes/characters/lager_visual.tscn`) plays exactly like the Grinch.
+  Built by `tools/build_lager.py` from the untouched upload
+  (`assets/characters/lager/source/lager_source.glb`); her look is not
+  changed. Already the others' size (1.7 m, hips 0.82 m), not rescaled.
+  Arms (owner: "sort out the arms and rig"): her waffle gauntlets were
+  30-80 % weighted to the hand bones (bent like rubber); now rigid on the
+  forearms, weapons plugging in at their glowing lens ends (`arm_end_offset`
+  0.418, right +0.039: her elbow joints aren't symmetric). Animations (owner:
+  "the same animations the other characters have"): her own Running /
+  Walking / RunFast kept; the rest retargeted from Harbinger's (bone
+  directions lined up, world rotations copied, hips scaled), feet levelled
+  in the idle. Hair (owner: "not attached as one mesh moving"): the hanging
+  hair has its own bone chain (Hair_Root -> Hair_1 -> Hair_2 -> Hair_End
+  from the head, the scalp stays on the head) sprung by
+  `HairSprings` (SpringBoneSimulator3D, stiffness 5, drag 0.3, a capsule
+  keeping it off her back; added last, after the pose layers; also on the
+  select preview via `lager_hair.tscn`). Card art / portrait cut from the
+  owner's banner (`tools/build_character_art.py lager`, CUT_FROM_ART: her
+  art's slant is shallower, so the card's shape is cut from inside it).
 
 - Cartoon VFX (owner asked, from the GDQuest VFX repo review): puffy 3D
   fireballs/smoke for rocket + boss missile explosions and the rocket

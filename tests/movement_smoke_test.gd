@@ -561,6 +561,7 @@ func _run() -> void:
 	await _optimisation_tests()
 	await _front_end_tests()
 	await _harbinger_tests()
+	await _lager_tests()
 	await _vfx_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
@@ -6011,6 +6012,178 @@ func _harbinger_tests() -> void:
 	await _ticks(5)
 
 
+## Lager: playable like the Grinch (same player, her model), the others'
+## size, rigid gauntlets with weapons at their lens ends, her hair on its own
+## springing bones, soles flat, picked in the front end.
+func _lager_tests() -> void:
+	var roster := CharacterRoster.load_default()
+	var ldef := roster.find(&"lager")
+	var main: Node = load("res://scenes/test_arena.tscn").instantiate()
+	main.front_end_mode = 1
+	root.add_child(main)
+	await _ticks(3)
+	var fe: FrontEnd = main.front_end
+	fe.press_start()
+	await process_frame
+	var card: Rect2 = fe._buttons.get("char:lager", Rect2())
+	var xf := root.get_final_transform()
+	for pressed in [true, false]:
+		var ev := InputEventScreenTouch.new()
+		ev.index = 4322
+		ev.pressed = pressed
+		ev.position = xf * card.get_center()
+		Input.parse_input_event(ev)
+		await process_frame
+		await process_frame
+	_check(card.size.x > 0.0 and fe.selected == ldef and fe._preview_def == ldef, "lager: tapping her card picks her (3D preview switches)")
+	fe.press_deploy()
+	await _ticks(30)
+	var p: PlayerController = main.players[1]
+	var vis := p.get_node_or_null("Visual/LagerVisual") as CharacterAnimator
+	_check(p.character == ldef and vis != null and p.get_node("Visual").find_children("*", "CharacterAnimator", false, false).size() == 1, "lager: DEPLOY spawns her (her model only)")
+	var grinch: PlayerController = preload("res://scenes/player.tscn").instantiate()
+	var same := true
+	for prop in grinch.get_property_list():
+		if prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and prop.usage & PROPERTY_USAGE_STORAGE and prop.name != "character":
+			if typeof(grinch.get(prop.name)) in [TYPE_FLOAT, TYPE_INT, TYPE_BOOL] and grinch.get(prop.name) != p.get(prop.name) and prop.name != "player_id" and prop.name != "can_die":
+				same = false
+				print("  differs: ", prop.name)
+	grinch.free()
+	_check(same, "lager: plays like the Grinch (same movement / health settings)")
+	var ap := vis.get_node("Model").find_child("AnimationPlayer", true, false) as AnimationPlayer
+	var clips := ["Idle 9", "Walking", "Running", "RunFast", "Regular Jump", "slide right", "Dead", "Fall1", "Fall2",
+		"Idle Turn Left", "Idle Turn Right", "Run Sharp Turn Right", "Climb Attempt and Fall 5"]
+	_check(clips.all(func(c: String) -> bool: return ap.has_animation(c)), "lager: has every clip the animator uses (the others' animations)")
+	_check(["Idle 9", "Walking", "Running", "RunFast", "Fall1", "Fall2"].all(func(c: String) -> bool: return ap.get_animation(c).loop_mode == Animation.LOOP_LINEAR),
+		"lager: idle, walk, runs and falls loop")
+	_check(vis.anim_tree != null and vis.current_state == "Locomotion", "lager: animation tree runs (%s)" % vis.current_state)
+	var mi := vis.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	var sk := vis.find_children("*", "Skeleton3D", true, false)[0] as Skeleton3D
+	var arrays := mi.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	# The others' size: head top and hips as high as Harbinger's (within 5 %).
+	var top := sk.get_bone_global_rest(sk.find_bone("mixamorig_HeadTop_End")).origin.y
+	var hips := sk.get_bone_global_rest(sk.find_bone("mixamorig_Hips")).origin.y
+	var tallest := -INF
+	for v in verts:
+		tallest = maxf(tallest, v.y)
+	_check(absf(top - 1.69) < 0.085 and absf(hips - 0.81) < 0.04 and absf(tallest - 1.7) < 0.085,
+		"lager: the others' size (head top %.2f m, hips %.2f m, %.2f m tall)" % [top, hips, tallest])
+	# Gauntlets rigid: nothing follows a hand bone.
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var per := bones.size() / verts.size()
+	var hand_binds := {}
+	for i in mi.skin.get_bind_count():
+		var bn := String(mi.skin.get_bind_name(i))
+		if bn.ends_with("Hand") or bn.begins_with("Bone_"):
+			hand_binds[i] = true
+	var on_hand := 0
+	for i in bones.size():
+		if weights[i] > 0.001 and hand_binds.has(bones[i]):
+			on_hand += 1
+	_check(not hand_binds.is_empty() and on_hand == 0, "lager: gauntlets rigid on the forearms (%d weights on hand bones)" % on_hand)
+	# Hair: its own bone chain from the head, sprung after every pose layer.
+	var chain := ["Hair_Root", "Hair_1", "Hair_2", "Hair_End"].map(func(b: String) -> int: return sk.find_bone(b))
+	var hair_sim := sk.get_node_or_null("HairSprings") as SpringBoneSimulator3D
+	_check(not chain.has(-1) and sk.get_bone_parent(chain[0]) == sk.find_bone("mixamorig_Head") and hair_sim != null
+		and hair_sim.get_index() == sk.get_child_count() - 1 and hair_sim.get_root_bone_name(0) == "Hair_Root" and hair_sim.get_end_bone_name(0) == "Hair_End",
+		"lager: hair has its own bones (head -> 3 segments), springs added last")
+	var hair_verts := 0
+	for i in bones.size():
+		if weights[i] > 0.5 and String(mi.skin.get_bind_name(bones[i])).begins_with("Hair_"):
+			hair_verts += 1
+	_check(hair_verts > 1000, "lager: hanging hair weighted to the hair bones (%d vertices)" % hair_verts)
+	# Arm ends: each lens face measured separately (asymmetric elbow joints).
+	var holder := p.get_node("WeaponHolder") as WeaponHolder
+	_check(is_equal_approx(holder.slot("Right").arm_end_offset() - holder.slot("Left").arm_end_offset(), 0.039), "lager: each arm's lens end measured separately")
+	var furthest := {"Left": -INF, "Right": -INF}
+	for side in ["Left", "Right"]:
+		var fa := sk.get_bone_global_rest(sk.find_bone("mixamorig_%sForeArm" % side))
+		var hd := sk.get_bone_global_rest(sk.find_bone("mixamorig_%sHand" % side))
+		var ax := (hd.origin - fa.origin).normalized()
+		for i in range(0, verts.size(), 2):
+			var v := verts[i]
+			if v.x * (1.0 if side == "Left" else -1.0) > 0.5 and v.y > 0.9:
+				furthest[side] = maxf(furthest[side], (v - fa.origin).dot(ax))
+	_check(absf(furthest.Left - 0.05 - holder.slot("Left").arm_end_offset()) < 0.02 and absf(furthest.Right - 0.05 - holder.slot("Right").arm_end_offset()) < 0.02,
+		"lager: weapons plug in at the gauntlets' lens faces (%.3f / %.3f m past the elbows)" % [furthest.Left, furthest.Right])
+	# Every weapon mounts on both arms (heavy weapons: the right arm only).
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	var mounted := 0
+	for def in reg.weapons:
+		holder.equip(def, "Right")
+		if not def.heavy:
+			holder.equip(def, "Left")
+		await _ticks(3)
+		var ok := true
+		for side in (["Right"] if def.heavy else ["Left", "Right"]):
+			var w := holder.weapon(side)
+			var sl := holder.slot(side)
+			if w == null or not w.is_inside_tree():
+				ok = false
+				continue
+			if def.mount_mode == WeaponDefinition.MountMode.ARM_END:
+				var box := sl.socket_node.global_transform.affine_inverse() * w.global_transform * w.get_local_aabb()
+				if absf(box.position.x - sl.trim_x()) > 0.03:
+					ok = false
+					print("  %s %s rear %.3f vs end %.3f" % [def.id, side, box.position.x, sl.trim_x()])
+		if ok:
+			mounted += 1
+	_check(mounted == reg.weapons.size(), "lager: every weapon mounts on her arms at the gauntlet ends (%d/%d)" % [mounted, reg.weapons.size()])
+	holder.unequip("Left")
+	holder.equip(reg.find(&"default_cannon"), "Right")
+	# Soles flat on the ground while standing.
+	await _ticks(60)
+	var tilt := 0.0
+	var low := INF
+	for side in ["Left", "Right"]:
+		var r := _sole(mi, sk, arrays, side)
+		tilt = maxf(tilt, r[0])
+		low = minf(low, r[1] - p.global_position.y)
+	_check(tilt < 6.0 and low > -0.06 and low < 0.03, "lager: standing, soles flat on the ground (tilt %.1f deg, lowest %.3f m)" % [tilt, low])
+	# Running, the hair stays off her back (behind the spine). The springs'
+	# result is only in the pose as they finish (modification_processed).
+	var spine := sk.find_bone("mixamorig_Spine1")
+	var head := sk.find_bone("mixamorig_Head")
+	var snap := {}
+	var read := func() -> void:
+		snap.tip = (sk.global_transform * sk.get_bone_global_pose(chain[3])).origin
+		snap.sp1 = (sk.global_transform * sk.get_bone_global_pose(spine)).origin
+		snap.rel = (sk.get_bone_global_pose(head).affine_inverse() * sk.get_bone_global_pose(chain[3])).origin
+	hair_sim.modification_processed.connect(read)
+	Input.action_press("move_forward")
+	var behind := INF
+	for i in 60:
+		await process_frame
+		if snap.has("tip"):
+			behind = minf(behind, (snap.tip - snap.sp1).dot(p.global_basis.z))  # she faces -Z
+	var sp := Vector2(p.velocity.x, p.velocity.z).length()
+	_check(sp > 7.0 and vis.current_state == "Locomotion", "lager: runs (%.1f m/s)" % sp)
+	_check(behind > 0.1 and behind < 1.0, "lager: running, her hair stays behind her back (%.2f m behind the spine)" % behind)
+	# Stops: the hair swings on (springs), unlike the head it hangs from.
+	Input.action_release("move_forward")
+	var moved := 0.0
+	var prev: Vector3 = snap.get("rel", Vector3.ZERO)
+	for i in 40:
+		await process_frame
+		if snap.has("rel"):
+			moved += (snap.rel - prev).length()
+			prev = snap.rel
+	hair_sim.modification_processed.disconnect(read)
+	_check(moved > 0.05, "lager: hair swings on its own when she stops (tip moved %.2f m against the head)" % moved)
+	await _ticks(40)
+	Input.action_press("jump")
+	await _ticks(2)
+	Input.action_release("jump")
+	await _ticks(12)
+	_check(not p.is_on_floor() and vis.current_state in ["Jump", "AirJump"], "lager: jumps (%s)" % vis.current_state)
+	await _ticks(90)
+	_check(p.is_on_floor(), "lager: lands")
+	main.queue_free()
+	await _ticks(5)
+
+
 ## [tilt (deg) from level, lowest point (world y)] of one boot's sole as drawn.
 func _sole(mi: MeshInstance3D, sk: Skeleton3D, arrays: Array, side: String) -> Array:
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -6058,9 +6231,10 @@ func _sole(mi: MeshInstance3D, sk: Skeleton3D, arrays: Array, side: String) -> A
 ## Title "TAP TO START" -> character select -> DEPLOY, and the HUD.
 func _front_end_tests() -> void:
 	var roster := CharacterRoster.load_default()
-	_check(roster != null and roster.characters.size() == 2 and roster.characters[0].id == &"grinch" and roster.characters[1].id == &"harbinger"
+	_check(roster != null and roster.characters.size() == 3 and roster.characters[0].id == &"grinch" and roster.characters[1].id == &"harbinger"
+		and roster.characters[2].id == &"lager"
 		and roster.characters.all(func(c: CharacterDefinition) -> bool: return c.portrait != null and c.banner != null and c.player_scene == preload("res://scenes/player.tscn")),
-		"front end: roster has the Grinch and Harbinger (banner art, portraits, same player scene)")
+		"front end: roster has the Grinch, Harbinger and Lager (banner art, portraits, same player scene)")
 	_check(HudStyle.title_font() is FontFile and HudStyle.label_font() is FontFile and HudStyle.num_font() is FontFile, "HUD: Orbitron / Rajdhani fonts load")
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	main.front_end_mode = 1
