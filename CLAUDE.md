@@ -233,15 +233,23 @@
   stumps (`lager_caps.res`, `tools/build_mesh_caps.gd`), and the weapons
   plug in there (`arm_end_offset` 0.268, right +0.04: her elbow joints
   aren't symmetric). Animations (owner:
-  "the same animations the other characters have"): her own Running /
-  Walking / RunFast kept; the rest retargeted from Harbinger's (bone
-  directions lined up, world rotations copied, hips scaled), feet levelled
-  in the idle. Hair (owner: "not attached as one mesh moving"): the hanging
-  hair has its own bone chain (Hair_Root -> Hair_1 -> Hair_2 -> Hair_End
-  from the head, the scalp stays on the head) sprung by
-  `HairSprings` (SpringBoneSimulator3D, stiffness 5, drag 0.3, a capsule
-  keeping it off her back; added last, after the pose layers; also on the
-  select preview via `lager_hair.tscn`). Card art / portrait cut from the
+  "the same animations the other characters have"): every clip retargeted
+  from Harbinger's (bone directions lined up, world rotations copied, hips
+  scaled), feet levelled in the idle. Her own uploaded run / walk / sprint
+  aren't used (owner: arms "quickly swing/glitch left to right" running -
+  blending them with the retargeted clips flipped the arms up to 120 deg a
+  frame; now ~2 deg a frame like Harbinger's). Hair (owner: "not attached as one mesh moving", then "weird and
+  stretched when she jumps and slides"): the hanging hair has its own bone
+  chain (Hair_Root -> Hair_1 -> Hair_2 -> Hair_End from the head, the
+  scalp stays on the head) swung by `HairSprings` (own pose layer, added
+  last): it rests along her back (torso frame from the hips / neck /
+  shoulder joints - not her head, which the jump / slide clips throw back,
+  tipping the hair out like a board; the root segment half follows the
+  head), each joint a damped spring towards that (lag and follow-through on
+  starts, stops, turns, jumps, landings), gravity, swing limits (38 / 28 /
+  28 deg, 6-10 deg towards her back), fixed segment lengths. Godot's
+  SpringBoneSimulator3D was used first: no limits, it threw the hair over
+  her head. Also on the select preview (`lager_hair.tscn`). Card art / portrait cut from the
   owner's banner (`tools/build_character_art.py lager`, CUT_FROM_ART: her
   art's slant is shallower, so the card's shape is cut from inside it).
 

@@ -49,8 +49,8 @@ SRC = os.path.join(ROOT, "assets/characters/lager/source/lager_source.glb")
 REF = os.path.join(ROOT, "assets/characters/harbinger/harbinger.glb")
 OUT = os.path.join(ROOT, "assets/characters/lager/lager.glb")
 
-KEEP = ["Running", "Walking", "RunFast"]
-RETARGET = ["Idle 9", "Idle Turn Left", "Idle Turn Right", "Regular Jump", "Run Sharp Turn Right",
+KEEP = []
+RETARGET = ["Running", "Walking", "RunFast", "Idle 9", "Idle Turn Left", "Idle Turn Right", "Regular Jump", "Run Sharp Turn Right",
             "slide right", "Dead", "Climb Attempt and Fall 5", "Fall1", "Fall2"]
 MIX = "mixamorig:"
 # Bone -> the child its direction is measured to (bind pose). Bones not
@@ -412,10 +412,6 @@ def build_prep():
         after = sole_normal(rig, sk_j, dst.ibm, P, J, W, sole, "Idle 9", 0.0, {foot: corr[foot]})
         print("%s foot: soles %.1f deg off level in the idle -> %.1f deg" % (
             side, np.degrees(ang), np.degrees(np.arccos(min(1.0, after[1])))))
-        for name in ("Running", "Walking"):
-            tin = clips[name][(foot, "rotation")][0]
-            nn = [sole_normal(rig, sk_j, dst.ibm, P, J, W, sole, name, t)[1] for t in tin[::4]]
-            print("   (her own %s: soles at most %.1f deg off level)" % (name, np.degrees(np.arccos(min(1.0, max(nn))))))
     for ch in rclips.values():
         for (node, path), (tin, out) in list(ch.items()):
             if path == "rotation" and node in corr:

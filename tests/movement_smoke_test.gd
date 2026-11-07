@@ -6086,10 +6086,14 @@ func _lager_tests() -> void:
 	_check(not hand_binds.is_empty() and on_hand == 0, "lager: gauntlets rigid on the forearms (%d weights on hand bones)" % on_hand)
 	# Hair: its own bone chain from the head, sprung after every pose layer.
 	var chain := ["Hair_Root", "Hair_1", "Hair_2", "Hair_End"].map(func(b: String) -> int: return sk.find_bone(b))
-	var hair_sim := sk.get_node_or_null("HairSprings") as SpringBoneSimulator3D
+	var hair_sim := sk.get_node_or_null("HairSprings") as HairSprings
+	var last_layer: Node = null
+	for c in sk.get_children():
+		if c is SkeletonModifier3D:
+			last_layer = c
 	_check(not chain.has(-1) and sk.get_bone_parent(chain[0]) == sk.find_bone("mixamorig_Head") and hair_sim != null
-		and hair_sim.get_index() == sk.get_child_count() - 1 and hair_sim.get_root_bone_name(0) == "Hair_Root" and hair_sim.get_end_bone_name(0) == "Hair_End",
-		"lager: hair has its own bones (head -> 3 segments), springs added last")
+		and last_layer == hair_sim and vis.find_children("*", "HairSprings", true, false).size() == 1,
+		"lager: hair has its own bones (head -> 3 segments), swung after every other pose layer")
 	var hair_verts := 0
 	for i in bones.size():
 		if weights[i] > 0.5 and String(mi.skin.get_bind_name(bones[i])).begins_with("Hair_"):
@@ -6151,7 +6155,14 @@ func _lager_tests() -> void:
 	var spine := sk.find_bone("mixamorig_Spine1")
 	var head := sk.find_bone("mixamorig_Head")
 	var snap := {}
+	var fore := [sk.find_bone("mixamorig_LeftForeArm"), sk.find_bone("mixamorig_LeftHand"), sk.find_bone("mixamorig_RightForeArm"), sk.find_bone("mixamorig_RightHand")]
+	var arm_jump := [0.0]
 	var read := func() -> void:
+		for k in [0, 2]:
+			var d := (sk.get_bone_global_pose(fore[k + 1]).origin - sk.get_bone_global_pose(fore[k]).origin).normalized()
+			if snap.has(k):
+				arm_jump[0] = maxf(arm_jump[0], rad_to_deg((snap[k] as Vector3).angle_to(d)))
+			snap[k] = d
 		snap.tip = (sk.global_transform * sk.get_bone_global_pose(chain[3])).origin
 		snap.sp1 = (sk.global_transform * sk.get_bone_global_pose(spine)).origin
 		snap.rel = (sk.get_bone_global_pose(head).affine_inverse() * sk.get_bone_global_pose(chain[3])).origin
@@ -6165,6 +6176,7 @@ func _lager_tests() -> void:
 	var sp := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(sp > 7.0 and vis.current_state == "Locomotion", "lager: runs (%.1f m/s)" % sp)
 	_check(behind > 0.1 and behind < 1.0, "lager: running, her hair stays behind her back (%.2f m behind the spine)" % behind)
+	_check(arm_jump[0] < 25.0, "lager: running, her armed arms move smoothly (at most %.1f deg a frame; her own run clips glitched up to 120)" % arm_jump[0])
 	# Stops: the hair swings on (springs), unlike the head it hangs from.
 	Input.action_release("move_forward")
 	var moved := 0.0
@@ -6176,6 +6188,28 @@ func _lager_tests() -> void:
 			prev = snap.rel
 	hair_sim.modification_processed.disconnect(read)
 	_check(moved > 0.05, "lager: hair swings on its own when she stops (tip moved %.2f m against the head)" % moved)
+	# Jump and slide: no hair segment swings past its limit from its resting
+	# place along her back (it used to fly out like a board and stretch).
+	var worst := [0.0, 0.0, 0.0]
+	var check := func() -> void:
+		for i in 3:
+			worst[i] = maxf(worst[i], hair_sim.swing[i])
+	hair_sim.modification_processed.connect(check)
+	Input.action_press("jump")
+	await _ticks(2)
+	Input.action_release("jump")
+	await _ticks(70)
+	Input.action_press("move_forward")
+	await _ticks(20)
+	Input.action_press("dodge")
+	await _ticks(2)
+	Input.action_release("dodge")
+	await _ticks(50)
+	Input.action_release("move_forward")
+	await _ticks(30)
+	hair_sim.modification_processed.disconnect(check)
+	_check(worst[0] <= hair_sim.max_swing[0] + 1.0 and worst[1] <= hair_sim.max_swing[1] + 1.0 and worst[2] <= hair_sim.max_swing[2] + 1.0 and worst.max() > 3.0,
+		"lager: jumping and sliding, the hair swings but within its limits (%.0f / %.0f / %.0f deg)" % worst)
 	await _ticks(40)
 	Input.action_press("jump")
 	await _ticks(2)
