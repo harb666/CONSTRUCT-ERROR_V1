@@ -18,6 +18,16 @@ static var crease_deg := 45.0
 static var _cache := {}  # source Mesh -> line ArrayMesh
 
 
+## Drop the cached wire copies of the meshes under `root` (a character
+## preview going off screen), so they and the model they hold can be freed.
+## (Keyed by each wire copy's source: the model's own mesh may since have
+## been swapped for a sealed copy, MeshCaps.)
+static func forget(root: Node) -> void:
+	for mi: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		if mi.has_meta(&"wire_source"):
+			_cache.erase(mi.get_meta(&"wire_source"))
+
+
 ## Give every MeshInstance3D under `root` a wire copy in `color` and the
 ## paint-out overlay. Returns the two materials [line, overlay].
 static func add_to(root: Node, color: Color, hide_color := Color(0.03, 0.09, 0.11)) -> Array:
@@ -38,6 +48,7 @@ static func add_to(root: Node, color: Color, hide_color := Color(0.03, 0.09, 0.1
 		var w := MeshInstance3D.new()
 		w.name = String(mi.name) + "_Wire"
 		w.set_meta(&"wire_copy", true)
+		w.set_meta(&"wire_source", mi.mesh)
 		w.mesh = lines
 		w.material_override = line
 		w.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

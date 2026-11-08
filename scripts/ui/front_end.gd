@@ -471,6 +471,10 @@ func _make_preview() -> void:
 		add_child(_preview_view)
 		move_child(_preview_view, glitch.get_index())  # under the glitch's line pass
 	if _preview_pivot:
+		# Only the character on screen stays in graphics memory (owner: a
+		# "WebGL context lost" on the character select; every character
+		# looked at stayed loaded, ~12 MB each with its wire copy).
+		WireMesh.forget(_preview_pivot)
 		_preview_pivot.queue_free()
 	_preview_pivot = Node3D.new()
 	_preview_vp.add_child(_preview_pivot)

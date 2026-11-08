@@ -625,7 +625,12 @@
   source mesh / material (meta), not in static caches keyed by instance -
   those kept every load's copies (~9 MB more graphics memory each level
   change). The menus' wire copies of the previews (`WireMesh`) are dropped
-  when the menus close.
+  when the menus close, and a character's as its preview goes off screen
+  (owner: "WebGL context lost" on the character select - every character
+  looked at stayed loaded with its wire copy, ~12 MB each; `WireMesh.forget`,
+  keyed by each wire copy's source mesh since MeshCaps swaps in a sealed
+  copy). Graphics memory there now stays flat (~98 MB mesh data, ~110 MB
+  textures in the browser test) however many characters are looked at.
 - No shader freezes in play (owner: "extremely laggy ... parts completely
   freeze for over 5 seconds"): a phone makes a material's shaders (5
   programs each, ~0.1-0.3 s apiece on an iPhone) the first time it's

@@ -6037,6 +6037,14 @@ func _lager_tests() -> void:
 		await process_frame
 		await process_frame
 	_check(card.size.x > 0.0 and fe.selected == ldef and fe._preview_def == ldef, "lager: tapping her card picks her (3D preview switches)")
+	await _ticks(3)
+	# Only the character on screen stays loaded: the Grinch's preview (shown
+	# first) and its wire copy are let go (a WebGL context loss on the select).
+	var kept := 0
+	for m: Mesh in WireMesh._cache:
+		if is_instance_valid(m) and m.resource_path.contains("grinch"):
+			kept += 1
+	_check(WireMesh._cache.size() <= 3 and kept == 0, "character select: only the previewed character's wire copy is kept (%d cached)" % WireMesh._cache.size())
 	fe.press_deploy()
 	await _ticks(30)
 	var p: PlayerController = main.players[1]
