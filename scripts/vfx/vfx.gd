@@ -207,7 +207,9 @@ static func warm_up(cam: Camera3D, seconds := 1.0, lit := false) -> void:
 		return
 	warming += 1
 	progress = 0.0
+	DebugHud.note("warm-up start")
 	await _warm(cam, seconds, lit)
+	DebugHud.note("warm-up done")
 	warming -= 1
 	if warming == 0:
 		progress = 1.0
@@ -280,6 +282,8 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	fire.set_process(false)
 	# The robots first, one a frame.
 	for i in WARM_ROBOTS.size():
+		if not await _wait_while_held(root):
+			return
 		_warm_up_robot(root, i)
 		await tree.process_frame
 		if not _follow(root):
@@ -326,6 +330,8 @@ const WARM_PER_FRAME := 3
 static func _show_a_few(root: Node3D, items: Array[Node3D], from := 0.0, to := 1.0) -> void:
 	var tree := root.get_tree()
 	for i in range(0, items.size(), WARM_PER_FRAME):
+		if not await _wait_while_held(root):
+			return
 		progress = lerpf(from, to, float(i) / maxf(items.size(), 1.0))
 		for k in range(i, mini(i + WARM_PER_FRAME, items.size())):
 			if is_instance_valid(items[k]):
@@ -334,6 +340,22 @@ static func _show_a_few(root: Node3D, items: Array[Node3D], from := 0.0, to := 1
 		if not _follow(root):
 			return
 	await tree.process_frame
+
+
+## Held (`hold`): the menus past the title screen (character / level
+## select) - their 3D preview and glitch are heavy, and a phone building the
+## warm-up's shaders under them lost its graphics (owner: "WebGL context
+## lost" on the character select, two phones). It carries on at DEPLOY,
+## under the black cover. False once the warm-up's gone.
+static var hold := false
+
+
+static func _wait_while_held(root: Node3D) -> bool:
+	while hold:
+		await root.get_tree().process_frame
+		if not _follow(root):
+			return false
+	return _follow(root)
 
 
 ## The warm-up stays in front of whichever camera is showing: tiny, in a

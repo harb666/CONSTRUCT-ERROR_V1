@@ -5906,6 +5906,7 @@ func _harbinger_tests() -> void:
 	_check(fe.selected == hdef and fe._preview_def == hdef, "harbinger: tapping her card picks her (3D preview switches)")
 	fe.press_deploy()
 	await _ticks(30)
+	await _wait_warm_up()
 	var p: PlayerController = main.players[1]
 	var vis := p.get_node_or_null("Visual/HarbingerVisual") as CharacterAnimator
 	_check(p.character == hdef and vis != null and p.get_node("Visual").find_children("*", "CharacterAnimator", false, false).size() == 1, "harbinger: DEPLOY spawns her (her model only)")
@@ -6047,6 +6048,7 @@ func _lager_tests() -> void:
 	_check(WireMesh._cache.size() <= 3 and kept == 0, "character select: only the previewed character's wire copy is kept (%d cached)" % WireMesh._cache.size())
 	fe.press_deploy()
 	await _ticks(30)
+	await _wait_warm_up()
 	var p: PlayerController = main.players[1]
 	var vis := p.get_node_or_null("Visual/LagerVisual") as CharacterAnimator
 	_check(p.character == ldef and vis != null and p.get_node("Visual").find_children("*", "CharacterAnimator", false, false).size() == 1, "lager: DEPLOY spawns her (her model only)")
@@ -6164,12 +6166,15 @@ func _lager_tests() -> void:
 	var head := sk.find_bone("mixamorig_Head")
 	var snap := {}
 	var fore := [sk.find_bone("mixamorig_LeftForeArm"), sk.find_bone("mixamorig_LeftHand"), sk.find_bone("mixamorig_RightForeArm"), sk.find_bone("mixamorig_RightHand")]
-	var arm_jump := [0.0]
+	var arm_jump := [0.0, 0.0, 0]  # worst, total, count (deg a frame)
 	var read := func() -> void:
 		for k in [0, 2]:
 			var d := (sk.get_bone_global_pose(fore[k + 1]).origin - sk.get_bone_global_pose(fore[k]).origin).normalized()
 			if snap.has(k):
-				arm_jump[0] = maxf(arm_jump[0], rad_to_deg((snap[k] as Vector3).angle_to(d)))
+				var j := rad_to_deg((snap[k] as Vector3).angle_to(d))
+				arm_jump[0] = maxf(arm_jump[0], j)
+				arm_jump[1] += j
+				arm_jump[2] += 1
 			snap[k] = d
 		snap.tip = (sk.global_transform * sk.get_bone_global_pose(chain[3])).origin
 		snap.sp1 = (sk.global_transform * sk.get_bone_global_pose(spine)).origin
@@ -6184,7 +6189,8 @@ func _lager_tests() -> void:
 	var sp := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(sp > 7.0 and vis.current_state == "Locomotion", "lager: runs (%.1f m/s)" % sp)
 	_check(behind > 0.1 and behind < 1.0, "lager: running, her hair stays behind her back (%.2f m behind the spine)" % behind)
-	_check(arm_jump[0] < 25.0, "lager: running, her armed arms move smoothly (at most %.1f deg a frame; her own run clips glitched up to 120)" % arm_jump[0])
+	var arm_mean: float = arm_jump[1] / maxf(arm_jump[2], 1.0)
+	_check(arm_mean < 4.0 and arm_jump[0] < 60.0, "lager: running, her armed arms move smoothly (%.1f deg a frame on average, at most %.1f - a lock-on snap; her own run clips glitched ~10 on average, up to 120)" % [arm_mean, arm_jump[0]])
 	# Stops: the hair swings on (springs), unlike the head it hangs from.
 	Input.action_release("move_forward")
 	var moved := 0.0
@@ -6228,6 +6234,16 @@ func _lager_tests() -> void:
 	_check(p.is_on_floor(), "lager: lands")
 	main.queue_free()
 	await _ticks(5)
+
+
+## After a DEPLOY: until any warm-up left from the title has finished under
+## the black cover (the game held still meanwhile). Frames waited.
+func _wait_warm_up() -> int:
+	var n := 0
+	while (paused or Vfx.warming > 0) and n < 3000:
+		await process_frame
+		n += 1
+	return n
 
 
 ## [tilt (deg) from level, lowest point (world y)] of one boot's sole as drawn.
@@ -6400,6 +6416,11 @@ func _front_end_tests() -> void:
 	_check(fe.screen == FrontEnd.Screen.LEVEL and fe.level_id == "test", "level select: and NEXT comes back to it")
 	await process_frame
 	await process_frame
+	# The effects' warm-up waits on the menus past the title (a phone lost
+	# its graphics building it under the character select).
+	var pr_before := Vfx.progress
+	await _ticks(5)
+	_check(Vfx.hold and (Vfx.warming == 0 or is_equal_approx(Vfx.progress, pr_before)), "menus: the effects' warm-up waits past the title (%s)" % ("held" if Vfx.warming > 0 else "already done"))
 	# Tap DEPLOY (the test area: the level behind the menu).
 	var dep: Rect2 = fe._buttons["deploy"]
 	for pressed in [true, false]:
@@ -6410,6 +6431,9 @@ func _front_end_tests() -> void:
 		Input.parse_input_event(ev)
 		await process_frame
 		await process_frame
+	var covered := Vfx.warming == 0 or (LevelTransfer._fade != null and paused)
+	var waited := await _wait_warm_up()
+	_check(covered, "deploy: the rest of the warm-up finishes under the black cover, held still (%d frames)" % waited)
 	var p: PlayerController = main.players.get(1)
 	_check(p != null and p.character == roster.characters[0] and not paused and not LevelTransfer.pending, "front end: DEPLOY spawns the Grinch and starts the match (in the level behind the menu)")
 	# Another level picked: it loads with the picked character, nothing

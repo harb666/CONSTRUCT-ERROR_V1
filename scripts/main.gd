@@ -83,6 +83,7 @@ func _ready() -> void:
 func _warm_up_level() -> void:
 	await get_tree().process_frame
 	DebugHud.note("arrived %s" % scene_file_path.get_file().get_basename())
+	DebugHud.where = "preparing level"
 	# The whole level is looked over (all its shaders made) before the black
 	# cover lifts; held still meanwhile (not online: the host runs the world).
 	_holding = not Net.is_online() and not get_tree().paused
@@ -100,18 +101,30 @@ func _warm_up_level() -> void:
 	if _holding:
 		_holding = false
 		get_tree().paused = false
+	DebugHud.where = "play"
 	LevelTransfer.fade_in(get_tree())
 	if StressTest.fx_soak():
 		print("FXSOAK arrived")
 
 
 func _finish_warm_up_covered() -> void:
+	Vfx.hold = false
+	DebugHud.note("finishing warm-up under cover")
 	LevelTransfer.cover(get_tree())
+	# Held still meanwhile (the warm-up waits on the menus past the title, so
+	# most of it can be left): not online - the host runs the world.
+	var held := not Net.is_online() and not get_tree().paused
+	if held:
+		_holding = true
+		get_tree().paused = true
 	_preparing += 1
 	_show_preparing()
 	while is_inside_tree() and Vfx.warming > 0:
 		await get_tree().process_frame
 	_preparing -= 1
+	if held and is_inside_tree():
+		_holding = false
+		get_tree().paused = false
 	if is_inside_tree():
 		LevelTransfer.fade_in(get_tree())
 
@@ -158,6 +171,7 @@ func _net_ready(local: PlayerController) -> void:
 ## it behind the menus, so the phone prepares its graphics meanwhile).
 ## DEPLOY spawns the local player as the picked character and un-pauses.
 func open_front_end() -> void:
+	DebugHud.where = "title"
 	get_tree().paused = true
 	touch_controls.visible = false
 	debug_hud.visible = false
@@ -206,6 +220,8 @@ func _on_deployed(character: CharacterDefinition) -> void:
 		LevelTransfer.start_as(character)
 		Net.go_to_level(get_tree(), level)
 		return
+	DebugHud.where = "play"
+	DebugHud.note("deploy " + String(character.id))
 	# The title's warm-up not done yet: it finishes behind a black cover
 	# (its shapes and half-made shaders would show in play).
 	if Vfx.warming > 0:

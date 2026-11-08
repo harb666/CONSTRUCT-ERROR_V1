@@ -664,6 +664,19 @@
   (`LevelTransfer.cover_text`, main `_show_preparing`), then fades in. A
   DEPLOY on the title's own level before its warm-up is done finishes it
   under a short black cover too (main `_finish_warm_up_covered`).
+  Menus (owner: "WebGL context lost" on the character select, on two
+  phones): the title's warm-up (~370 of the ~555 shader programs built
+  there) only goes on while the title shows - held on the character /
+  level select (`Vfx.hold`, set by FrontEnd), whose 3D preview and glitch
+  it overlapped on a phone; what's left finishes at DEPLOY under the black
+  "PREPARING" cover, the game held still (offline).
+  Crash report on the title (owner can't reach play when the menus crash):
+  the last session's report is drawn at the top of the title in amber
+  (`FrontEnd._draw_title`, `DebugHud._last_session`); it now names the
+  screen (`DebugHud.where`: title / character select / level select /
+  preparing level / play), the shader programs built (counted by the page,
+  `window.__cePrograms`, `export_presets.cfg` head_include) and menu
+  events (screen changes, previews, warm-up start / done, deploy).
 - Loading screen start-up watch (owner: "won't load past this screen", a
   full bar): after the download the game sets itself up in one go - the
   page is frozen ~15 s on a PC, longer on a phone - so the moment the bar

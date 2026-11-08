@@ -113,6 +113,7 @@ var skip_title := false:
 ## of graphics memory the levels don't use; made again if the menus reopen).
 func _exit_tree() -> void:
 	WireMesh._cache.clear()
+	Vfx.hold = false
 
 
 func _ready() -> void:
@@ -161,6 +162,8 @@ func _show_emblem(ec: Vector2, er: float, a: float) -> void:
 
 
 func _process(delta: float) -> void:
+	# The effects' warm-up only goes on behind the title (Vfx.hold).
+	Vfx.hold = screen == Screen.SELECT or screen == Screen.LEVEL
 	delta = minf(delta, 0.1)
 	_t += delta
 	_screen_t += delta
@@ -266,6 +269,8 @@ func _hit(pos: Vector2) -> String:
 ## Presses a button by id ("start", "deploy", "char:<id>").
 func _activate(id: String) -> void:
 	if id == "start" and screen == Screen.TITLE:
+		DebugHud.where = "character select"
+		DebugHud.note("menu: character select")
 		screen = Screen.SELECT
 		_screen_t = 0.0
 		_make_preview()
@@ -276,9 +281,12 @@ func _activate(id: String) -> void:
 	elif id.begins_with("pad:") and pad_open:
 		_pad_key(id.substr(4))
 	elif id == "next" and screen == Screen.SELECT and selected:
+		DebugHud.where = "level select"
+		DebugHud.note("menu: level select")
 		screen = Screen.LEVEL
 		_screen_t = 0.0
 	elif id == "back" and screen == Screen.LEVEL:
+		DebugHud.where = "character select"
 		screen = Screen.SELECT
 		_screen_t = 0.0
 	elif id.begins_with("level:") and screen == Screen.LEVEL:
@@ -429,6 +437,7 @@ func _make_preview() -> void:
 	if selected == null or selected == _preview_def or selected.preview_model_path == "":
 		return
 	_preview_def = selected
+	DebugHud.note("preview " + String(selected.id))
 	if _preview_vp == null:
 		_preview_vp = SubViewport.new()
 		_preview_vp.own_world_3d = true
@@ -664,6 +673,28 @@ func _draw_title(a: float) -> void:
 	_buttons["start"] = btn
 	if _build != "":
 		HudStyle.text(self, lf, Vector2(size.x - _margin(), size.y - 14), "build " + _build, 15, Color(HudStyle.TEXT, 0.45 * a), 1.0)
+	# The last session's crash report (a crash on the menus never reached
+	# play, where the debug line shows it): at the top, for a screenshot.
+	if DebugHud._last_session != "":
+		var lines := _wrap(lf, DebugHud._last_session, 14, size.x - 2.0 * _margin())
+		for i in mini(lines.size(), 7):
+			HudStyle.text(self, lf, Vector2(_margin(), 22.0 + i * 17.0), lines[i], 14, Color(1.0, 0.78, 0.35, 0.95 * a))
+
+
+## `text` broken into lines no wider than `width` at `font_size`.
+static func _wrap(font: Font, text: String, font_size: int, width: float) -> PackedStringArray:
+	var out := PackedStringArray()
+	var line := ""
+	for w in text.split(" "):
+		var next := w if line == "" else line + " " + w
+		if line != "" and font.get_string_size(next, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width:
+			out.append(line)
+			line = w
+		else:
+			line = next
+	if line != "":
+		out.append(line)
+	return out
 
 
 func _draw_select(a: float) -> void:

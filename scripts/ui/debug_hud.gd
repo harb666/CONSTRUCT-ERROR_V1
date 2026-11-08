@@ -26,6 +26,8 @@ var _rec_t := 0.0
 static var _session_t := 0.0
 static var _read_last := false
 static var _last_session := ""
+## Which screen the player is on (the menus set it; "play" once deployed).
+static var where := "title"
 static var _last_session_t := 0.0
 ## Web only, first minute: when the game was ready and when its sounds could
 ## first play (seconds since the page opened), to check start-up audio.
@@ -81,8 +83,8 @@ func _ready() -> void:
 ## A recorded session in words (the crash / context-loss report).
 static func describe_session(headline: String, d: Dictionary) -> String:
 	var t := float(d.get("t", 0))
-	var s := "%s after %dm%02ds: level %s, fps %d, robots %d, debris %d, nodes %d, pick-ups %s, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
-		headline, int(t) / 60, int(t) % 60, str(d.get("level", "?")), int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
+	var s := "%s after %dm%02ds: on %s, shaders built %s, level %s, fps %d, robots %d, debris %d, nodes %d, pick-ups %s, game memory %s MB (start %s, peak %s), graphics %s MB (start %s, peak %s), drawn %s, character %s, weapon %s, build %s" % [
+		headline, int(t) / 60, int(t) % 60, str(d.get("where", "?")), str(int(d.progs)) if d.has("progs") else "?", str(d.get("level", "?")), int(d.get("fps", 0)), int(d.get("robots", 0)), int(d.get("debris", 0)),
 		int(d.get("nodes", 0)), str(d.get("pickups", "?")), str(d.get("heap", "?")), str(d.get("heap0", "?")), str(d.get("hpeak", "?")), str(d.get("vmem", "?")), str(d.get("vmem0", "?")), str(d.get("vpeak", "?")), str(d.get("res", "?")), str(d.get("char", "?")), str(d.get("weapon", "?")), str(d.get("build", "?"))]
 	if str(d.get("events", "")) != "":
 		s += ", last events: " + str(d.events)
@@ -176,8 +178,14 @@ func _record(delta: float) -> void:
 		"mem": snappedf(OS.get_static_memory_usage() / 1048576.0, 1.0),
 		"vmem": snappedf(_vmem(), 1.0), "vmem0": snappedf(_vmem0, 1.0), "vpeak": snappedf(_vpeak, 1.0),
 		"heap": snappedf(_heap(), 1.0), "heap0": snappedf(_heap0, 1.0), "hpeak": snappedf(_hpeak, 1.0),
-		"res": _res()}
+		"res": _res(), "where": where, "progs": int(_programs())}
 	JavaScriptBridge.eval("try { localStorage.setItem('ce_session', %s); } catch (e) {}" % JSON.stringify(JSON.stringify(d)))
+
+
+## Shader programs the page has built (counted by the page, web only).
+func _programs() -> float:
+	var v = JavaScriptBridge.eval("window.__cePrograms || 0")
+	return float(v) if v != null else -1.0
 
 
 ## Drawing size (device pixels) and pixel ratio used / the screen's.
