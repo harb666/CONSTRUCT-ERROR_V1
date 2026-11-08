@@ -41,6 +41,10 @@ static var _vpeak := 0.0
 
 
 func _ready() -> void:
+	# Keeps recording the session while the game is paused (the menus pause
+	# it): a crash on the character select reported the last numbers from
+	# play, "on ?" (owner's screenshot).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Small, top-centre between the player panel and the weapon panel.
 	if label_settings:
 		label_settings = label_settings.duplicate()

@@ -488,6 +488,7 @@ func _make_preview() -> void:
 	_preview_pivot = Node3D.new()
 	_preview_vp.add_child(_preview_pivot)
 	var model: Node3D = (load(selected.preview_model_path) as PackedScene).instantiate()
+	DebugHud.note("preview model loaded")
 	model.rotation_degrees.y = selected.preview_yaw_degrees
 	_preview_pivot.add_child(model)
 	# Its wire mesh, for the glitch (in the character's colour, as neon).

@@ -676,7 +676,10 @@
   screen (`DebugHud.where`: title / character select / level select /
   preparing level / play), the shader programs built (counted by the page,
   `window.__cePrograms`, `export_presets.cfg` head_include) and menu
-  events (screen changes, previews, warm-up start / done, deploy).
+  events (screen changes, previews, warm-up start / done, deploy). The
+  recorder runs while the menus pause the game (`DebugHud` process mode
+  always): it used to stop there, so a menu crash reported the last
+  numbers from play ("on ?").
 - Loading screen start-up watch (owner: "won't load past this screen", a
   full bar): after the download the game sets itself up in one go - the
   page is frozen ~15 s on a PC, longer on a phone - so the moment the bar
