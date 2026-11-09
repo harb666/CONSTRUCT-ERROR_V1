@@ -29,7 +29,14 @@ signal core_protected
 signal core_hit(amount: float)
 signal died
 
-const MODEL := preload("res://assets/enemies/robot_boss/robot_boss.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_MODEL: PackedScene
+static var MODEL: PackedScene:
+	get:
+		if _lazy_MODEL == null:
+			_lazy_MODEL = load("res://assets/enemies/robot_boss/robot_boss.glb") as PackedScene
+		return _lazy_MODEL
 const LOCOMOTION := [&"Idle", &"Walking", &"Running", &"Walk_Fight_Back", &"Walk_Turn_Left", &"Walk_Turn_Right"]
 const CHEST_CLIPS := [&"Chest_Open", &"Chest_Close", &"Chest_Open_Hold", &"Chest_Closed"]
 const GUN_CLIP := &"Chaingun_Fire"

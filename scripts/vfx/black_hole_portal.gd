@@ -15,7 +15,14 @@ extends MeshInstance3D
 ##   collapsing size frame by frame.
 
 const SHADER := preload("res://scripts/vfx/black_hole_portal.gdshader")
-const ATLAS := preload("res://assets/vfx/black_hole_portal/portal_atlas.png")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_ATLAS: Texture2D
+static var ATLAS: Texture2D:
+	get:
+		if _lazy_ATLAS == null:
+			_lazy_ATLAS = load("res://assets/vfx/black_hole_portal/portal_atlas.png") as Texture2D
+		return _lazy_ATLAS
 const RAMP := preload("res://assets/vfx/black_hole_portal/portal_ramp.png")
 ## Atlas layout (tools/bake_portal.py, portal_cells.json).
 const LOOP_CELLS := 44

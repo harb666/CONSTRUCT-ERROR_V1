@@ -156,7 +156,8 @@
   (owner asked): splash doesn't kill, the boss takes 0.4 per rocket.
 
 - Front end (owner asked): TAP TO START title (the tap turns sound on; the
-  arena prepares behind it, meant to end the iPhone start-up silence) ->
+  light menu scene behind it, see Light menus; meant to end the iPhone
+  start-up silence) ->
   character select (roster: Grinch and Harbinger; cards use the owner's
   banner art in the cyan theme, HUD portrait = the face from that art;
   4-player co-op squad shown with open slots until online play exists) ->
@@ -168,8 +169,8 @@
   the host picks the level) -> LEVEL SELECT: LEVEL 1 Skyforge Arena,
   LEVEL 2 Toxic Works, TEST AREA battle arena (`FrontEnd.LEVELS`), each a
   card with a preview picture (`assets/ui/levels/`, rendered from the game
-  by `tools/render_level_previews.gd`), BACK and DEPLOY. Starts on the level
-  behind the menu (the test area); picking another fades out and loads it
+  by `tools/render_level_previews.gd`), BACK and DEPLOY. Starts on the test
+  area (picked first); DEPLOY fades out and loads the picked level
   with the picked character (`LevelTransfer.start_as`, `Net.go_to_level`:
   a hosting phone takes the room; joined phones still on the menus get the
   character select there). Level 2 starts on the lift, as from Skyforge;
@@ -397,12 +398,28 @@
   across to the right arm; heavier lock-in (bigger burst, arm dips under
   the weight); HUD HEAVY plate.
 
-- Test map = start level (owner asked: "load up the test map and put one
-  of each enemy down"): the game starts in the battle arena
+- Test map (owner asked: "load up the test map and put one of each enemy
+  down"): TEST AREA on the level select = the battle arena
   (`battle_arena.tscn`, every weapon pad; no music - owner asked, silence
   to hear the sounds while testing) with one boss,
   one Neon Sentinel, one grunt and one skirmisher (`BattleSpawner`
-  `total = 4`, `sentinels = 1`). `?level=works` / `skyforge` for the levels.
+  `total = 4`, `sentinels = 1`). `?level=works` / `skyforge` / `battle`.
+- Light menus (owner asked: "load only what you're playing", no lower
+  graphics; it was the test arena behind the title and the phones' WebGL
+  context was lost on the character select): the game starts in
+  `scenes/menu.tscn` (main.gd `menu_only`): a dark neon grid floor
+  (`menu_grid.gdshader`) with slowly turning wire cubes (`MenuBackdrop`),
+  no level, robots or pads; the menus' glitch draws over it as before. The
+  effects warm-up isn't done there: it runs under the PREPARING cover after
+  DEPLOY. A joined co-op phone on the menus shows WAITING FOR HOST (the
+  host picks the level). Keep the menus light: robot / weapon / effect
+  models and level music are loaded the first time they're used (lazy
+  static getters - `RobotEnemy.MODEL`, `RobotBoss.MODEL`, ...;
+  `WeaponDefinition.weapon_scene_path`), not `preload`ed in scripts the
+  menus compile. `tests/menu_memory_check.gd` (run by the smoke test)
+  fails if a heavy model is loaded on the title. Measured in the browser
+  (title / character select): textures 102 / 110 -> 41 / 49 MB, buffers
+  82 / 98 -> 26 / 41 MB, shader programs 555 / 588 -> 39 / ~100.
 - Neon Sentinel (owner's model, owner asked; `RobotSentinel`, a
   `RobotEnemy`, `robot_sentinel.tscn`; model `assets/enemies/sentinel/`
   built from the untouched upload in `source/` by `tools/build_sentinel.py`:

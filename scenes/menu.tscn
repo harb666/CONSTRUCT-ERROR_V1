@@ -1,0 +1,81 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/touch_controls.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/world/menu_backdrop.gd" id="backdrop"]
+[ext_resource type="Shader" path="res://scripts/world/menu_grid.gdshader" id="grid"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.01, 0.025, 0.045, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.5, 0.7, 0.8, 1)
+ambient_light_energy = 0.6
+fog_enabled = true
+fog_light_color = Color(0.05, 0.16, 0.22, 1)
+fog_density = 0.02
+
+[sub_resource type="ShaderMaterial" id="grid_mat"]
+shader = ExtResource("grid")
+
+[sub_resource type="PlaneMesh" id="floor"]
+size = Vector2(160, 160)
+
+[sub_resource type="LabelSettings" id="hud_text"]
+font_size = 18
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.7)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+front_end_mode = 1
+menu_only = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+mesh = SubResource("floor")
+surface_material_override/0 = SubResource("grid_mat")
+cast_shadow = 0
+
+[node name="Backdrop" type="Node3D" parent="."]
+script = ExtResource("backdrop")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TargetMarker" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8")
+
+[node name="TouchControls" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="DebugHud" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 16.0
+offset_right = 700.0
+offset_bottom = 70.0
+label_settings = SubResource("hud_text")
+script = ExtResource("4")

@@ -27,8 +27,22 @@ extends RobotEnemy
 ## Jumping_Punch (the dive: a leaping lunge whose travel the body follows),
 ## Fall3 (killed in the air) and five ground deaths.
 
-const SKIRMISHER_MODEL := preload("res://assets/enemies/robot_skirmisher/robot_skirmisher.glb")
-const SKIRMISHER_FAR := preload("res://assets/enemies/robot_skirmisher/robot_skirmisher_far.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_SKIRMISHER_MODEL: PackedScene
+static var SKIRMISHER_MODEL: PackedScene:
+	get:
+		if _lazy_SKIRMISHER_MODEL == null:
+			_lazy_SKIRMISHER_MODEL = load("res://assets/enemies/robot_skirmisher/robot_skirmisher.glb") as PackedScene
+		return _lazy_SKIRMISHER_MODEL
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_SKIRMISHER_FAR: PackedScene
+static var SKIRMISHER_FAR: PackedScene:
+	get:
+		if _lazy_SKIRMISHER_FAR == null:
+			_lazy_SKIRMISHER_FAR = load("res://assets/enemies/robot_skirmisher/robot_skirmisher_far.glb") as PackedScene
+		return _lazy_SKIRMISHER_FAR
 const SKIRMISHER_SECTIONS := preload("res://resources/enemies/robot_skirmisher_sections.tres")
 ## Cannon muzzles (the open barrel ends of the forearm cannons), hand space.
 const SKIRMISHER_MUZZLES := {"Left": Vector3(0.0554, 0.3019, 0.0656), "Right": Vector3(0.0631, 0.4998, 0.0862)}

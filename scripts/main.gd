@@ -23,6 +23,10 @@ static var no_deaths := false
 ## Title "TAP TO START" + character select before the match: 1 = always,
 ## 0 = never, -1 = only when this level is the running game (not in tests).
 @export var front_end_mode := -1
+## The menus' own light scene (scenes/menu.tscn, the game's start): no
+## players, no warm-up (each level prepares its own under the black cover);
+## DEPLOY always loads the picked level.
+@export var menu_only := false
 
 ## The open front end (title / character select), if any.
 var front_end: FrontEnd
@@ -180,8 +184,10 @@ func open_front_end() -> void:
 	_menu_camera.fov = 60.0
 	add_child(_menu_camera)
 	_menu_camera.make_current()
-	# Prepare the cartoon effects' shaders behind the title screen.
-	Vfx.warm_up(_menu_camera, 1.5, Vfx.has_lamps(self))
+	# Prepare the cartoon effects' shaders behind the title screen (not on the
+	# menus' own scene: each level does it under its black cover).
+	if not menu_only:
+		Vfx.warm_up(_menu_camera, 1.5, Vfx.has_lamps(self))
 	var layer := CanvasLayer.new()
 	layer.name = "FrontEndLayer"
 	layer.layer = 20
@@ -190,6 +196,7 @@ func open_front_end() -> void:
 	front_end = FrontEnd.new()
 	front_end.name = "FrontEnd"
 	front_end.orbit_camera = _menu_camera
+	front_end.menu_only = menu_only
 	front_end.current_scene_path = scene_file_path
 	var c := Vector3.ZERO
 	for sp: Node3D in spawn_points.get_children():

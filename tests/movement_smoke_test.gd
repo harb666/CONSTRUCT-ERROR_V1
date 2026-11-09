@@ -562,6 +562,7 @@ func _run() -> void:
 	await _front_end_tests()
 	await _harbinger_tests()
 	await _lager_tests()
+	await _menu_scene_tests()
 	await _vfx_tests()
 	print("FAILURES: %d" % _failures)
 	quit(1 if _failures else 0)
@@ -4730,7 +4731,8 @@ func _battle_arena_tests() -> void:
 	var main: Node = load("res://scenes/battle_arena.tscn").instantiate()
 	root.add_child(main)
 	await _ticks(30)
-	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/battle_arena.tscn", "battle: the test map is the game's start level (owner asked)")
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/menu.tscn" and (load("res://scenes/menu.tscn") as PackedScene).instantiate().get("menu_only"),
+		"start: the game starts on the menus' own light scene (owner asked; was the test map)")
 	var t := main.get_node("Targets")
 	var bosses := 0
 	var grunts := 0
@@ -6233,6 +6235,49 @@ func _lager_tests() -> void:
 	await _ticks(90)
 	_check(p.is_on_floor(), "lager: lands")
 	main.queue_free()
+	await _ticks(5)
+
+
+## The menus' own light scene (the game's start; owner asked: the test arena
+## behind the menus held every weapon, robot and the boss in memory):
+## nothing heavy in it, the level select starts on the test area, DEPLOY
+## loads it with the picked character.
+func _menu_scene_tests() -> void:
+	# A fresh game process: which heavy models the menus load.
+	if OS.has_feature("editor") or FileAccess.file_exists("res://project.godot"):
+		var out := []
+		OS.execute(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://tests/menu_memory_check.gd"], out, true)
+		var line := ""
+		for o in "\n".join(out).split("\n"):
+			if o.begins_with("MENU HEAVY LOADED: "):
+				line = o.trim_prefix("MENU HEAVY LOADED: ").strip_edges()
+		_check(line == "none", "menus: no robot / boss / weapon models or level music loaded (%s)" % (line if line != "" else "no answer"))
+	var main: Node = load("res://scenes/menu.tscn").instantiate()
+	root.add_child(main)
+	await _ticks(10)
+	var fe: FrontEnd = main.front_end
+	var heavy := main.find_children("*", "RobotEnemy", true, false).size() + main.find_children("*", "RobotBoss", true, false).size() + main.find_children("*", "WeaponSpawnPad", true, false).size()
+	_check(fe != null and fe.menu_only and main.players.is_empty() and heavy == 0 and Vfx.warming == 0,
+		"menus: their own scene - no players, robots or weapon pads, no warm-up (%d)" % heavy)
+	fe.press_start()
+	await process_frame
+	fe.press_next()
+	await process_frame
+	_check(fe.level_id == "test" and fe.level_path() == "res://scenes/battle_arena.tscn", "menus: the level select starts on the test area (%s)" % fe.level_id)
+	fe.press_deploy()
+	var n := 0
+	while n < 900 and not (current_scene and current_scene.scene_file_path == "res://scenes/battle_arena.tscn" and not current_scene.players.is_empty()):
+		await process_frame
+		n += 1
+	var arena := current_scene
+	var p: PlayerController = arena.players.get(1) if arena and "players" in arena else null
+	_check(arena != null and arena.scene_file_path == "res://scenes/battle_arena.tscn" and p != null and p.character != null and p.character.id == &"grinch",
+		"menus: DEPLOY loads the test area with the picked character (%d frames)" % n)
+	await _wait_warm_up()
+	if is_instance_valid(main):
+		main.queue_free()
+	if arena and arena != main:
+		arena.queue_free()
 	await _ticks(5)
 
 

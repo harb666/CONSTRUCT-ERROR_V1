@@ -58,6 +58,14 @@ var current_scene_path := "":
 		for l in LEVELS:
 			if l["scene"] == v:
 				level_id = l["id"]
+		# The menus' own scene isn't a level: the level select starts on the
+		# test area, as it did when that was behind the menus.
+		if level_id == "" and menu_only:
+			level_id = "test"
+## On the menus' own light scene (main.menu_only): there's no level here, so
+## a joined phone waits for the host to pick one (it's then taken there and
+## gets its DEPLOY), and DEPLOY always loads the picked level.
+var menu_only := false
 var level_id := ""
 var _level_images := {}
 var _was_level := false
@@ -307,7 +315,7 @@ func _activate(id: String) -> void:
 		Net.instance.leave()
 	elif id == "share" and Net.instance and Net.is_online():
 		_share_link(Net.instance.room)
-	elif id == "deploy" and screen == Screen.SELECT and selected:
+	elif id == "deploy" and screen == Screen.SELECT and selected and not menu_only:
 		screen = Screen.OUT
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		deployed.emit(selected)
@@ -804,6 +812,14 @@ func _draw_select(a: float) -> void:
 	# level).
 	var pulse := 0.5 + 0.5 * sin(_t * 4.0)
 	var next := picks_level()
+	if not next and menu_only:
+		# A joined phone on the menus' own scene: the host picks the level.
+		HudStyle.panel(self, deploy, HudStyle.CYAN_DIM, HudStyle.FILL, 16.0, a)
+		HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 9), "WAITING FOR HOST", HudStyle.fit(tf, "WAITING FOR HOST", deploy.size.x - 24.0, 22), Color(HudStyle.TEXT, (0.6 + 0.3 * pulse) * a), 0.5, 2)
+		HudStyle.text(self, lf, Vector2(deploy.get_center().x, deploy.position.y - 10), "THE HOST PICKS THE LEVEL", 16, Color(HudStyle.CYAN, a), 0.5, 2)
+		if pad_open:
+			_draw_pad(a)
+		return
 	HudStyle.panel(self, deploy, HudStyle.CYAN, HudStyle.FILL.lerp(Color(HudStyle.CYAN, 0.5), 0.3 + pulse * 0.3), 16.0, a)
 	HudStyle.brackets(self, deploy, Color(HudStyle.CYAN, a), 16.0, 5.0 + pulse * 3.0)
 	HudStyle.text(self, tf, deploy.get_center() + Vector2(0, 12), "NEXT" if next else "DEPLOY", 32, Color(HudStyle.TEXT, a), 0.5, 3)

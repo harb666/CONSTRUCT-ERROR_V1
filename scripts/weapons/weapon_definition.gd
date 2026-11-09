@@ -6,8 +6,17 @@ extends Resource
 
 @export var id: StringName
 @export var display_name := ""
-## Scene whose root extends Weapon.
-@export var weapon_scene: PackedScene
+## Scene whose root extends Weapon, as a path: loaded the first time it's
+## used (equipped, or shown on a pad) and then kept. A linked scene loaded
+## every weapon's model with the weapon list, from the title on (owner:
+## "WebGL context lost" on the character select).
+@export_file("*.tscn") var weapon_scene_path := ""
+var _weapon_scene: PackedScene
+var weapon_scene: PackedScene:
+	get:
+		if _weapon_scene == null and weapon_scene_path != "":
+			_weapon_scene = load(weapon_scene_path) as PackedScene
+		return _weapon_scene
 
 @export_group("Loadout")
 ## Picture for the weapon wheel (tools/render_weapon_icons.gd makes these).

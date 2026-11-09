@@ -11,7 +11,14 @@ extends RigidBody3D
 signal died(info: DamageInfo)
 signal hit(count: int)
 
-const MODEL := preload("res://assets/characters/robot/robot_enemy.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_MODEL: PackedScene
+static var MODEL: PackedScene:
+	get:
+		if _lazy_MODEL == null:
+			_lazy_MODEL = load("res://assets/characters/robot/robot_enemy.glb") as PackedScene
+		return _lazy_MODEL
 ## Seals the model's cut sections (its own interior caps made opaque, plus
 ## caps for the few cuts it lacks) so no part is see-through when broken.
 const CAPS := preload("res://assets/characters/robot/robot_caps.res")
@@ -386,7 +393,14 @@ func _whole_mesh_skips(_mat: Material) -> bool:
 # skin and materials on the same skeleton): 2 draw calls instead of ~28.
 
 ## Much simpler copy for when it's far away (only a few pixels tall).
-const FAR_MODEL := preload("res://assets/characters/robot/robot_enemy_far.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_FAR_MODEL: PackedScene
+static var FAR_MODEL: PackedScene:
+	get:
+		if _lazy_FAR_MODEL == null:
+			_lazy_FAR_MODEL = load("res://assets/characters/robot/robot_enemy_far.glb") as PackedScene
+		return _lazy_FAR_MODEL
 ## Per model (scene path): [whole mesh, whole skin, far mesh, far skin],
 ## built once and shared by every robot using that model.
 static var _mesh_cache := {}

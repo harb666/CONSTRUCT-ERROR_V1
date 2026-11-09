@@ -33,7 +33,14 @@ extends RobotEnemy
 ## when hit - and its eye (a plasma ball in the middle of the eye, swirling
 ## yellow gas round it) burns brighter as it gets worked up (`_express`).
 
-const SENTINEL_MODEL := preload("res://assets/enemies/sentinel/sentinel.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_SENTINEL_MODEL: PackedScene
+static var SENTINEL_MODEL: PackedScene:
+	get:
+		if _lazy_SENTINEL_MODEL == null:
+			_lazy_SENTINEL_MODEL = load("res://assets/enemies/sentinel/sentinel.glb") as PackedScene
+		return _lazy_SENTINEL_MODEL
 const GAS_SHADER := preload("res://scripts/vfx/sentinel_plasma_gas.gdshader")
 const CORE_SHADER := preload("res://scripts/vfx/sentinel_plasma_core.gdshader")
 const GLOW_SHADER := preload("res://scripts/vfx/sentinel_eye_glow.gdshader")

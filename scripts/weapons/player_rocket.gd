@@ -27,7 +27,14 @@ extends Node3D
 signal exploded(at: Vector3)
 
 const POOL_SIZE := 6
-const LAUNCHER_MODEL := preload("res://assets/weapons/rocket_launcher/rocket_launcher.glb")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_LAUNCHER_MODEL: PackedScene
+static var LAUNCHER_MODEL: PackedScene:
+	get:
+		if _lazy_LAUNCHER_MODEL == null:
+			_lazy_LAUNCHER_MODEL = load("res://assets/weapons/rocket_launcher/rocket_launcher.glb") as PackedScene
+		return _lazy_LAUNCHER_MODEL
 ## The launcher model's scale in its weapon scene, and where the warhead sits
 ## in the model (its base centre, mesh space; the tip points to -X there).
 const MODEL_SCALE := 0.47

@@ -9,7 +9,14 @@ extends RefCounted
 ## The owner's new main menu track (source/Construct_error_menu_music_2.mp3;
 ## owner asked: it replaces the first one, kept in source/).
 const MAIN_MENU := preload("res://assets/audio/music/main_menu_music_2.ogg")
-const LEVEL_1 := preload("res://assets/audio/music/level_1_music.ogg")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_LEVEL_1: AudioStream
+static var LEVEL_1: AudioStream:
+	get:
+		if _lazy_LEVEL_1 == null:
+			_lazy_LEVEL_1 = load("res://assets/audio/music/level_1_music.ogg") as AudioStream
+		return _lazy_LEVEL_1
 ## Title / character select.
 const MENU_DB := -9.0
 ## In game: louder than it was (owner asked; was -17) but still under the

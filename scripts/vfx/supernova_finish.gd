@@ -6,8 +6,22 @@ extends Node3D
 ## `duration` seconds, swelling to just past the blast's damage radius.
 ## Translucent (alpha-blended, no depth writes) so players can see through.
 
-const BAKED := preload("res://assets/vfx/supernova/supernova_finish_baked.scn")
-const PLASMA_TEX := preload("res://assets/vfx/supernova/supernova_finish_Turbulent_Plasma_512.png")
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_BAKED: PackedScene
+static var BAKED: PackedScene:
+	get:
+		if _lazy_BAKED == null:
+			_lazy_BAKED = load("res://assets/vfx/supernova/supernova_finish_baked.scn") as PackedScene
+		return _lazy_BAKED
+## Loaded the first time it is used, not with this script: other scripts
+## name this class, so a preload here put it in memory from the title on.
+static var _lazy_PLASMA_TEX: Texture2D
+static var PLASMA_TEX: Texture2D:
+	get:
+		if _lazy_PLASMA_TEX == null:
+			_lazy_PLASMA_TEX = load("res://assets/vfx/supernova/supernova_finish_Turbulent_Plasma_512.png") as Texture2D
+		return _lazy_PLASMA_TEX
 
 @export var duration := 0.8
 ## Share of the duration spent building up (the rest fades out).
