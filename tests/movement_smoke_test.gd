@@ -3216,7 +3216,7 @@ func _weapon_switch_tests(main: Node) -> void:
 	for i in 10:
 		await process_frame
 	# (The wheel eases closed in real time: give slow / busy runners time.)
-	await _wall_wait(func() -> bool: return Engine.time_scale == 1.0, 3.0)
+	await _wall_wait(func() -> bool: return Engine.time_scale == 1.0, 6.0)
 	_check(Engine.time_scale == 1.0, "game speed back to normal")
 
 
@@ -6244,7 +6244,9 @@ func _lager_tests() -> void:
 ## loads it with the picked character.
 func _menu_scene_tests() -> void:
 	# A fresh game process: which heavy models the menus load.
-	if OS.has_feature("editor") or FileAccess.file_exists("res://project.godot"):
+	# (Only on the project: Godot hides --main-pack from a script, so the
+	# exported-package run can't hand its package on; same code either way.)
+	if FileAccess.file_exists("res://project.godot"):
 		var out := []
 		OS.execute(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"), "-s", "res://tests/menu_memory_check.gd"], out, true)
 		var line := ""
