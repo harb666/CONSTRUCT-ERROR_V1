@@ -271,7 +271,7 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
-	items.append_array(_library_items(lit))
+	items.append_array(_library_items(lit, level.scene_file_path.get_file().get_basename()))
 	# A grid in view (anything off screen isn't drawn, so nothing is made),
 	# all hidden at first: they're shown a few a frame (below).
 	for i in items.size():
@@ -440,7 +440,9 @@ static var _library: WarmUpLibrary
 static var _white: ImageTexture
 
 
-static func _library_items(lit := false) -> Array[Node3D]:
+## Only those used in `level` (scene name; "" = all), each only in the
+## forms it's drawn there (one object / a batch).
+static func _library_items(lit := false, level := "") -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	if _library == null and ResourceLoader.exists(LIBRARY):
 		_library = load(LIBRARY) as WarmUpLibrary
@@ -455,14 +457,18 @@ static func _library_items(lit := false) -> Array[Node3D]:
 	batch.use_custom_data = true
 	batch.mesh = quad
 	batch.instance_count = 1
-	for m in _library.materials:
-		if m is ParticleProcessMaterial:
+	for i in _library.materials.size():
+		var m := _library.materials[i]
+		if m is ParticleProcessMaterial or not _library.used_in(i, level):
 			continue
-		var mi := MeshInstance3D.new()
-		mi.mesh = quad
-		mi.material_override = m
-		out.append(mi)
-		if not lit:
+		var how := _library.drawn_as(i)
+		# (Unlit, a batch draws with the one-object version.)
+		if "mesh" in how or not lit:
+			var mi := MeshInstance3D.new()
+			mi.mesh = quad
+			mi.material_override = m
+			out.append(mi)
+		if not lit or not "multi" in how:
 			continue
 		var mm := MultiMeshInstance3D.new()
 		mm.multimesh = batch
@@ -473,6 +479,8 @@ static func _library_items(lit := false) -> Array[Node3D]:
 		img.fill(Color.WHITE)
 		_white = ImageTexture.create_from_image(img)
 	for d: Dictionary in _library.sprites:
+		if level != "" and d.has("levels") and not level in str(d["levels"]).split(",", false):
+			continue
 		var sp: GeometryInstance3D
 		if d.get("label", false):
 			var l := Label3D.new()
