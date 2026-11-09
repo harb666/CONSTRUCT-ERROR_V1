@@ -18,8 +18,10 @@ extends Resource
 ## both differ in their shaders): a level warms up only its own (owner's
 ## iPhone lost its graphics preparing the Toxic Works - every level's
 ## effects in both forms there, ~250 shaders it never uses).
-@export var levels: PackedStringArray = []
-@export var drawn: PackedStringArray = []
+## (Plain arrays: a script's PackedStringArray came back empty from the
+## exported game's binary copy - `keys` / `seen` do, unused at run time.)
+@export var levels: Array = []
+@export var drawn: Array = []
 ## Sprite3D / Label3D set-ups (their materials are made inside the engine):
 ## {"label": bool, "billboard", "transparent", "shaded", "double_sided",
 ## "no_depth_test", "fixed_size", "alpha_cut", "texture_filter",
@@ -66,9 +68,9 @@ static func sprite_key(s: GeometryInstance3D) -> Dictionary:
 func used_in(i: int, level: String) -> bool:
 	if levels.size() != materials.size() or level == "":
 		return true
-	return level in levels[i].split(",", false)
+	return level in str(levels[i]).split(",", false)
 
 
 ## How material `i` was drawn: "mesh", "multi" or "mesh,multi".
 func drawn_as(i: int) -> String:
-	return drawn[i] if drawn.size() == materials.size() and drawn[i] != "" else "mesh,multi"
+	return str(drawn[i]) if drawn.size() == materials.size() and str(drawn[i]) != "" else "mesh,multi"
