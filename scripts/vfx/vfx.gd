@@ -271,7 +271,11 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
-	items.append_array(_library_items(lit, level.scene_file_path.get_file().get_basename()))
+	var level_id := level.scene_file_path.get_file().get_basename()
+	# Effects this level never draws (by the library's records - e.g. the
+	# toxic barrels' blast outside Skyforge) aren't prepared here.
+	items = items.filter(func(it: Node3D) -> bool: return _used_here(it, level_id))
+	items.append_array(_library_items(lit, level_id))
 	# A grid in view (anything off screen isn't drawn, so nothing is made),
 	# all hidden at first: they're shown a few a frame (below).
 	for i in items.size():
@@ -284,6 +288,8 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	for i in WARM_ROBOTS.size():
 		if not await _wait_while_held(root):
 			return
+		if over_budget():
+			break
 		_warm_up_robot(root, i)
 		await tree.process_frame
 		if not _follow(root):
@@ -332,6 +338,11 @@ static func _show_a_few(root: Node3D, items: Array[Node3D], from := 0.0, to := 1
 	for i in range(0, items.size(), WARM_PER_FRAME):
 		if not await _wait_while_held(root):
 			return
+		if over_budget():
+			if not _budget_noted:
+				_budget_noted = true
+				DebugHud.note("warm-up stopped: %d shaders (phone budget)" % shaders_built())
+			break
 		progress = lerpf(from, to, float(i) / maxf(items.size(), 1.0))
 		for k in range(i, mini(i + WARM_PER_FRAME, items.size())):
 			if is_instance_valid(items[k]):
@@ -340,6 +351,62 @@ static func _show_a_few(root: Node3D, items: Array[Node3D], from := 0.0, to := 1
 		if not _follow(root):
 			return
 	await tree.process_frame
+
+
+## Shader programs a phone may have made before the warm-up stops adding
+## more (the rest are made the first time they're drawn in play - a short
+## stutter then, not a lost game): the owner's iPhone lost its graphics
+## (WebGL context lost) at 639 preparing the Toxic Works. `?shaderbudget=`
+## sets it on any browser (testing).
+const PHONE_SHADER_BUDGET := 540
+static var _budget_noted := false
+
+
+## Programs the page has made so far (counted by the page; -1 = unknown).
+static func shaders_built() -> int:
+	if not OS.has_feature("web"):
+		return -1
+	var v = JavaScriptBridge.eval("window.__cePrograms || 0")
+	return int(v) if v != null else -1
+
+
+static func shader_budget() -> int:
+	var forced := StressTest._param("shaderbudget")
+	if forced != "":
+		return forced.to_int()
+	if OS.has_feature("web_ios") or OS.has_feature("web_android"):
+		return PHONE_SHADER_BUDGET
+	return 0
+
+
+static func over_budget() -> bool:
+	var b := shader_budget()
+	if b <= 0:
+		return false
+	var n := shaders_built()
+	return n >= 0 and n >= b
+
+
+## Whether warm-up item `it` is used in `level`: its material's kind is in
+## the library and recorded there (kinds the library hasn't seen anywhere
+## are kept).
+static func _used_here(it: Node3D, level: String) -> bool:
+	if level == "" or not (it is GeometryInstance3D):
+		return true
+	if _library == null and ResourceLoader.exists(LIBRARY):
+		_library = load(LIBRARY) as WarmUpLibrary
+	var m := (it as GeometryInstance3D).material_override
+	if _library == null or m == null:
+		return true
+	if _library_index.is_empty():
+		# (Worked out from the materials: `keys` doesn't survive export.)
+		for j in _library.materials.size():
+			_library_index[WarmUpLibrary.key_of(_library.materials[j])] = j
+	var i: int = _library_index.get(WarmUpLibrary.key_of(m), -1)
+	return i < 0 or _library.used_in(i, level)
+
+
+static var _library_index := {}
 
 
 ## Held (`hold`): the menus past the title screen (character / level
