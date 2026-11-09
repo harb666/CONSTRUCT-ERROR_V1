@@ -711,6 +711,18 @@
   level select (`Vfx.hold`, set by FrontEnd), whose 3D preview and glitch
   it overlapped on a phone; what's left finishes at DEPLOY under the black
   "PREPARING" cover, the game held still (offline).
+  Per level (owner: "WebGL context lost" at PREPARING 50 % loading level 2
+  on an iPhone, 639 shaders built): the library records each kind's
+  levels and how it's drawn there (`WarmUpLibrary.levels` / `drawn`:
+  one object and / or a batch - plain Arrays, a PackedStringArray came
+  back empty from the exported copy), and a level warms only its own, in
+  those forms; the always-warmed effects a level never draws (by the same
+  records) are skipped too. The Works' warm-up: 762 -> 585 shaders built,
+  peak over the whole fxsoak 747 -> 604 (browser). Phones (web_ios /
+  web_android) stop warming at `Vfx.PHONE_SHADER_BUDGET` (600) shaders
+  built - the rest made in play (a stutter, not a lost game);
+  `?shaderbudget=` sets it in any browser. The library must be re-recorded
+  (`tools/collect_warm_up_materials.gd`, ~35 min) after adding effects.
   Crash report on the title (owner can't reach play when the menus crash):
   the last session's report is drawn at the top of the title in amber
   (`FrontEnd._draw_title`, `DebugHud._last_session`); it now names the

@@ -6405,6 +6405,19 @@ func _front_end_tests() -> void:
 				shown += 1
 	_check(lib_n >= 60 and wu != null and wu.get_child_count() > lib_n and shown <= Vfx.WARM_PER_FRAME * 3,
 		"front end: the play materials' library (%d kinds) is drawn behind the title, a few a frame (%d shown so far)" % [lib_n, shown])
+	# Each level warms only its own (owner's iPhone lost its graphics
+	# preparing the Toxic Works: every level's effects there, in both forms -
+	# ~250 shaders it never draws): the Works' lit warm-up has far fewer
+	# items than all the library twice.
+	var all_items := Vfx._library_items(true, "")
+	var works_items := Vfx._library_items(true, "toxic_works")
+	var works_kinds := 0
+	for i in lib_n:
+		works_kinds += 1 if Vfx._library.used_in(i, "toxic_works") else 0
+	_check(works_kinds > 40 and works_kinds < lib_n and works_items.size() < lib_n * 2 * 0.6 and works_items.size() < all_items.size(),
+		"warm-up: a level warms only the effects it uses, in the forms it draws them (Works: %d of %d kinds, %d items, was %d - every kind in both forms)" % [works_kinds, lib_n, works_items.size(), lib_n * 2])
+	for it in all_items + works_items:
+		it.free()
 	_check(not Vfx.has_lamps(main) and wu.get_node_or_null("Lamp") == null, "front end: no lamp-lit versions in the test arena (it has no lamps)")
 	_check(not (main.get_node("UI/TouchControls") as Control).visible and main.get_viewport().get_camera_3d() == main._menu_camera, "front end: touch controls hidden, menu camera circles the arena")
 	var cam_from: Vector3 = main._menu_camera.global_position

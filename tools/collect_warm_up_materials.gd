@@ -31,6 +31,14 @@ func _run() -> void:
 	lib = WarmUpLibrary.new() if fresh or not ResourceLoader.exists(OUT) else load(OUT).duplicate()
 	for k in lib.keys:
 		have[k] = true
+	# Where each kind is used (and how it's drawn) is recorded afresh.
+	lib.levels.resize(lib.materials.size())
+	lib.drawn.resize(lib.materials.size())
+	for i in lib.materials.size():
+		lib.levels[i] = ""
+		lib.drawn[i] = ""
+	for sd: Dictionary in lib.sprites:
+		sd["levels"] = ""
 	for sd in lib.sprites:
 		sprite_have[str(sd)] = true
 	var before := lib.materials.size()
@@ -96,15 +104,34 @@ func _scan(main: Node, at_start: bool, where: String) -> void:
 
 
 func _look_at(gi: GeometryInstance3D, at_start: bool, where: String, main: Node = null) -> void:
+	var level := where.get_file().get_basename()
 	if (gi is SpriteBase3D or gi is Label3D) and not at_start:
 		var sd := WarmUpLibrary.sprite_key(gi)
 		if not sprite_have.has(str(sd)):
 			sprite_have[str(sd)] = true
 			lib.sprites.append(sd)
+		for e: Dictionary in lib.sprites:
+			if str(_without_levels(e)) == str(sd):
+				e["levels"] = _with(str(e.get("levels", "")), level)
 	if at_start and not _scenery(gi, main):
 		return
+	var how := "multi" if gi is GPUParticles3D or gi is CPUParticles3D or gi is MultiMeshInstance3D else "mesh"
 	for m in _materials_of(gi):
-		_add(m, at_start, "%s %s" % [where.get_file().get_basename(), gi.name])
+		_add(m, at_start, "%s %s" % [level, gi.name], level, how)
+
+
+func _without_levels(d: Dictionary) -> Dictionary:
+	var c := d.duplicate()
+	c.erase("levels")
+	return c
+
+
+## `list` (comma separated) with `item` in it.
+static func _with(list: String, item: String) -> String:
+	var parts := list.split(",", false)
+	if not item in parts:
+		parts.append(item)
+	return ",".join(parts)
 
 
 ## Part of the level's own scenery: placed in the level's scene, not on a
@@ -152,16 +179,22 @@ func _materials_of(gi: GeometryInstance3D) -> Array[Material]:
 	return out
 
 
-func _add(m: Material, at_start: bool, where: String) -> void:
+func _add(m: Material, at_start: bool, where: String, level := "", how := "mesh") -> void:
 	while m:
 		var k := WarmUpLibrary.key_of(m)
 		if at_start:
 			start_keys[k] = true
-		elif not have.has(k) and not start_keys.has(k):
-			have[k] = true
-			lib.materials.append(_portable(m))
-			lib.keys.append(k)
-			lib.seen.append(where)
+		elif not start_keys.has(k):
+			if not have.has(k):
+				have[k] = true
+				lib.materials.append(_portable(m))
+				lib.keys.append(k)
+				lib.seen.append(where)
+				lib.levels.append("")
+				lib.drawn.append("")
+			var i := lib.keys.find(k)
+			lib.levels[i] = _with(lib.levels[i], level)
+			lib.drawn[i] = _with(lib.drawn[i], how)
 		m = m.next_pass
 
 

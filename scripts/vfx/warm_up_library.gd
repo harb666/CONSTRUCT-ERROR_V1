@@ -13,9 +13,19 @@ extends Resource
 ## Each one's kind (what makes its shader differ) and where it was seen.
 @export var keys: PackedStringArray = []
 @export var seen: PackedStringArray = []
+## Each one's levels (scene names, comma separated) and how it was drawn
+## there ("mesh" - one object, "multi" - a batch: particles / multimesh,
+## both differ in their shaders): a level warms up only its own (owner's
+## iPhone lost its graphics preparing the Toxic Works - every level's
+## effects in both forms there, ~250 shaders it never uses).
+## (Plain arrays: a script's PackedStringArray came back empty from the
+## exported game's binary copy - `keys` / `seen` do, unused at run time.)
+@export var levels: Array = []
+@export var drawn: Array = []
 ## Sprite3D / Label3D set-ups (their materials are made inside the engine):
 ## {"label": bool, "billboard", "transparent", "shaded", "double_sided",
-## "no_depth_test", "fixed_size", "alpha_cut", "texture_filter"}.
+## "no_depth_test", "fixed_size", "alpha_cut", "texture_filter",
+## "levels": "a,b"}.
 @export var sprites: Array[Dictionary] = []
 
 
@@ -51,3 +61,16 @@ static func sprite_key(s: GeometryInstance3D) -> Dictionary:
 	if s is SpriteBase3D:
 		d["transparent"] = (s as SpriteBase3D).transparent
 	return d
+
+
+## Whether material `i` is warmed up in `level` (all levels when the
+## library has no level records).
+func used_in(i: int, level: String) -> bool:
+	if levels.size() != materials.size() or level == "":
+		return true
+	return level in str(levels[i]).split(",", false)
+
+
+## How material `i` was drawn: "mesh", "multi" or "mesh,multi".
+func drawn_as(i: int) -> String:
+	return str(drawn[i]) if drawn.size() == materials.size() and str(drawn[i]) != "" else "mesh,multi"
