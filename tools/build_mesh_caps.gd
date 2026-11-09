@@ -84,10 +84,12 @@ func _caps_for(mesh: ArrayMesh, hint: String, uv: Vector2, mi: MeshInstance3D) -
 				target = s
 		if target < 0:
 			return {}
-	# Stray triangles in the cap surface (authored caps can have spikes that
-	# poke out of the part): anything outside the other surfaces' bounds.
+	# Stray triangles in an authored cap surface (named by `hint`: they can
+	# have spikes that poke out of the part): anything outside the other
+	# surfaces' bounds. (Not on a model's main surface: Lager's hair
+	# ornament is its own small surfaces.)
 	var drop := PackedInt32Array()
-	if target >= 0 and mesh.get_surface_count() > 1:
+	if hint != "" and target >= 0 and mesh.get_surface_count() > 1:
 		var main := AABB()
 		var first := true
 		for s in mesh.get_surface_count():

@@ -6078,10 +6078,31 @@ func _lager_tests() -> void:
 	var top := sk.get_bone_global_rest(sk.find_bone("mixamorig_HeadTop_End")).origin.y
 	var hips := sk.get_bone_global_rest(sk.find_bone("mixamorig_Hips")).origin.y
 	var tallest := -INF
-	for v in verts:
-		tallest = maxf(tallest, v.y)
+	for si in mi.mesh.get_surface_count():   # (her hair ornament is its own surfaces)
+		for v: Vector3 in mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]:
+			tallest = maxf(tallest, v.y)
 	_check(absf(top - 1.69) < 0.085 and absf(hips - 0.81) < 0.04 and absf(tallest - 1.7) < 0.085,
 		"lager: the others' size (head top %.2f m, hips %.2f m, %.2f m tall)" % [top, hips, tallest])
+	# Waffle look (owner asked): the corn-cob bun is gone from her body, two
+	# waffles + melting ice cream ride on her head bone instead.
+	var body_top := -INF
+	for v in verts:
+		body_top = maxf(body_top, v.y)
+	var orn := {}
+	var head_bone := sk.find_bone("mixamorig_Head")
+	for si in range(1, mi.mesh.get_surface_count()):
+		var mat := mi.mesh.surface_get_material(si)
+		var a := mi.mesh.surface_get_arrays(si)
+		var bones: PackedInt32Array = a[Mesh.ARRAY_BONES]
+		var on_head := true
+		var skin := mi.skin
+		for k in range(0, bones.size(), 4):
+			if skin.get_bind_name(bones[k]) != sk.get_bone_name(head_bone) and skin.get_bind_bone(bones[k]) != head_bone:
+				on_head = false
+				break
+		orn[mat.resource_name if mat else "?"] = on_head
+	_check(body_top < 1.6 and orn.get("Waffle", false) and orn.get("IceCream", false),
+		"lager: waffle hair ornament (waffles + ice cream on the head bone %s, corn bun gone: body top %.2f m)" % [orn, body_top])
 	# Gauntlets rigid: nothing follows a hand bone.
 	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
 	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]

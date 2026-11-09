@@ -224,8 +224,25 @@
   select, gold accent; `resources/characters/lager.tres`,
   `scenes/characters/lager_visual.tscn`) plays exactly like the Grinch.
   Built by `tools/build_lager.py` from the untouched upload
-  (`assets/characters/lager/source/lager_source.glb`); her look is not
-  changed. Already the others' size (1.7 m, hips 0.82 m), not rescaled.
+  (`assets/characters/lager/source/lager_source.glb`). Already the others'
+  size (1.7 m, hips 0.82 m), not rescaled.
+  Waffle look (owner asked, from their daughter's drawing: the hair
+  ornament looked like sweetcorn, the suit should be waffles too; they
+  picked option A of a mockup, the butter made "icecream melting like
+  what's on the rest of her armour"; `tools/lager_waffle.py`): her shiny
+  gold armour is toasted waffle - matte golden-brown from the gold's own
+  light / dark, so the square panels read as waffle pockets (28 % of the
+  texture; white cream swirls, black joints, glowing lights, face and hair
+  as they were). The corn-cob bun is cut off (opening in the hair top
+  sealed) and replaced by two stacked square waffles (deep pockets, toasted
+  crust with the iron's seam) with a soft-serve swirl of melting ice cream
+  on top, its pool spreading over the pockets and five drips running over
+  the edges into drops - own surfaces (`Waffle`, `IceCream`, coloured from
+  a small ramp texture: Godot's import didn't reliably turn vertex colours
+  on), skinned to the head, closed shapes, added after gltfpack so the
+  grid stays exact. `tools/build_mesh_caps.gd` only drops "stray"
+  triangles for models naming a cap surface (the robot) - with her
+  ornament surfaces it threw away most of her body.
   Arms (owner: "sort out the arms and rig"): her waffle gauntlets were
   30-80 % weighted to the hand bones (bent like rubber); now rigid on the
   forearms. Her built-in cannons (dark ring, gold barrel, glowing lens) are

@@ -41,6 +41,7 @@ import io, json, os, subprocess, sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
+import lager_waffle as waffle
 from build_harbinger import (read_glb, write_glb, accessor, Writer, qmul, qmat, mat_q,
                              sample, Rig, sole_normal, clip_mesh)
 
@@ -308,6 +309,38 @@ def build_prep():
         region = (P[:, 0] * sx > 0.4) & (d > 0.2) & (rad < 0.25)
         P, N, UV, J, W, I, removed = clip_mesh(P, N, UV, J, W, I, d - CUT[side], region)
         print("%s arm end: cannon cut %.3f m past the elbow, %d triangles removed/clipped" % (side, CUT[side], removed))
+    # 1a. Waffle hair ornament (owner asked): the corn-cob bun off, the
+    # opening in the hair top sealed (the waffles sit over it; added after
+    # gltfpack in build(), so their pockets stay exact).
+    Cb = base_colours(js, b, UV)
+    bun = waffle.bun_triangles(P, I, Cb)
+    loops = waffle.seal(P, I, bun)
+    I = I[~bun]
+    add_P, add_N, add_UV, add_J, add_W, add_I = [], [], [], [], [], []
+    for rim, centre in loops:
+        # Own vertices (rim copies + centre), all on one white texel of the
+        # hair: plain white, and no stretch across the texture.
+        white = rim[int(np.argmax(Cb[rim].sum(1)))]
+        c = len(P) + len(add_P)
+        add_P.append(centre); add_N.append([0.0, 1.0, 0.0]); add_UV.append(UV[white])
+        add_J.append(J[white]); add_W.append(W[white])
+        ring = []
+        for v in rim:
+            ring.append(len(P) + len(add_P))
+            add_P.append(P[v]); add_N.append([0.0, 1.0, 0.0]); add_UV.append(UV[white])
+            add_J.append(J[v]); add_W.append(W[v])
+        fan = [[c, ring[k], ring[(k + 1) % len(ring)]] for k in range(len(ring))]
+        pts = np.concatenate([P, np.array(add_P)])
+        t = pts[np.array(fan)]
+        if np.cross(t[:, 1] - t[:, 0], t[:, 2] - t[:, 0])[:, 1].sum() < 0:
+            fan = [[f[0], f[2], f[1]] for f in fan]
+        add_I += fan
+    if add_P:
+        P = np.concatenate([P, np.array(add_P)]); N = np.concatenate([N, np.array(add_N)])
+        UV = np.concatenate([UV, np.array(add_UV)]); J = np.concatenate([J, np.array(add_J)])
+        W = np.concatenate([W, np.array(add_W)]); I = np.concatenate([I, np.array(add_I, np.int64)])
+    print("hair ornament: corn bun off (%d triangles), %d opening(s) sealed (%d triangles)" % (
+        bun.sum(), len(loops), len(add_I)))
     used = np.zeros(len(P), bool)
     used[I.ravel()] = True
     remap = -np.ones(len(P), np.int64)
@@ -428,10 +461,29 @@ def build_prep():
         print("%s gauntlet: lens face %.3f m past the elbow (forearm %.3f m)" % (side, d.max(), np.linalg.norm(hd - fa)))
 
     # Write.
-    w = Writer()
+    # 5. Toasted waffle armour (owner asked, option A).
+    from PIL import Image
+    raw = {}
     for img in js["images"]:
         bv = js["bufferViews"][img["bufferView"]]
-        img["bufferView"] = w.view(b[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])
+        raw[img["name"]] = bytes(b[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]])
+    col = np.asarray(Image.open(io.BytesIO(raw["texture_0"])).convert("RGB")).astype(np.float32) / 255
+    mr = np.asarray(Image.open(io.BytesIO(raw["texture_0_metallic_roughness"])).convert("RGB")).astype(np.float32) / 255
+    col, mr, share = waffle.recolour(col, mr, P, UV, I)
+    print("armour: %.1f %% of the texture toasted" % (share * 100))
+    out = io.BytesIO()
+    Image.fromarray(np.round(col * 255).astype(np.uint8)).save(out, "JPEG", quality=95)
+    raw["texture_0"] = out.getvalue()
+    out = io.BytesIO()
+    Image.fromarray(np.round(mr * 255).astype(np.uint8)).save(out, "PNG", optimize=True)
+    raw["texture_0_metallic_roughness"] = out.getvalue()
+    # (Godot extracts the embedded images next to the model: keep them equal.)
+    for name, ext in (("texture_0", "jpg"), ("texture_0_metallic_roughness", "png")):
+        with open(os.path.join(os.path.dirname(OUT), "lager_%s.%s" % (name, ext)), "wb") as f:
+            f.write(raw[name])
+    w = Writer()
+    for img in js["images"]:
+        img["bufferView"] = w.view(raw[img["name"]])
     skin["inverseBindMatrices"] = w.acc(ibm.transpose(0, 2, 1).reshape(-1, 16).astype(np.float32), "MAT4")
     prim["attributes"] = {
         "POSITION": w.acc(P.astype(np.float32), "VEC3", True, 34962),
@@ -456,6 +508,44 @@ def build_prep():
     return js, w.buf
 
 
+def add_ornament(path):
+    """Appends the waffle hair ornament (lager_waffle.ornament) to her mesh:
+    one primitive per material, skinned to the head."""
+    js, b = read_glb(path)
+    skin = js["skins"][0]
+    head = [js["nodes"][j].get("name") for j in skin["joints"]].index(MIX + "Head")
+    w = Writer()
+    w.buf = bytearray(b)
+    w.views = js["bufferViews"]
+    w.accessors = js["accessors"]
+    mesh = js["meshes"][0]
+    from PIL import Image
+    png = io.BytesIO()
+    Image.fromarray(np.round(waffle.ramp_image() * 255).astype(np.uint8)).save(png, "PNG")
+    js["images"].append({"name": "ornament", "mimeType": "image/png", "bufferView": w.view(png.getvalue())})
+    js["textures"].append({"source": len(js["images"]) - 1})
+    tex = len(js["textures"]) - 1
+    for name, (p, n, uv, rough) in waffle.ornament().items():
+        js["materials"].append({"name": name, "pbrMetallicRoughness": {
+            "baseColorTexture": {"index": tex}, "metallicFactor": 0.0, "roughnessFactor": rough}})
+        # Corners shared by several triangles stored once.
+        key = np.round(np.c_[p * 1e5, n * 1e3, uv * 1e4]).astype(np.int64)
+        _, first, idx = np.unique(key, axis=0, return_index=True, return_inverse=True)
+        p, n, uv, idx = p[first], n[first], uv[first], idx.ravel()
+        k = len(p)
+        mesh["primitives"].append({"attributes": {
+            "POSITION": w.acc(p.astype(np.float32), "VEC3", True, 34962),
+            "NORMAL": w.acc(n.astype(np.float32), "VEC3", target=34962),
+            "TEXCOORD_0": w.acc(uv.astype(np.float32), "VEC2", target=34962),
+            "JOINTS_0": w.acc(np.tile([head, 0, 0, 0], (k, 1)).astype(np.uint16), "VEC4", target=34962),
+            "WEIGHTS_0": w.acc(np.tile([1.0, 0, 0, 0], (k, 1)).astype(np.float32), "VEC4", target=34962)},
+            "indices": w.acc(idx.astype(np.uint32), "SCALAR", target=34963),
+            "material": len(js["materials"]) - 1})
+        print("hair ornament: %s %d triangles, %d vertices" % (name, len(idx) // 3, k))
+    js["buffers"] = [{"byteLength": len(w.buf)}]
+    write_glb(path, js, w.buf)
+
+
 def build():
     js, buf = build_prep()
     tmp = OUT.replace(".glb", "_prep.tmp.glb")
@@ -464,6 +554,7 @@ def build():
     gp = os.environ.get("GLTFPACK", "gltfpack")
     subprocess.run([gp, "-i", tmp, "-o", red, "-si", "0.6", "-slb", "-kn", "-km", "-noq"], check=True)
     subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "transplant_animations.py"), tmp, red, OUT], check=True)
+    add_ornament(OUT)
     os.remove(tmp)
     os.remove(red)
     print("wrote", OUT)
