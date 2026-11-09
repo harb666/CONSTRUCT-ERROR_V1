@@ -6190,6 +6190,7 @@ func _lager_tests() -> void:
 	var snap := {}
 	var fore := [sk.find_bone("mixamorig_LeftForeArm"), sk.find_bone("mixamorig_LeftHand"), sk.find_bone("mixamorig_RightForeArm"), sk.find_bone("mixamorig_RightHand")]
 	var arm_jump := [0.0, 0.0, 0]  # worst, total, count (deg a frame)
+	var hair_run := [0.0, 0, 0]  # worst change (deg a frame), frames on a limit, frames
 	var read := func() -> void:
 		for k in [0, 2]:
 			var d := (sk.get_bone_global_pose(fore[k + 1]).origin - sk.get_bone_global_pose(fore[k]).origin).normalized()
@@ -6200,6 +6201,22 @@ func _lager_tests() -> void:
 				arm_jump[2] += 1
 			snap[k] = d
 		snap.tip = (sk.global_transform * sk.get_bone_global_pose(chain[3])).origin
+		# Hair while running: each segment's direction in her torso's frame,
+		# frame to frame (owner: "buggy / glitchy while running" - it was held
+		# on its swing limit and snapped 40-70 deg in a frame).
+		var tp: Array[Vector3] = []
+		for t in ["mixamorig_Hips", "mixamorig_Neck", "mixamorig_LeftShoulder", "mixamorig_RightShoulder"]:
+			tp.append(sk.get_bone_global_pose(sk.find_bone(t)).origin)
+		var fb := HairSprings._frame(tp).inverse()
+		var on_limit := false
+		for i in 3:
+			var d := (fb * (sk.get_bone_global_pose(chain[i + 1]).origin - sk.get_bone_global_pose(chain[i]).origin)).normalized()
+			if snap.has("seg%d" % i):
+				hair_run[0] = maxf(hair_run[0], rad_to_deg((snap["seg%d" % i] as Vector3).angle_to(d)))
+			snap["seg%d" % i] = d
+			on_limit = on_limit or hair_sim.swing[i] >= hair_sim.max_swing[i] - 0.6
+		hair_run[1] += 1 if on_limit else 0
+		hair_run[2] += 1
 		snap.sp1 = (sk.global_transform * sk.get_bone_global_pose(spine)).origin
 		snap.rel = (sk.get_bone_global_pose(head).affine_inverse() * sk.get_bone_global_pose(chain[3])).origin
 	hair_sim.modification_processed.connect(read)
@@ -6212,6 +6229,7 @@ func _lager_tests() -> void:
 	var sp := Vector2(p.velocity.x, p.velocity.z).length()
 	_check(sp > 7.0 and vis.current_state == "Locomotion", "lager: runs (%.1f m/s)" % sp)
 	_check(behind > 0.1 and behind < 1.0, "lager: running, her hair stays behind her back (%.2f m behind the spine)" % behind)
+	_check(hair_run[0] < 15.0 and hair_run[1] <= hair_run[2] / 10, "lager: running, her hair swings smoothly (at most %.1f deg a frame, on a swing limit %d of %d frames; it was held on its limit and snapped 40-70 deg)" % hair_run)
 	var arm_mean: float = arm_jump[1] / maxf(arm_jump[2], 1.0)
 	_check(arm_mean < 4.0 and arm_jump[0] < 60.0, "lager: running, her armed arms move smoothly (%.1f deg a frame on average, at most %.1f - a lock-on snap; her own run clips glitched ~10 on average, up to 120)" % [arm_mean, arm_jump[0]])
 	# Stops: the hair swings on (springs), unlike the head it hangs from.

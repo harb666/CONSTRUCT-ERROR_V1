@@ -263,9 +263,16 @@
   last): it rests along her back (torso frame from the hips / neck /
   shoulder joints - not her head, which the jump / slide clips throw back,
   tipping the hair out like a board; the root segment half follows the
-  head), each joint a damped spring towards that (lag and follow-through on
-  starts, stops, turns, jumps, landings), gravity, swing limits (38 / 28 /
-  28 deg, 6-10 deg towards her back), fixed segment lengths. Godot's
+  head) hanging a little towards straight down (`hang`), each joint a
+  damped spring towards that, swing limits (38 / 28 / 28 deg, 6-10 deg
+  towards her back), fixed segment lengths. Running (owner: "buggy /
+  glitchy"): it's simulated in her torso's own frame, swung only by her
+  acceleration (smoothed, capped: she reaches full speed in a frame and
+  clip blends pop her body a few cm, which flung a world-simulated hair
+  onto its limit) and the air she runs through; a limit stops the motion
+  into it (no kick), a second update in a frame leaves it be (it reset).
+  It was held on its limit most of the run, snapping 40-70 deg in a frame;
+  now ~1-2 deg a frame, at most ~7 (a smoke test checks). Godot's
   SpringBoneSimulator3D was used first: no limits, it threw the hair over
   her head. Also on the select preview (`lager_hair.tscn`). Card art / portrait cut from the
   owner's banner (`tools/build_character_art.py lager`, CUT_FROM_ART: her
