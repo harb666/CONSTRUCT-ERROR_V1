@@ -1,0 +1,182 @@
+# Importing a generated level into Construct Error (Godot 4)
+
+Claude does these steps for you when it has access to the Construct Error repository and you've asked it to. Nothing
+here changes the Construct Error repo on its own. The Godot scripts and `.tres` files are **untested in Godot from
+the generator environment**, so treat them as starting points and check the first import in the editor.
+
+## 1. Copy the package
+
+1. Run `python3 pipeline/package.py levels/assembly_ascent --zip` to produce `dist/assembly_ascent/package/levels/assembly_ascent/` and
+   `dist/assembly_ascent/assembly_ascent.zip`.
+2. Copy the `levels/assembly_ascent/` folder to `res://levels/assembly_ascent/` in the Godot project. Every path inside the package
+   (`environment.tres`, the scripts) assumes that location.
+
+## 2. Build the level scene
+
+Use the mobile files for the game, and the dev files for editing and inspection.
+
+| What | File | How |
+|---|---|---|
+| Level geometry | `mobile/level_mobile.glb` | Instance it. In the import settings, keep the default mesh compression and enable LOD generation (see `mobile/mobile_manifest.json` → `godot`). |
+| Distant scenery | `mobile/background_mobile.glb` | Instance it. It has no collision and nothing is walkable. |
+| Collision | `mobile/collision.glb` | Instance it. Its node suffixes `-colonly` / `-convcolonly` make Godot create StaticBody3D shapes on import. As an alternative, build the shapes yourself from `mobile/collision.json`. |
+| Visibility, shadows and hazards | `mobile/apply_mobile.gd` | Add a Node3D at the origin with this script. Set `manifest_path` to `res://levels/assembly_ascent/mobile/mobile_manifest.json` and `level_root` to the level_mobile instance. |
+| Effects | `fx/godot/apply_effects.gd` | Add a Node3D with this script. Set `effects_path` to `res://levels/assembly_ascent/mobile/effects_mobile.json` (its targets match the merged mobile nodes), `level_root`, `quality`, and `environment`. | Screens: `tv_static` effects put `fx/godot/tv_static.gdshader` on the screen materials (animated TV static; the picture breaks through every few seconds). Column pods: `tube_pods` (category `launch`) moves each column's `<column>_Pod__*` nodes up by `min(fmod(t + phase, period) * speed, travel)` (own period / phase per column); keep those nodes unparented from anything that moves. Liquid ripples are part of `liquid_surface.gdshader` (uniform array `ripple_points`, no textures). Vat / column bubbles: `tube_bubbles` builds one mesh and puts `fx/godot/tube_bubbles.gdshader` on it (the shader moves every bubble; no CPU work). TV screens: `tv_static.gdshader` reads each screen's id from floor(UV.x) (keep texture repeat on); `egg_*` parameters set the easter egg. Assembly lines (`assembly_line`, category `assembly`): parcels, parts and arm groups (`<group>__*` nodes) are animated by `_assembly` in `apply_effects.gd`; the added parts use `fx/godot/assembly_reveal.gdshader` (world clip plane). Stage 65: the working arms are skinned meshes - the GLB import gives each arm a `Skeleton3D` (bones `Arm_N_JYaw`, `_JShoulder`, `_JElbow`, `_JWrist`, `_JTwist`, `_JFinger1..3`); `_assembly` sets their bone pose rotations every frame from the station's motion program (Stage 66, `pipeline/arm_motion.py`; keep the importer's skins / skeletons on). Stage 72: crushers (effect `crusher`) move their `<id>_Ram` nodes and enable a kill Area3D (group = `hazard_group` export, default `hazard`, like apply_mobile.gd) while the ram is down; `collision.json` lists them under `crushers`.
+| Sky, fog and light | `environment.tres` | Assign it to a WorldEnvironment. Add a DirectionalLight3D using `environment.json` → `sun.godot_rotation_degrees`, colour and energy. |
+| Fluids (Stage 8) | `effects.json` → `fluid_attachments` | One entry per liquid stream: outlet position / direction / diameter / section, impact point, receiving pool, initial speed. The GLB already contains a stream mesh leaving the real opening (animated by `liquid_flow`). Use these anchors if Construct Error renders richer fluids at runtime. |
+| Terrain (Stage 9) | `mobile/level_mobile.glb` nodes `TR_<i>_<j>_<material>_L0/L1`, `TR_<i>_<j>_L2_far`, `TRM_<sector>` | Chunk LODs with complementary visibility ranges in `mobile_manifest.json` (begin/end); `apply_mobile.gd` sets them. Borders are full-resolution at every LOD, so any mix is crack-free. `*_far` / `TRM_*` use vertex colours (the importer enables vertex colour as albedo). Middle zone `TRM_*` has no collision. |
+| Terrain collision | `mobile/collision.glb` `TR_<i>_<j>-colonly` | One heightmap mesh per chunk (or build HeightMapShape3D from `collision.json`: origin, cell, heights). Caves / arches / overhangs / tunnel berms are concave (`-colonly`) so their openings stay open. |
+| Scatter (optional) | `terrain.json` → `instances`, `props/props.glb`, `mobile/apply_scatter_multimesh.gd` | The GLB already has scatter merged per cell (no code needed). For MultiMesh instancing use the script (UNTESTED in Godot here); it hides the merged `SC_*` nodes. |
+| Art style (toon) | `fx/godot/apply_style.gd` + `environment.json` → `style` | Add a Node with this script, set `environment_path` to `res://levels/assembly_ascent/environment.json` and `level_root` to the level_mobile instance: every material gets diffuse_mode TOON with specular off; the `ink` material stays unlit black. Outlines need no code: they are inverted-hull meshes in the GLB (`*__ol` / merged `M_ink_*`), with no colliders. |
+| Level exits (elevator shaft) | `level.json` → `exits`, `mobile/collision.json` → `triggers` | `apply_mobile.gd` creates one `Area3D` (CylinderShape3D) per trigger, in the group `level_exit`, with meta `target` (e.g. `next_level`), and emits `level_exit_entered(target, body)` when a body enters. Connect that signal in Construct Error and load the next level there; nothing is loaded automatically. |
+| Elevator arrivals (Stage 15) | `level.json` → `entrances`, `mobile/collision.json` → `entrances`, manifest nodes with `group` | `apply_mobile.gd` puts the car's merged nodes (`<car>__<material>`) under one `<car>_Pivot` Node3D and offers `play_arrival(entrance_id, player)`: the car comes down from `start_offset_y` above its rest position over `duration_s` (the player is kept on the car floor) and emits `arrival_finished(entrance_id)`. The car's colliders are at the rest position, so pause player physics / input until the signal. |
+| Indoor levels (Stage 15) | `environment.json` → `indoor`, `sun.shadows.enabled` false | Roofed level: turn the DirectionalLight3D's shadows OFF (the roof would shade the whole hall); the sky is never visible but still feeds ambient light. |
+| Factory backdrop (Stage 16) | `mobile/background_mobile.glb` nodes `BG_Factory_*` | Non-playable factory seen through the windows (no collision). Four nodes / four draw calls; leave them visible (the shell closes the space, no sky). |
+| Animated extras | `mobile/effects_mobile.json` | Built by `apply_effects.gd`: liquid falls (`liquid_flow`: direction measured per mesh as `flow_uv` → shader `flow_dir`, no manual flipping), cloud layers / puffs, fly-by ships behind the skyline (MultiMesh; they grow in / shrink away, never pop). |
+| Spawns | `gameplay/spawns.json` | The `PlayerSpawn` node in the GLB is the first spawn. Extra team or respawn points are listed in the JSON (position, yaw_deg, Stage 9 `team` player / enemy, plus the `spawn_regions` they came from). |
+| Laser gates + waves (Stage 59) | `mobile/collision.json` → `gates`, `encounters` | `apply_mobile.gd` puts a StaticBody3D blocker (group `laser_gate`) in each closed gate. Your wave system reads `encounters` (waves, enemies per wave, spawn ids from `gameplay/spawns.json`, `opens`) and, when the last wave is cleared, calls `open_gate(gate_id)` on the apply_mobile node: the gate's beam nodes (`<group>__*`) stutter out, the blocker goes, `gate_opened(gate_id)` is emitted. |
+| Hazards | `gameplay/hazards.json` | Box Area3Ds in world space. Construct Error decides whether they kill, damage or respawn. `apply_mobile.gd` creates them in the group `hazard`. |
+
+## 3. Gameplay numbers
+
+`config/gameplay.json` holds PLACEHOLDER player and camera values: radius, height, step, slope, jump, and the
+spring-arm length and probe radius. The navigation and camera checks use them. Copy Construct Error's real
+CharacterBody3D and SpringArm3D settings into that file, or into `levels/assembly_ascent/gameplay.json`, and re-run
+`python3 pipeline/checks.py levels/assembly_ascent`. Reachability and jump results are only as right as those numbers.
+
+## 4. What is not in the GLB
+
+The GLB holds only static meshes and PBR materials. These are rebuilt at runtime from the JSON, `.tres` and scripts:
+
+- animated liquid
+- particles
+- pulsing lights
+- fog sheets
+- sky drift
+- hazards
+- spawns
+- level-exit trigger volumes
+- cloud layers, cloud puffs and fly-by ships
+- toon shading (outline shells ARE in the GLB)
+
+The browser preview approximates all of these with three.js. It is close to Godot but not identical.
+
+## 5. Checklist after the first import
+
+- [ ] The level appears at the right scale. The player capsule fits the doors and bridges.
+- [ ] The collision shapes line up with the floors and walls. You can't walk through walls.
+- [ ] The hazard areas trigger.
+- [ ] The sky and fog look like the preview.
+- [ ] The effects play, and none of them spawn inside opaque geometry. Falls flow downwards.
+- [ ] Dropping into the elevator shaft fires `level_exit_entered` (connected to Construct Error's level loader).
+- [ ] Slime Arena: `play_arrival("Elevator", player)` brings the car down through the roof opening and the player
+      steps off it onto the central deck after `arrival_finished`.
+- [ ] Run the profiler on a device. The manifest numbers are estimates.
+- [ ] Worlds: walk to a chunk border and watch LODs switch (no cracks, no popping holes); check the boundary colliders
+      sit just inside the barrier ridge; look out from the edge in every direction (no void below the horizon).
+
+## Smaller files (Stage 16)
+
+- Mobile GLBs use 16-bit indices and toon materials carry only base colour (+ emissive): no normal or ORM maps, so
+  nothing to set up and less GPU memory. Non-toon materials (slime, glow) keep theirs.
+- Game exports (`exports/assembly_ascent`, built with `package.py --game`) contain no desktop `level.glb` / `background.glb`:
+  instance `mobile/level_mobile.glb` and `mobile/background_mobile.glb`.
+
+## Smallest files (Stage 25)
+
+- Textures in the mobile GLBs are WebP (`EXT_texture_webp`, listed as required). Godot 4 imports it natively (the
+  extension is in the Godot 4.2 and 4.3 importer source). Godot re-encodes textures and meshes on import, so the size
+  of the exported game depends on your import settings: keep the default mesh compression and VRAM-compressed textures.
+- Faces that are buried in, or pressed flat against, a solid box are removed from `level_mobile.glb` (never visible).
+  `mobile_manifest.json` → `metrics.mobile.occluded_faces_removed` / `occluded_objects` lists what went.
+- Merge lists (which source objects went into which merged node) live only in `mobile_manifest.json`, not in GLB extras.
+- Game exports (`--game`) are minified and drop editor-only data: `level.json` without `objects` / `relations` /
+  `generator_notes`, `gameplay/navigation.json` without `links`, manifest nodes without `source_objects`, no
+  `scene_spec.json`. What was left out is counted under `"omitted"`. Numbers are rounded to 0.0001.
+
+## Rising pads, control terminals (Stage 80)
+- effects.json `emerge` (apply_effects.gd `_riser`): finds the skinned `<group>__*` meshes' Skeleton3D, keeps every pad
+  under the liquid, and starts the sequence when a `CharacterBody3D` enters the trigger sphere (Area3D on the default
+  layer/mask - match your player's layers) or when you call `raise_pads(id)`. The pads' colliders from collision.glb
+  (nodes whose names start with the cap names, e.g. `Pads_West_Pad_1_Cap*`) are disabled until each pad is up.
+- collision.json `terminals` (apply_mobile.gd): an Area3D per terminal in group `terminal` (meta `terminal_id`); call
+  `activate_terminal(id)` from your interact action: the listed gates open (`open_gate`), then `terminal_activated(id)`.
+  `Exit_Hall_Laser` (gates, `opens_on: terminal`) closes the exit doorway until then.
+
+## Shotgun platform, pickups (Stage 89)
+- `Shotgun_Platform` is a riser with one pad (same `emerge` effect, `raise_pads(id)` works): it surges up out of the pool
+  when a CharacterBody3D reaches Pipe_Junction_A. Its pad has `drips` (world points on the rim): once it is up a
+  CPUParticles3D drops green goo from them into the pool (`<id>_J1_Drips`). Stage 91: `goo` - `hold` s after it is up
+  the goo drains away over `fade` s (bones `<id>_GD` / `<id>_GS` scaled down) and the drops stop.
+- collision.json `pickups` (apply_mobile.gd): an Area3D per pickup (`<id>_Pickup`, group `pickup`, metas `pickup_id`,
+  `item`); a CharacterBody3D entering it emits `pickup_reached(pickup_id, item)` once - give the player the item there
+  (`Shotgun_Pickup`, item `shotgun`, over the pedestal). A pickup with `riser` stays off (monitoring false) until its
+  platform is up. The level has no weapon mesh: spawn your own shotgun model at `center`.
+
+## Assembly Ascent hazards (Stage 97)
+- Stage 123: effects.json `floater` (collision.json `floaters`): apply_effects.gd poses the float rig's bones with
+  `float_pose` (bob, sway, tilt; flame bones flicker) and moves one AnimatableBody3D deck collider per pad; a lift with
+  `bob` floats the same way on top of its travel.
+- Stage 119: effects.json `jet` (collision.json `jets`): apply_effects.gd `_jet` poses the screen's groups with
+  `jet_pose` (body, flames scaled about the nozzles, drawer slid out, button cap pressed); an Area3D over the trigger
+  floor starts the flight; the button's terminal area (apply_mobile.gd "<id>_Button_Use") is kept out of group
+  "terminal" until the screen has arrived; apply_mobile's `terminal_activated` sends it spinning home.
+- Stage 112: a goofy riser pad with `rust` also scales its rust bone (y 0 -> 1) once it has settled (see `_pose_goofy`).
+- Stage 110: a riser pad with `goof` is posed by `goofy_pose` (bone pose position + rotation + scale), not the plain
+  surge curve; its colliders switch on when the pose says so.
+- Stage 108: effects.json / collision.json `lifts`: apply_effects.gd `_lift` builds an AnimatableBody3D (sync_to_physics)
+  with the pad's deck collider and a rider Area3D, plus a call Area3D per `calls` entry; `_update_lifts` (physics
+  frame) boards / calls and moves the pad group nodes and the body together. Lift parts get no static colliders.
+- Stage 105: effects.json `steam_jet`: emitters carry `dir`; one CPUParticles3D with EMISSION_SHAPE_DIRECTED_POINTS
+  (emission_normals = the dirs, direction +z), damping = `damping`, explosiveness 1 - emit_time / lifetime, restarted
+  at the `sync` times like `steam_burst`.
+- Stage 104: effects.json `steam_burst` with `sync` {period, phase, at}: one CPUParticles3D over all vent points
+  (one_shot), restarted when (t + phase) mod period crosses each `at` - steam on the press's impact and release.
+- Stage 155: a `drive` with `plasma` (a material-name prefix): `_sweeper` collects those materials; each frame their
+  `uv1_offset` = (rotor angle / 360 * plasma_tiles, -t * plasma_rise - pressed * 0.5) and `emission_energy_multiplier`
+  = base * (0.4 + 0.7 pressed + 1.2 exp(-3 (u - slam)) + flicker) - the chambers' lightning turns with the arms and
+  flares on each slam (same as the viewer; untested in Godot).
+- Stage 103: a `sweeper` with a `drive` takes its angle from `press_profile()` (apply_effects.gd, same as the viewer):
+  the press stage groups (`drive.stages`, each moved by offset * frac) slam and lift, the head's glow node
+  (`drive.lamps`) blinks before the slam, and the current camera shakes (h/v offset) near an impact.
+- Stage 102: a saw's `joints` (shoulder, elbow, wrist) chain their turns; its `spin` group (the blade) rides on the last
+  joint and also spins - the wrist's motor and guard do not.
+- effects.json `saw` (apply_effects.gd `_saw` / `_update_saws`): the arm and blade groups (`<id>_Arm__*`,
+  `<id>_Blade__*`) turn about `axis` through `pivot` by `amp * sin(2 pi (t + phase) / period)` degrees; the blade also
+  spins `rpm` about the same axis. A CylinderShape3D Area3D (hazard group) follows the blade.
+- effects.json `belt` (`_belt`): chevrons (`<id>_Chev__*`) slide along `axis`; an Area3D over the deck moves every
+  CharacterBody3D standing on it `speed * axis` m/s (move_and_collide in `_physics_process`). If your player script
+  overwrites its position each frame, add the belt velocity there instead.
+- collision.json `kills` (apply_mobile.gd): static spike boxes (yaw-turned) in the hazard group.
+- Stage 98: effects.json `sweeper` (`_sweeper`): the rotor group (`Spinner_Rotor__*`) turns about the tower's vertical
+  axis at `rpm`; per arm a box Area3D (the bar) and a sphere Area3D (the spiked ball) ride on a pivot node in the hazard
+  group. `Spinner_Terminal` (collision.json `terminals`) activates `Yard_Laser`.
+- level.json `entrances`: `type: doorway` with a `spawn` point - the player starts there, walking out of the black
+  hallway (no elevator in this map).
+
+## Drone swarm (Stage 95)
+- effects.json `flyby_ships` `Drone_Swarm`: same MultiMesh flyers as before; ships may carry `cx` / `cz` (route centre),
+  `recede` and `loop` (circle for good), and vertex glow flag 2 takes the effect's `accent` colour.
+
+## Specimen bob (Stage 92)
+- effects.json `bob` (apply_effects.gd `_bobs`): the group's nodes (`Gir_Specimen_Float__*`) keep their rest transform
+  and are turned / lifted about `pivot` every frame (amp, period, sway) - GIR drifting in Core_Vat.
+
+## Turbine wind (Stage 82)
+- effects.json `wind` (apply_effects.gd `_wind`): an Area3D over the cone; in `_physics_process` every overlapping
+  CharacterBody3D inside the cone gets `move_and_collide(dir * push * strength)` and, while not on the floor,
+  `velocity.y += lift * strength * delta`. If your player script overwrites `velocity` each frame that is fine (the
+  push is a move, not a velocity); if it zeroes `velocity.y` in the air, apply `lift` in your own gravity code instead.
+  The rotor node `<id>_Rotor` turns with the cycle; streaks are a CPUParticles3D. collision.json `winds` has the data.
+- Stage 85: a wind with `trigger` blows at full force until a CharacterBody3D enters that sphere (Turbine_East: at
+  West_Landing_S, after the rising pads), then spins down for good; `stop_wind(id)` does the same from code.
+
+
+## Stage 152: animated characters (`characters` / effect `character`)
+
+The specimen in the showcase vat is its own GLB: the package copies it to `res://levels/assembly_ascent/characters/<file>`.
+`apply_effects.gd` `_characters` instances it under `level_root` at `position` / `yaw`, sets the idle and alert
+animations to loop, plays `clips.idle`, bobs the `FloatRoot` node (or bone, if the importer made it one) by
+`float.amp * sin(2 pi t / float.period)`, and crossfades (`fade` s) to `clips.alert` while any node in the `players`
+group is within `trigger.radius` of `trigger.center`. Untested in Godot (no Godot here): check that the import keeps
+the animations (scene import, not mesh) and that the hair and cable primitives come in with the skin.

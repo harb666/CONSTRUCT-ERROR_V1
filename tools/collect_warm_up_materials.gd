@@ -12,7 +12,7 @@ extends SceneTree
 ## (adds to the library already there; -- --fresh starts it again).
 
 const OUT := "res://assets/vfx/warm_up_library.tres"
-const LEVELS := ["res://scenes/battle_arena.tscn", "res://scenes/skyforge_arena.tscn", "res://scenes/toxic_works.tscn"]
+const LEVELS := ["res://scenes/battle_arena.tscn", "res://scenes/skyforge_arena.tscn", "res://scenes/toxic_works.tscn", "res://scenes/assembly_ascent.tscn"]
 
 var lib: WarmUpLibrary
 var have := {}

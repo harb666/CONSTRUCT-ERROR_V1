@@ -6,11 +6,12 @@ extends SceneTree
 ## instead of getting stuck. Run after the level's collision changes:
 ##   godot --headless --path . -s tools/bake_skyforge_navmesh.gd
 ## The Toxic Works' (its hall waves hunt the same way):
-##   godot --headless --path . -s tools/bake_skyforge_navmesh.gd -- --level=works
+##   godot --headless --path . -s tools/bake_skyforge_navmesh.gd -- --level=works  (or ascent)
 
 const LEVELS := {
 	"skyforge": ["res://scenes/skyforge_arena.tscn", "SkyforgeArena/Collision", "res://levels/skyforge_arena/gameplay/navmesh.res"],
 	"works": ["res://scenes/toxic_works.tscn", "ToxicWorks/Collision", "res://levels/slime_arena/gameplay/navmesh.res"],
+	"ascent": ["res://scenes/assembly_ascent.tscn", "AssemblyAscent/Collision", "res://levels/assembly_ascent/gameplay/navmesh.res"],
 }
 
 

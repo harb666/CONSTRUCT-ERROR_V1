@@ -1,0 +1,1 @@
+{"note":"Hazard volumes: box areas in world space (Area3D). The game decides damage / kill / respawn.","hazards":[{"name":"HazardFluid","shape":"box_area","center":[0,0.5,0],"size":[100,1,130],"rotation":[0,0,0,1]}],"names":["HazardFluid"]}

@@ -164,10 +164,12 @@
   DEPLOY. HUD in the owner's cyan reference style, Ratchet: Gladiator
   layout (player panel top-left, arm weapons top-right).
 - Level select (owner asked: after character select, levels 1 and 2 and
-  the test area, with preview pictures, text readable through the glitch):
+  the test area, with preview pictures, text readable through the glitch;
+  level 3 added with it, the cards laid out however many there are):
   character select's button is NEXT (a joined co-op phone keeps DEPLOY -
   the host picks the level) -> LEVEL SELECT: LEVEL 1 Skyforge Arena,
-  LEVEL 2 Toxic Works, TEST AREA battle arena (`FrontEnd.LEVELS`), each a
+  LEVEL 2 Toxic Works, LEVEL 3 Assembly Ascent, TEST AREA battle arena
+  (`FrontEnd.LEVELS`), each a
   card with a preview picture (`assets/ui/levels/`, rendered from the game
   by `tools/render_level_previews.gd`), BACK and DEPLOY. Starts on the test
   area (picked first); DEPLOY fades out and loads the picked level
@@ -572,7 +574,9 @@
   dropped upstream; a riser's colliders are looked up under their
   StaticBody3D too - the import names the body, not the shape, so the
   platforms were solid before rising). Slime / crusher / falling: player
-  back to spawn, robots die. Exit hallway: "PART 3 COMING SOON" banner.
+  back to spawn, robots die. Exit hallway: once the whole squad has walked
+  into the black at its end (`ToxicWorks._check_exit`, host decides) part 3,
+  Assembly Ascent, loads (`Net.go_to_level`, the squad carried over).
   Final rebuild (image-to-level 8bc3117, Stages 86-96, packaged here with
   `package.py --game`): turbine fan wind (package's `_wind`), rising
   shotgun platform with dripping goo, GIR in Core_Vat, drone swarm, window
@@ -600,6 +604,39 @@
   (`ToxicWorks._shrink_gir`, `gir_scale` / `gir_lift`), so he floats clear
   of the tank's plinth band - whole body seen through the glass even from
   right up against it, head under the hood grate. Still drifts (the bob).
+- Assembly Ascent (owner asked: "import level 3 that's just been finished
+  in the image-to-level map maker"; image-to-level dfdaf82, its
+  `exports/assembly_ascent` copied to `levels/assembly_ascent` - level 1
+  part 3, "Map 3"; `AssemblyAscent`, `scenes/assembly_ascent.tscn`,
+  `?level=ascent`, LEVEL 3 on the level select, `assets/ui/levels/ascent.png`
+  from `tools/render_level_previews.gd` (`ONLY=ascent`)). Put together like
+  the Toxic Works: the package's mobile GLBs, apply_mobile.gd /
+  apply_effects.gd, the map maker preview's look with its own sky lighting
+  (`sky/ibl_atlas.png`, `tools/bake_skyforge_ibl.py` from its panorama),
+  Level 1's music. The package's scripts needed compile fixes here (marked
+  "Construct Error:": typed vars, `floorf`, the dropped assembly-arm
+  transform again, the effects file's base folder, a riser's colliders
+  under their StaticBody3D, a doorway entrance without a car). Reached from
+  the Works' exit (the squad walks out of the black hallway at the entrance
+  door, facing into the robot yard). The map maker's gameplay:
+  three fights (collision.json `encounters`), a WaveDirector each
+  (YardWaves 2 + 0 / 3 + 1, DeckWaves 2 + 1 / 3 + 2, ArenaWaves 2 + 1 /
+  3 + 1 / 4 + 2 grunts + skirmishers - the map maker gave the totals,
+  hunting over `gameplay/navmesh.res`, `bake_skyforge_navmesh.gd --
+  --level=ascent`), each started the first time a player steps onto its deck
+  (the ring in the robot yard, the upper deck, the arena); clearing the
+  upper deck's opens the exit's laser gate. The arena surges up out of the
+  slime when a player reaches the overlook; on it the jet screen flies over,
+  and walking up to its big red button opens the yard's laser gate. On the
+  showcase deck the boss lift comes down its shaft (13 s) with the mini boss
+  - the robot boss (`RobotBoss`, no respawn) - on it; when it dies the
+  conveyor ramps (15 m/s down into spike pits, faster than a sprint) spin
+  down and stop (apply_effects `boss_defeated`), so they can be climbed to
+  the exit. Sinking floating platforms (stand on one: it sinks into the
+  slime), the pad lift by the spinner, the spinner tower, two swinging
+  saws, the spike press, spike pits, slime: a player back to the door a
+  health bar down, robots die. The exit: "LEVEL 2 COMING SOON" (its target
+  `level2_part1` isn't made yet).
 - Grunt cannons straightened (owner asked: "the weapons mesh is bent"):
   `tools/straighten_grunt_cannons.py` unbent Left_ / Right_Forearm_Weapon
   in `robot_enemy.glb` and `robot_enemy_far.glb` (housing was ~4 deg and
