@@ -758,16 +758,12 @@
   peak over the whole fxsoak 747 -> 604 (browser). Phones (web_ios /
   web_android) stop warming at `Vfx.PHONE_SHADER_BUDGET` (600) shaders
   built - the rest made in play (a stutter, not a lost game);
-  `?shaderbudget=` sets it in any browser. The player's own effects (glide,
-  sonic boom, flashes, beams, vent, pick-ups, frost) are warmed in every
-  level (the glide's trail / streaks emitting - idle emitters draw
-  nothing), a recorded kind seen in 2+ levels counts for all
-  (`WarmUpLibrary.GENERIC_IN`: a level's recording can miss one), and the
-  warm-up's materials are kept after it (`Vfx._kept`, one per kind: Godot
-  drops a built-in material kind's shaders with its last material).
-  Assembly Ascent made 52 shaders mid-play before, 24 now (browser). (The
-  collector recording effects' kinds shared with scenery was tried: +147
-  shaders at load, no fewer in play.) The library must be re-recorded
+  `?shaderbudget=` sets it in any browser. The glide's trail / speed
+  streaks are warmed emitting (idle emitters draw nothing: their shaders
+  were made on the first glide). Level 3's records were added to the
+  library without changing the other levels' (a full re-record shifted
+  the Works' warm-up - 609 / 641 shaders in the browser, close to the 639
+  that lost the owner's iPhone). The library must be re-recorded
   (`tools/collect_warm_up_materials.gd`, ~35 min) after adding effects.
   Crash report on the title (owner can't reach play when the menus crash):
   the last session's report is drawn at the top of the title in amber

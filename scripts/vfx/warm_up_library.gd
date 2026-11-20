@@ -64,18 +64,11 @@ static func sprite_key(s: GeometryInstance3D) -> Dictionary:
 
 
 ## Whether material `i` is warmed up in `level` (all levels when the
-## library has no level records): recorded there, or in `GENERIC_IN` levels
-## or more - something the squad brings (a level's recording can miss one:
-## Assembly Ascent's missed the shotgun's scorch and the black hole's light,
-## built mid-play there).
+## library has no level records).
 func used_in(i: int, level: String) -> bool:
 	if levels.size() != materials.size() or level == "":
 		return true
-	var where := str(levels[i]).split(",", false)
-	return level in where or where.size() >= GENERIC_IN
-
-
-const GENERIC_IN := 2
+	return level in str(levels[i]).split(",", false)
 
 
 ## How material `i` was drawn: "mesh", "multi" or "mesh,multi".

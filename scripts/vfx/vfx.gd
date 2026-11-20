@@ -262,22 +262,19 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	# Frost Byte: the blizzard and frozen robots' materials.
 	items.append_array(FrostBlizzard.warm_up_items())
 	items.append_array(FrostFreeze.warm_up_items())
+	# Toxic barrels: the blast's blobs / chunks, the slime and its fire.
+	items.append_array(ToxicBlast.warm_up_items())
+	items.append_array(ElevatorLift.warm_up_items())
 	# The glide melee's glitch (overlay + pixel trail).
 	items.append_array(GlitchGlide.warm_up_items())
 	items.append_array(SonicBoom.warm_up_items())
+	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
 	var level_id := level.scene_file_path.get_file().get_basename()
-	# The level's own features' effects (toxic barrels: the blast's blobs /
-	# chunks, the slime and its fire; the lift; slime pools) only where the
-	# library's records have them. The player's own effects above go
-	# everywhere they go (a level's recording can miss one - a glide too
-	# short for its trail: Assembly Ascent built them mid-play).
-	var features: Array[Node3D] = []
-	features.append_array(ToxicBlast.warm_up_items())
-	features.append_array(ElevatorLift.warm_up_items())
-	features.append_array(SlimeSplash.warm_up_items())
-	items.append_array(features.filter(func(it: Node3D) -> bool: return _used_here(it, level_id)))
+	# Effects this level never draws (by the library's records - e.g. the
+	# toxic barrels' blast outside Skyforge) aren't prepared here.
+	items = items.filter(func(it: Node3D) -> bool: return _used_here(it, level_id))
 	items.append_array(_library_items(lit, level_id))
 	# A grid in view (anything off screen isn't drawn, so nothing is made),
 	# all hidden at first: they're shown a few a frame (below).
@@ -324,45 +321,7 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 		if not _follow(root):
 			return
 	if is_instance_valid(root):
-		_keep_materials(root)
 		root.queue_free()
-
-
-## The warm-up's own materials (the effects' kinds it made), kept after it's
-## gone: Godot drops a built-in material kind's shaders with its last
-## material, so they were made again mid-play wherever the level's scenery
-## didn't happen to share them (Assembly Ascent: the pistol's flash, the
-## glide's blocks).
-static var _kept: Array[Material] = []
-
-
-static func _keep_materials(root: Node) -> void:
-	var keep := {}  # kind -> material
-	for gi: GeometryInstance3D in root.find_children("*", "GeometryInstance3D", true, false):
-		var mats: Array[Material] = [gi.material_override, gi.material_overlay]
-		var mesh: Mesh = null
-		if gi is MeshInstance3D:
-			mesh = (gi as MeshInstance3D).mesh
-		elif gi is CPUParticles3D:
-			mesh = (gi as CPUParticles3D).mesh
-		elif gi is MultiMeshInstance3D and (gi as MultiMeshInstance3D).multimesh:
-			mesh = (gi as MultiMeshInstance3D).multimesh.mesh
-		elif gi is GPUParticles3D:
-			mats.append((gi as GPUParticles3D).process_material)
-			mesh = (gi as GPUParticles3D).draw_pass_1
-		if mesh:
-			for i in mesh.get_surface_count():
-				mats.append(mesh.surface_get_material(i))
-		for m in mats:
-			while m:
-				keep[WarmUpLibrary.key_of(m)] = m
-				m = m.next_pass
-	# One of each kind (each warm-up makes its own).
-	for m: Material in _kept:
-		var k := WarmUpLibrary.key_of(m)
-		if not keep.has(k):
-			keep[k] = m
-	_kept.assign(keep.values())
 
 
 ## Where the warm-up sits in front of the camera.
