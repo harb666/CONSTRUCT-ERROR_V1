@@ -6545,6 +6545,18 @@ func _front_end_tests() -> void:
 		works_kinds += 1 if Vfx._library.used_in(i, "toxic_works") else 0
 	_check(works_kinds > 40 and works_kinds < lib_n and works_items.size() < lib_n * 2 * 0.6 and works_items.size() < all_items.size(),
 		"warm-up: a level warms only the effects it uses, in the forms it draws them (Works: %d of %d kinds, %d items, was %d - every kind in both forms)" % [works_kinds, lib_n, works_items.size(), lib_n * 2])
+	# A kind seen in most levels counts everywhere: a level's recording can
+	# miss one (Assembly Ascent's missed the black hole's light - built
+	# mid-play there).
+	var generic_ok := true
+	var generic_n := 0
+	for i in lib_n:
+		var where := str(Vfx._library.levels[i]).split(",", false)
+		if where.size() >= WarmUpLibrary.GENERIC_IN and not "assembly_ascent" in where:
+			generic_n += 1
+			generic_ok = generic_ok and Vfx._library.used_in(i, "assembly_ascent")
+	_check(generic_n > 0 and generic_ok and not Vfx._library.used_in(Vfx._library.levels.find("toxic_works"), "assembly_ascent"),
+		"warm-up: kinds seen in %d+ levels are warmed in every level (%d missed by Assembly Ascent's recording), level-only ones aren't" % [WarmUpLibrary.GENERIC_IN, generic_n])
 	for it in all_items + works_items:
 		it.free()
 	_check(not Vfx.has_lamps(main) and wu.get_node_or_null("Lamp") == null, "front end: no lamp-lit versions in the test arena (it has no lamps)")

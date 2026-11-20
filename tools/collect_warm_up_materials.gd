@@ -5,7 +5,8 @@ extends SceneTree
 ## sentinel, barrel, boss, fall ...) is played, and every few frames each
 ## visible GeometryInstance3D's materials are looked at. The level's own
 ## scenery (in its scene file, not a character / robot) is left out - the
-## level's look-round (Vfx.sweep_level) prepares that. Textures are swapped
+## level's look-round (Vfx.sweep_level) prepares that - but not the effects'
+## kinds it shares. Textures are swapped
 ## for a tiny stand-in (only whether a slot is used changes a shader), so
 ## the library holds no real textures.
 ##   godot --headless --fixed-fps 60 --path . -s tools/collect_warm_up_materials.gd
@@ -16,7 +17,6 @@ const LEVELS := ["res://scenes/battle_arena.tscn", "res://scenes/skyforge_arena.
 
 var lib: WarmUpLibrary
 var have := {}
-var start_keys := {}
 var sprite_have := {}
 
 
@@ -49,7 +49,6 @@ func _run() -> void:
 		current_scene = main  # effects that go into the current scene
 		for i in 10:
 			await process_frame
-		start_keys.clear()
 		watch.clear()
 		_scan(main, true, path)
 		_scan(main, false, path)
@@ -182,9 +181,12 @@ func _materials_of(gi: GeometryInstance3D) -> Array[Material]:
 func _add(m: Material, at_start: bool, where: String, level := "", how := "mesh") -> void:
 	while m:
 		var k := WarmUpLibrary.key_of(m)
-		if at_start:
-			start_keys[k] = true
-		elif not start_keys.has(k):
+		# (Effects' kinds are recorded even when the level's scenery has the
+		# same: scenery out of the look-round's reach - hidden, beyond its
+		# view range - doesn't make them, and Assembly Ascent made the
+		# glide's, guns' and debris' unshaded / lit ones mid-play. One the
+		# scenery has made costs the warm-up nothing.)
+		if not at_start:
 			if not have.has(k):
 				have[k] = true
 				lib.materials.append(_portable(m))

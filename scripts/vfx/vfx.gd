@@ -262,19 +262,22 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 	# Frost Byte: the blizzard and frozen robots' materials.
 	items.append_array(FrostBlizzard.warm_up_items())
 	items.append_array(FrostFreeze.warm_up_items())
-	# Toxic barrels: the blast's blobs / chunks, the slime and its fire.
-	items.append_array(ToxicBlast.warm_up_items())
-	items.append_array(ElevatorLift.warm_up_items())
 	# The glide melee's glitch (overlay + pixel trail).
 	items.append_array(GlitchGlide.warm_up_items())
 	items.append_array(SonicBoom.warm_up_items())
-	items.append_array(SlimeSplash.warm_up_items())
 	items.append_array(PlasmaVent.warm_up_items())
 	items.append_array(RecoveryDrops.warm_up_items())
 	var level_id := level.scene_file_path.get_file().get_basename()
-	# Effects this level never draws (by the library's records - e.g. the
-	# toxic barrels' blast outside Skyforge) aren't prepared here.
-	items = items.filter(func(it: Node3D) -> bool: return _used_here(it, level_id))
+	# The level's own features' effects (toxic barrels: the blast's blobs /
+	# chunks, the slime and its fire; the lift; slime pools) only where the
+	# library's records have them. The player's own effects above go
+	# everywhere they go (a level's recording can miss one - a glide too
+	# short for its trail: Assembly Ascent built them mid-play).
+	var features: Array[Node3D] = []
+	features.append_array(ToxicBlast.warm_up_items())
+	features.append_array(ElevatorLift.warm_up_items())
+	features.append_array(SlimeSplash.warm_up_items())
+	items.append_array(features.filter(func(it: Node3D) -> bool: return _used_here(it, level_id)))
 	items.append_array(_library_items(lit, level_id))
 	# A grid in view (anything off screen isn't drawn, so nothing is made),
 	# all hidden at first: they're shown a few a frame (below).

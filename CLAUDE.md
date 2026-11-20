@@ -758,7 +758,13 @@
   peak over the whole fxsoak 747 -> 604 (browser). Phones (web_ios /
   web_android) stop warming at `Vfx.PHONE_SHADER_BUDGET` (600) shaders
   built - the rest made in play (a stutter, not a lost game);
-  `?shaderbudget=` sets it in any browser. The library must be re-recorded
+  `?shaderbudget=` sets it in any browser. The player's own effects (glide,
+  sonic boom, flashes, beams, vent, pick-ups, frost) are warmed in every
+  level, and a recorded kind seen in 3+ levels counts for all
+  (`WarmUpLibrary.GENERIC_IN`); the collector records effects' kinds even
+  when the level's scenery shares them (Assembly Ascent made 52 effect
+  shaders mid-play: its recording missed some, and scenery it shared
+  kinds with is out of the look-round's reach). The library must be re-recorded
   (`tools/collect_warm_up_materials.gd`, ~35 min) after adding effects.
   Crash report on the title (owner can't reach play when the menus crash):
   the last session's report is drawn at the top of the title in amber
