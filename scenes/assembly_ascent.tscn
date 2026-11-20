@@ -1,0 +1,178 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/world/assembly_ascent.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/touch_controls.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ui/debug_hud.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/ui/target_marker.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
+[ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
+[ext_resource type="NavigationMesh" path="res://levels/assembly_ascent/gameplay/navmesh.res" id="navmesh"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.2, 0.12, 0.26, 1)
+
+[sub_resource type="LabelSettings" id="hud_text"]
+font_size = 18
+outline_size = 4
+outline_color = Color(0, 0, 0, 0.7)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+level_music = ExtResource("music1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+shadow_enabled = true
+
+[node name="AssemblyAscent" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="Targets" type="Node3D" parent="."]
+
+[node name="BossHolder" type="Node3D" parent="."]
+
+[node name="YardTargets" type="Node3D" parent="."]
+
+[node name="YardSpawns" type="Node3D" parent="."]
+
+[node name="Yard1" type="Marker3D" parent="YardSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 7.2, 6)
+
+[node name="Yard2" type="Marker3D" parent="YardSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 7.2, 1)
+
+[node name="Yard3" type="Marker3D" parent="YardSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -36, 7.2, 11)
+
+[node name="Yard4" type="Marker3D" parent="YardSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 7.2, 12)
+
+[node name="Yard5" type="Marker3D" parent="YardSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -35, 7.2, 0)
+
+[node name="DeckTargets" type="Node3D" parent="."]
+
+[node name="DeckSpawns" type="Node3D" parent="."]
+
+[node name="Deck1" type="Marker3D" parent="DeckSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21, 18.2, -51)
+
+[node name="Deck2" type="Marker3D" parent="DeckSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 18.2, -48)
+
+[node name="Deck3" type="Marker3D" parent="DeckSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31, 18.2, -54)
+
+[node name="Deck4" type="Marker3D" parent="DeckSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 18.2, -55)
+
+[node name="Deck5" type="Marker3D" parent="DeckSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27, 18.2, -47)
+
+[node name="ArenaTargets" type="Node3D" parent="."]
+
+[node name="ArenaSpawns" type="Node3D" parent="."]
+
+[node name="Arena1" type="Marker3D" parent="ArenaSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 39, 15.8, 35.3)
+
+[node name="Arena2" type="Marker3D" parent="ArenaSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 33, 15.8, 32)
+
+[node name="Arena3" type="Marker3D" parent="ArenaSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 15.8, 39)
+
+[node name="Arena4" type="Marker3D" parent="ArenaSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 33, 15.8, 44)
+
+[node name="Arena5" type="Marker3D" parent="ArenaSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 15.8, 32)
+
+[node name="YardWaves" type="Node" parent="."]
+script = ExtResource("waves")
+targets_path = NodePath("../YardTargets")
+spawns_path = NodePath("../YardSpawns")
+waves = Array[Vector2i]([Vector2i(2, 0), Vector2i(3, 1)])
+first_wave_placed = false
+auto_start = false
+hunt_players = true
+min_player_distance = 6.0
+max_player_distance = 40.0
+max_active = 6
+
+[node name="DeckWaves" type="Node" parent="."]
+script = ExtResource("waves")
+targets_path = NodePath("../DeckTargets")
+spawns_path = NodePath("../DeckSpawns")
+waves = Array[Vector2i]([Vector2i(2, 1), Vector2i(3, 2)])
+first_wave_placed = false
+auto_start = false
+hunt_players = true
+min_player_distance = 6.0
+max_player_distance = 40.0
+max_active = 6
+
+[node name="ArenaWaves" type="Node" parent="."]
+script = ExtResource("waves")
+targets_path = NodePath("../ArenaTargets")
+spawns_path = NodePath("../ArenaSpawns")
+waves = Array[Vector2i]([Vector2i(2, 1), Vector2i(3, 1), Vector2i(4, 2)])
+first_wave_placed = false
+auto_start = false
+hunt_players = true
+min_player_distance = 6.0
+max_player_distance = 40.0
+max_active = 6
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+navigation_mesh = ExtResource("navmesh")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="Spawn1" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -47.5, 6.25, 44)
+
+[node name="Spawn2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -47.5, 6.25, 45.8)
+
+[node name="Spawn3" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -47.5, 6.25, 42.2)
+
+[node name="Spawn4" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -49.3, 6.25, 44)
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TargetMarker" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8")
+
+[node name="TouchControls" type="Control" parent="UI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("3")
+
+[node name="DebugHud" type="Label" parent="UI"]
+offset_left = 60.0
+offset_top = 16.0
+offset_right = 700.0
+offset_bottom = 70.0
+label_settings = SubResource("hud_text")
+script = ExtResource("4")

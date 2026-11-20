@@ -68,7 +68,13 @@ static func warm_up_items() -> Array[Node3D]:
 	m.size = Vector3.ONE * 0.2
 	mi.mesh = m
 	mi.material_overlay = make_material()
-	return [mi, _make_trail(), _make_streaks()]
+	# (Emitting: an idle emitter draws nothing, so made nothing - the trail's
+	# and streaks' shaders were made on the first glide.)
+	var trail := _make_trail()
+	var streaks := _make_streaks()
+	trail.emitting = true
+	streaks.emitting = true
+	return [mi, trail, streaks]
 
 
 func _ready() -> void:

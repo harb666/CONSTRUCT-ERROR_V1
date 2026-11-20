@@ -11,12 +11,17 @@ const SHOTS := {
 	"skyforge": ["res://scenes/skyforge_arena.tscn", Vector3(40, 60, 60), Vector3(0, 30, 0)],
 	"works": ["res://scenes/toxic_works.tscn", Vector3(0, 24, 30), Vector3(0, 4, -30)],
 	"battle": ["res://scenes/battle_arena.tscn", Vector3(0, 10, 28), Vector3(0, 1, -6)],
+	"ascent": ["res://scenes/assembly_ascent.tscn", Vector3(-46, 24, 58), Vector3(10, 10, 5)],
 }
 
 
 func _init() -> void:
 	root.size = Vector2i(1280, 720)
+	# ONLY=<id>: just that one (the others' pictures stay as they are).
+	var only := OS.get_environment("ONLY")
 	for id in SHOTS:
+		if only != "" and id != only:
+			continue
 		var shot: Array = SHOTS[id]
 		var m: Node = load(shot[0]).instantiate()
 		m.set("front_end_mode", 0)

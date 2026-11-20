@@ -23,7 +23,7 @@ extends Node3D
 ##   - the turbine fan by the exit blows a player who comes into its air
 ##     stream straight off the walkway into the slime (owner asked);
 ##   - slime, the crusher or falling off sends a player back to the spawn
-##     and kills a robot; the exit leads to part 3, not made yet.
+##     and kills a robot; the exit leads to part 3, Assembly Ascent.
 
 signal level_exit_entered(target: String, body: Node)
 
@@ -654,6 +654,7 @@ func _physics_process(_delta: float) -> void:
 		return
 	if Net.is_authority():
 		_exit_ambush_check()
+		_check_exit()
 	var winds = effects.get("_winds")
 	if not winds is Array or (winds as Array).is_empty():
 		return
@@ -780,10 +781,36 @@ func _on_fell(body: Node3D) -> void:
 		body.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, body.global_position, Vector3.DOWN, 0.0))
 
 
-## The exit door: part 3 isn't made yet.
+## The exit door leads to part 3, Assembly Ascent (owner asked: the map
+## maker's finished Map 3): once the whole squad has walked into the black
+## at the end of the exit hallway, it loads (the world's owner decides;
+## online everyone follows), the squad carrying over as down the lift.
+const NEXT_PART := "res://scenes/assembly_ascent.tscn"
+var leaving := false
+
+
 func _on_level_exit(target: String, body: Node) -> void:
 	level_exit_entered.emit(target, body)
-	if body is PlayerController and hud and not _exit_shown:
+	if body is PlayerController and hud and not _exit_shown and get_tree().get_nodes_in_group(&"players").size() > 1:
 		_exit_shown = true
-		hud.banner("TOXIC WORKS - EXIT", "PART 3 COMING SOON")
+		hud.banner("TOXIC WORKS - EXIT", "WAITING FOR THE SQUAD")
 		get_tree().create_timer(6.0).timeout.connect(func() -> void: _exit_shown = false)
+	_check_exit()
+
+
+func _check_exit() -> void:
+	if leaving or not Net.is_authority():
+		return
+	var players := get_tree().get_nodes_in_group(&"players")
+	if players.is_empty():
+		return
+	var inside := {}
+	for a in get_tree().get_nodes_in_group(&"level_exit"):
+		if a is Area3D and is_ancestor_of(a):
+			for b in (a as Area3D).get_overlapping_bodies():
+				inside[b] = true
+	for pl in players:
+		if not inside.has(pl):
+			return
+	leaving = true
+	Net.go_to_level(get_tree(), NEXT_PART)

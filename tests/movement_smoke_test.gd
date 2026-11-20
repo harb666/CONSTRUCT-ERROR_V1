@@ -555,6 +555,7 @@ func _run() -> void:
 	await _toxic_barrel_tests()
 	await _level_flow_tests()
 	await _toxic_works_tests()
+	await _assembly_ascent_tests()
 	await _net_tests()
 	await _music_tests()
 	await _level_change_tests()
@@ -5613,6 +5614,134 @@ func _toxic_works_tests() -> void:
 	RobotEnemy.ai_enabled = ai_was
 
 
+## Assembly Ascent (owner asked: the map maker's level 1 part 3, "Map 3").
+func _assembly_ascent_tests() -> void:
+	_check((load("res://scripts/main.gd") as Script).get_script_constant_map()["LEVELS"].get("ascent") == "res://scenes/assembly_ascent.tscn",
+		"ascent: Assembly Ascent is a level (?level=ascent)")
+	var levels: Array = (load("res://scripts/ui/front_end.gd") as Script).get_script_constant_map()["LEVELS"]
+	_check(levels.any(func(l: Dictionary) -> bool: return l["id"] == "level3" and l["scene"] == "res://scenes/assembly_ascent.tscn" and ResourceLoader.exists(l["image"])),
+		"ascent: LEVEL 3 on the level select, with its preview picture")
+	var main: Node = load("res://scenes/assembly_ascent.tscn").instantiate()
+	main.set("front_end_mode", 0)
+	main.set("no_deaths", true)
+	root.add_child(main)
+	current_scene = main
+	await _ticks(30)
+	await _wait_warm_up()
+	await _ticks(10)
+	var aa := main.get_node("AssemblyAscent") as AssemblyAscent
+	var p: PlayerController = main.players.values()[0]
+	var spawn := p.global_position
+	_check(aa.level.find_children("*", "MeshInstance3D", true, false).size() > 30 and aa.collision.find_children("*", "StaticBody3D", true, false).size() > 30
+		and aa.look.converted > 20 and aa.effects.get_child_count() > 5,
+		"ascent: the level, its collision, the map maker preview's look (%d materials) and its effects are in" % aa.look.converted)
+	_check(spawn.distance_to(Vector3(-47.5, 6.0, 44.0)) < 1.0 and p.is_on_floor() and (-p.global_basis.z).dot(Vector3.RIGHT) > 0.9,
+		"ascent: the squad starts at the entrance door, standing, facing into the yard (%s)" % spawn)
+	var fx: Node = aa.effects
+	_check(fx.get("_belts").size() == 2 and fx.get("_boss_lifts").size() == 1 and fx.get("_jets").size() == 1 and fx.get("_risers").size() == 1,
+		"ascent: the conveyor ramps, the boss lift, the jet screen and the rising arena are in")
+	var hazards := main.get_tree().get_nodes_in_group(&"hazard").filter(func(a: Node) -> bool: return aa.is_ancestor_of(a))
+	_check(hazards.size() >= 10 and hazards.all(func(a: Node) -> bool: return a.has_meta(&"hazard_hooked")),
+		"ascent: slime, spikes, saws, the spinner and the press are deadly (%d hazards)" % hazards.size())
+	var blockers := main.get_tree().get_nodes_in_group(&"laser_gate").map(func(n: Node) -> String: return String(n.name))
+	_check(blockers.has("Yard_Laser_Blocker") and blockers.has("Exit_Laser_Blocker") and aa.encounter_triggers.size() == 3,
+		"ascent: the yard and exit laser gates are closed, the 3 fights wait on their decks %s" % [blockers])
+	var put := func(at: Vector3) -> void:
+		p.global_position = at
+		p.velocity = Vector3.ZERO
+		p.reset_physics_interpolation()
+	# The robot yard's fight starts on its ring.
+	put.call(Vector3(-30, 7.3, 6))
+	await _ticks(90)
+	_check(aa.encounters_started.has("Yard_Waves") and main.get_node("YardTargets").get_child_count() > 0,
+		"ascent: stepping onto the robot yard's ring starts its fight")
+	# Into the slime: back to the door one bar down.
+	var h0 := p.health
+	put.call(Vector3(-10, 3.0, 25))
+	await _ticks(90)
+	_check(p.global_position.distance_to(spawn) < 1.5 and p.health < h0, "ascent: the slime sends a player back to the door, a bar down")
+	# The conveyor ramps run faster than a sprint, down into the spikes.
+	put.call(Vector3(25.5, 15.6, -36.3))
+	await _ticks(1)
+	var b0 := p.global_position
+	await _ticks(20)
+	var belt_v := (p.global_position - b0).length() * 3.0
+	_check(belt_v > 11.0, "ascent: the conveyor ramps carry a player down faster than a sprint (%.1f m/s)" % belt_v)
+	# The boss lift: down its shaft with the mini boss onto the showcase deck.
+	put.call(Vector3(-30, 7.3, -30))
+	var t := 0
+	while aa.boss == null and t < 60 * 20:
+		await _ticks(10)
+		t += 10
+	_check(aa.boss != null and aa.boss.global_position.distance_to(Vector3(-30, 7.4, -39.5)) < 1.0 and aa.boss.respawn_time < 0.0,
+		"ascent: on the showcase deck the boss lift comes down with the mini boss (%.1f s)" % (t / 60.0))
+	if aa.boss:
+		aa.boss.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, aa.boss.global_position, Vector3.DOWN, 0.0))
+		await _ticks(180)
+		put.call(Vector3(25.5, 15.6, -36.3))
+		await _ticks(1)
+		b0 = p.global_position
+		await _ticks(20)
+		_check(aa.boss_beaten and (p.global_position - b0).length() < 0.1 and float(fx.get("_belts")[0][4]["k"]) == 0.0,
+			"ascent: with the mini boss down the conveyors stop - climbable to the exit")
+	# The arena: up out of the slime from the overlook, then its fight and the
+	# jet screen; its big red button opens the yard gate.
+	put.call(Vector3(43.2, 16.0, 51.2))
+	await _ticks(60 * 14)
+	put.call(Vector3(39, 16.5, 40))
+	t = 0
+	var jet: Dictionary = fx.get("_jets")[0]
+	while String(jet.get("phase", "")) != "wait" and t < 60 * 15:
+		await _ticks(10)
+		t += 10
+	_check(p.is_on_floor() and aa.encounters_started.has("Arena_Waves") and String(jet.get("phase", "")) == "wait",
+		"ascent: the arena rises from the overlook, its fight starts and the jet screen flies over")
+	put.call(Vector3(29.965, 16.0, 35.34))
+	await _ticks(30)
+	_check(aa.terminals_used.has("Jet_Screen_Button") and aa.gates_open.has("Yard_Laser"), "ascent: the jet screen's big red button opens the yard gate")
+	# The upper deck's fight, cleared, opens the exit gate.
+	put.call(Vector3(21, 18.3, -51))
+	var d: WaveDirector = main.get_node("DeckWaves")
+	t = 0
+	while d.state != WaveDirector.State.DONE and t < 60 * 60:
+		for r in main.get_node("DeckTargets").get_children():
+			if r is RobotEnemy and r.alive:
+				r.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, r.global_position, Vector3.DOWN, 0.0))
+		await _ticks(10)
+		t += 10
+	_check(aa.encounters_done.has("Deck_Waves") and aa.gates_open.has("Exit_Laser"), "ascent: clearing the upper deck's 2 waves opens the exit gate")
+	main.queue_free()
+	await _ticks(5)
+	# The Toxic Works' exit now leads here, the squad carried over.
+	var works: Node = load("res://scenes/toxic_works.tscn").instantiate()
+	works.set("front_end_mode", 0)
+	works.set("no_deaths", true)
+	root.add_child(works)
+	current_scene = works
+	await _ticks(30)
+	await _wait_warm_up()
+	var wp: PlayerController = works.players.values()[0]
+	wp.add_bitcoins(5)
+	var exit_area: Area3D = null
+	for a in get_nodes_in_group(&"level_exit"):
+		exit_area = a
+	wp.global_position = exit_area.global_position + Vector3.UP * 0.2
+	wp.velocity = Vector3.ZERO
+	t = 0
+	while (current_scene == null or current_scene.scene_file_path != "res://scenes/assembly_ascent.tscn") and t < 600:
+		await process_frame
+		t += 1
+	await _ticks(30)
+	await _wait_warm_up()
+	var ap: PlayerController = current_scene.players.values()[0] if current_scene and current_scene.get("players") else null
+	_check(ap != null and ap.global_position.distance_to(Vector3(-47.5, 6.0, 44.0)) < 1.5 and ap.bitcoins >= 5,
+		"ascent: walking into the Toxic Works' exit hallway takes the squad on to Assembly Ascent, things carried over")
+	if current_scene:
+		current_scene.queue_free()
+	current_scene = null
+	await _ticks(5)
+
+
 ## Online co-op pieces that work in one game (the two-game test is
 ## tests/run_net_pair.sh): offline the game runs everything itself; a
 ## teammate's character takes no damage here; the host's robots on a joined
@@ -6487,10 +6616,10 @@ func _front_end_tests() -> void:
 		await process_frame
 	await process_frame
 	_check(fe.screen == FrontEnd.Screen.LEVEL and main.players.is_empty() and paused, "level select: NEXT opens the level select (no player yet)")
-	_check(fe._buttons.has("level:level1") and fe._buttons.has("level:level2") and fe._buttons.has("level:test") and fe._buttons.has("deploy") and fe._buttons.has("back"),
-		"level select: cards for LEVEL 1, LEVEL 2 and the TEST AREA, BACK and DEPLOY laid out")
+	_check(fe._buttons.has("level:level1") and fe._buttons.has("level:level2") and fe._buttons.has("level:level3") and fe._buttons.has("level:test") and fe._buttons.has("deploy") and fe._buttons.has("back"),
+		"level select: cards for LEVEL 1, 2, 3 and the TEST AREA, BACK and DEPLOY laid out")
 	_check(FrontEnd.LEVELS.all(func(l: Dictionary) -> bool: return ResourceLoader.exists(l["scene"]) and load(l["image"]) is Texture2D and (load(l["image"]) as Texture2D).get_width() >= 640)
-		and fe._level_images.size() == 3 and fe._level_images.values().all(func(t: Variant) -> bool: return t is Texture2D),
+		and fe._level_images.size() == FrontEnd.LEVELS.size() and fe._level_images.values().all(func(t: Variant) -> bool: return t is Texture2D),
 		"level select: each level has its scene and a preview picture, drawn on its card")
 	_check(fe.level_id == "test" and fe.level_path() == main.scene_file_path, "level select: the level behind the menu (the test area) is picked to start with")
 	var lvl_texts: Array = g.texts.map(func(t: Array) -> String: return t[2])

@@ -35,6 +35,8 @@ const LEVELS := [
 		"scene": "res://scenes/skyforge_arena.tscn", "image": "res://assets/ui/levels/skyforge.png"},
 	{"id": "level2", "title": "LEVEL 2", "name": "TOXIC WORKS", "info": "3 WAVES  //  SLIME, CRUSHER, LASER GATES",
 		"scene": "res://scenes/toxic_works.tscn", "image": "res://assets/ui/levels/works.png"},
+	{"id": "level3", "title": "LEVEL 3", "name": "ASSEMBLY ASCENT", "info": "3 FIGHTS  //  MINI BOSS, CONVEYORS, LASER GATES",
+		"scene": "res://scenes/assembly_ascent.tscn", "image": "res://assets/ui/levels/ascent.png"},
 	{"id": "test", "title": "TEST AREA", "name": "BATTLE ARENA", "info": "EVERY WEAPON  //  ONE OF EACH ENEMY",
 		"scene": "res://scenes/battle_arena.tscn", "image": "res://assets/ui/levels/battle.png"},
 ]
@@ -893,14 +895,16 @@ func _draw_levels(a: float) -> void:
 	var bottom := size.y - 24.0
 	var deploy := Rect2(Vector2(size.x - m - 280, bottom - 62) + off, Vector2(280, 62))
 	var back := Rect2(Vector2(m, bottom - 52) + off, Vector2(180, 52))
-	# Cards: as wide as fits three across, short enough to leave the buttons.
+	# Cards: as wide as fits them all across, short enough to leave the
+	# buttons.
 	var gap := 22.0
 	var top := head.end.y + 26.0
 	var text_h := 112.0
-	var cw := (size.x - 2.0 * m - gap * 2.0) / 3.0
+	var nc := float(LEVELS.size())
+	var cw := (size.x - 2.0 * m - gap * (nc - 1.0)) / nc
 	cw = minf(cw, (deploy.position.y - 24.0 - top - text_h) * 16.0 / 9.0)
 	var ih := cw * 9.0 / 16.0
-	var x0 := (size.x - (cw * 3.0 + gap * 2.0)) * 0.5
+	var x0 := (size.x - (cw * nc + gap * (nc - 1.0))) * 0.5
 	for i in LEVELS.size():
 		var l: Dictionary = LEVELS[i]
 		var cr := Rect2(Vector2(x0 + i * (cw + gap), top) + off, Vector2(cw, ih + text_h))
