@@ -324,7 +324,45 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 		if not _follow(root):
 			return
 	if is_instance_valid(root):
+		_keep_materials(root)
 		root.queue_free()
+
+
+## The warm-up's own materials (the effects' kinds it made), kept after it's
+## gone: Godot drops a built-in material kind's shaders with its last
+## material, so they were made again mid-play wherever the level's scenery
+## didn't happen to share them (Assembly Ascent: the pistol's flash, the
+## glide's blocks).
+static var _kept: Array[Material] = []
+
+
+static func _keep_materials(root: Node) -> void:
+	var keep := {}  # kind -> material
+	for gi: GeometryInstance3D in root.find_children("*", "GeometryInstance3D", true, false):
+		var mats: Array[Material] = [gi.material_override, gi.material_overlay]
+		var mesh: Mesh = null
+		if gi is MeshInstance3D:
+			mesh = (gi as MeshInstance3D).mesh
+		elif gi is CPUParticles3D:
+			mesh = (gi as CPUParticles3D).mesh
+		elif gi is MultiMeshInstance3D and (gi as MultiMeshInstance3D).multimesh:
+			mesh = (gi as MultiMeshInstance3D).multimesh.mesh
+		elif gi is GPUParticles3D:
+			mats.append((gi as GPUParticles3D).process_material)
+			mesh = (gi as GPUParticles3D).draw_pass_1
+		if mesh:
+			for i in mesh.get_surface_count():
+				mats.append(mesh.surface_get_material(i))
+		for m in mats:
+			while m:
+				keep[WarmUpLibrary.key_of(m)] = m
+				m = m.next_pass
+	# One of each kind (each warm-up makes its own).
+	for m: Material in _kept:
+		var k := WarmUpLibrary.key_of(m)
+		if not keep.has(k):
+			keep[k] = m
+	_kept.assign(keep.values())
 
 
 ## Where the warm-up sits in front of the camera.

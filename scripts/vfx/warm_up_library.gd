@@ -75,7 +75,7 @@ func used_in(i: int, level: String) -> bool:
 	return level in where or where.size() >= GENERIC_IN
 
 
-const GENERIC_IN := 3
+const GENERIC_IN := 2
 
 
 ## How material `i` was drawn: "mesh", "multi" or "mesh,multi".
