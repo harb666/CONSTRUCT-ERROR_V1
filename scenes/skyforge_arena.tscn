@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/world/level_flow.gd" id="flow"]
 [ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 [ext_resource type="NavigationMesh" path="res://levels/skyforge_arena/gameplay/navmesh.res" id="navmesh"]
+[ext_resource type="Script" path="res://scripts/world/health_pickup.gd" id="healthpickup"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -133,6 +134,32 @@ script = ExtResource("lift")
 
 [node name="LevelFlow" type="Node" parent="."]
 script = ExtResource("flow")
+
+[node name="HealthPickups" type="Node3D" parent="."]
+
+[node name="Health1" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40.25, 37.0, -39.67)
+script = ExtResource("healthpickup")
+
+[node name="Health2" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 41.92, 40.0, -12.75)
+script = ExtResource("healthpickup")
+
+[node name="Health3" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.08, 40.0, 4.83)
+script = ExtResource("healthpickup")
+
+[node name="Health4" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 46.25, 37.0, 35.42)
+script = ExtResource("healthpickup")
+
+[node name="Health5" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42.25, 37.0, 40.92)
+script = ExtResource("healthpickup")
+
+[node name="Health6" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.42, 40.0, -36.25)
+script = ExtResource("healthpickup")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

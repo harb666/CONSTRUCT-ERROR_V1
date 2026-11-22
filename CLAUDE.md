@@ -856,13 +856,18 @@
   for the players' other weapons"): `WeaponDefinition.max_ammo` /
   `ammo_pack` - shotgun 20 / 5, machine gun 240 / 60, rocket launcher 8 / 2,
   Frost Byte 4 / 1, black hole gun 3 / 1. A pad gives a full load (and tops
-  it up when walked onto again, the pad staying). DOOM Eternal balance
-  (owner asked: "only drop when the player melees and kills the enemy" -
-  else a weapon never runs down): only a MELEE kill drops ammo (3D bullets
-  in the weapon's colour, its icon over each) for the local player's
-  weapons that aren't full, emptiest first - grunt 2, skirmisher /
-  sentinel 3 (`RecoveryDrops.melee_ammo_packs`; the boss can't be
-  meleed); gun kills drop none. Run dry, the arm switches to the
+  it up when walked onto again, the pad staying). Every kill drops ammo
+  (owner asked, replacing their earlier melee-only DOOM Eternal rule) for
+  the local player's weapons that aren't full, emptiest first
+  (`RecoveryDrops.kill_ammo_packs`): a gun kill 1 pick-up, a melee kill
+  more - grunt 2, skirmisher / sentinel 3 (`melee_ammo_packs`) - the boss
+  4. Each is a hologram of the weapon's own ammo in its colour (owner
+  asked: "mini black holes for the black hole gun"; `ammo_mesh`,
+  hologram.gdshader - no new shaders): 3 shotgun shells, a curl of belted
+  machine gun rounds, a mini rocket with fins, Frost Byte ice crystals, a
+  mini black hole (black core, accretion disc, outer ring), the weapon's
+  icon over it. (Robots dying in slime / hazards drop it too: kills don't
+  carry who made them online.) Run dry, the arm switches to the
   pistol cannon by itself and back when ammo for it is picked up
   (`WeaponLoadout` use_ammo / add_ammo, `_dry`); an empty weapon can't be
   picked in the wheel (dimmed, EMPTY, "NO AMMO - KILL ENEMIES FOR MORE").
@@ -871,10 +876,23 @@
   player's own device (co-op).
 - Pick-ups (owner asked; `RecoveryDrops`): health = a 3D "+" cross (the old
   crystal's size, green), armour = a 3D green shield (a lighter raised
-  boss on it), ammo = a 3D bullet in the gun's colour; all bob, spin and
+  boss on it), ammo = a hologram of the gun's ammo (above); all bob, spin and
   glitch now and then (a jump sideways, a stretch and a cyan / magenta
   flash). Magnet 3 -> 7 m (owner asked: "more magnetic", collected even
   from an edge - they fly up / down to the player).
+- Holographic health pick-ups placed round every map (owner asked; owner
+  picked all levels): `HealthPickup` under each level's "HealthPickups"
+  node - test arena 4, Skyforge 6 (tower decks), Toxic Works 8 (hall and
+  Works), Assembly Ascent 7 (start / showcase / upper / exit decks, robot
+  ring, overlook). A projector on the floor (dark disc, glowing green
+  ring) throws a faint beam up into a big green holographic "+" (~0.6 m,
+  hologram.gdshader) that bobs, turns and glitches now and then. Walked
+  through with health missing: +25 (2.5 bars), gone, back 30 s later
+  materialising (`Hologram.teleport_in`). Each device its own (co-op:
+  every player has their own). No sound (no owner sound for it). Spots
+  chosen by `tools/place_health_pickups.gd` (still open floor linked over
+  the navmesh to where players / robots start; no slime, hazards, moving
+  platforms, spawns or pads) then curated, checked in renders.
 - Currency (owner asked): bitcoin tokens - small gold coins with the ₿ on
   both faces (`assets/ui/pickups/bitcoin_face.png`, made by
   `tools/make_bitcoin_face.py`) - burst out of every robot killed, more

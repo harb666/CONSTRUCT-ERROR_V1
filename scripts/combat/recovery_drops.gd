@@ -5,12 +5,14 @@ extends Node3D
 ## no lights), at most `max_active`.
 ##  - Health: a 3D cross "+"; armour: a 3D green shield (owner asked). Every
 ##    kill drops one (whichever the player is lower on).
-##  - Ammo: a 3D bullet in the weapon's colour, its icon over it (owner
-##    asked), worth its `ammo_pack`. DOOM Eternal style (owner asked: "only
-##    drop when the player melees and kills the enemy" - else a weapon
-##    never runs down): only a player's MELEE kill drops ammo -
-##    `melee_ammo_packs` (grunt 2, skirmisher / sentinel 3) for the local
-##    player's weapons that aren't full, emptiest first.
+##  - Ammo: a 3D hologram of the weapon's own ammo in its colour (owner
+##    asked: "holographic ammo pickups ... correspond to what weapons it
+##    matches"): shotgun shells, a machine gun belt, a mini rocket, Frost
+##    Byte ice crystals, a mini black hole (`ammo_mesh`), its icon over it,
+##    worth its `ammo_pack`. Every kill drops some (owner asked; it was melee
+##    kills only): `kill_ammo_packs` - a gun kill 1, a melee kill more
+##    (`melee_ammo_packs`: grunt 2, skirmisher / sentinel 3), the boss 4 -
+##    for the local player's weapons that aren't full, emptiest first.
 ##  - Bitcoin tokens (owner asked: an in-game currency): small gold coins
 ##    that burst out of every robot killed - more from stronger ones
 ##    (`token_count`: grunt 4, skirmisher 7, sentinel 9, boss 30) - and go
@@ -103,12 +105,21 @@ static func on_enemy_killed(enemy: Node3D, info: DamageInfo, shards := true) -> 
 			var at := enemy.global_position
 			if shards:
 				m.enemy_killed(at, info)
-			if info and info.weapon == &"melee":
-				m.drop_ammo(at, melee_ammo_packs(enemy))
+			m.drop_ammo(at, kill_ammo_packs(enemy, info))
 			m.drop_tokens(at, token_count(enemy))
 
 
-## Ammo bullets a melee kill drops: bigger enemies, more.
+## Ammo pick-ups a kill drops: a gun kill one, a melee kill more, the boss
+## several.
+static func kill_ammo_packs(enemy: Node, info: DamageInfo) -> int:
+	if enemy is RobotBoss:
+		return 4
+	if info and info.weapon == &"melee":
+		return melee_ammo_packs(enemy)
+	return 1
+
+
+## Ammo pick-ups a melee kill drops: bigger enemies, more.
 static func melee_ammo_packs(enemy: Node) -> int:
 	if enemy is RobotSentinel or enemy is RobotSkirmisher:
 		return 3
@@ -145,7 +156,7 @@ func spawn_ammo(def: WeaponDefinition, at: Vector3) -> void:
 	spawn(Kind.AMMO, at, def.ammo_pack)
 	var s := _last
 	s.weapon = def
-	s.core.mesh = _bullet_mesh(def.accent_color)
+	s.core.mesh = ammo_mesh(def)
 	s.glow.material_override = Vfx.material("glow", def.accent_color * 0.6, BaseMaterial3D.BILLBOARD_ENABLED)
 	var icon := _icon_of(s)
 	icon.texture = def.icon
@@ -450,6 +461,134 @@ static func _bullet_mesh(col: Color) -> Mesh:
 	return mesh
 
 
+## A hologram in `col` (hologram.gdshader, as the pads' weapons' coat and
+## the teleport-ins: no new shaders): see-through, scan lines running up,
+## a bright rim. One per colour.
+static func hologram_material(col: Color, coat := 0.6) -> ShaderMaterial:
+	var key := "holo%s_%.2f" % [col.to_html(), coat]
+	if _meshes.has(key):
+		return _meshes[key]
+	var m := ShaderMaterial.new()
+	m.shader = Hologram.SHADER
+	m.set_shader_parameter("color", col.lerp(Color.WHITE, 0.15))
+	m.set_shader_parameter("coat", coat)
+	m.set_shader_parameter("line_y", -1000.0)
+	m.set_shader_parameter("band", 0.0001)
+	m.set_shader_parameter("strength", 1.0)
+	_meshes[key] = m
+	return m
+
+
+## Ammo pick-up: a hologram of the weapon's own ammo, in its colour (owner
+## asked: "mini black holes for the black hole gun"); ~0.4 m.
+static func ammo_mesh(def: WeaponDefinition) -> Mesh:
+	var key := "ammo_" + String(def.id)
+	if _meshes.has(key):
+		return _meshes[key]
+	var holo := hologram_material(def.accent_color)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var mesh := ArrayMesh.new()
+	var core_black := false
+	match def.id:
+		&"shotgun":
+			# Three fat shells standing in a row: hull and brass head.
+			for i in 3:
+				var x := (i - 1) * 0.12
+				_add_cyl(st, 0.05, 0.05, 0.2, Vector3(x, 0.03, 0.0))
+				_add_cyl(st, 0.058, 0.058, 0.06, Vector3(x, -0.1, 0.0))
+		&"machine_gun":
+			# A curl of belted rounds: case, tip and the link between each.
+			for i in 6:
+				var a := (i - 2.5) * 0.32
+				var at := Vector3(sin(a) * 0.32, 0.0, (cos(a) - 1.0) * 0.32 + 0.12)
+				_add_cyl(st, 0.034, 0.034, 0.13, at + Vector3(0, -0.02, 0))
+				_add_cyl(st, 0.0, 0.034, 0.08, at + Vector3(0, 0.085, 0))
+				_add_box(st, Vector3(0.1, 0.035, 0.03), Transform3D(Basis(Vector3.UP, -a), at + Vector3(0, -0.05, 0)))
+		&"rocket_launcher":
+			# A mini rocket: body, nose cone, nozzle and four fins.
+			_add_cyl(st, 0.06, 0.06, 0.3, Vector3(0, 0.0, 0))
+			_add_cyl(st, 0.0, 0.06, 0.14, Vector3(0, 0.22, 0))
+			_add_cyl(st, 0.04, 0.052, 0.06, Vector3(0, -0.18, 0))
+			for k in 4:
+				var b := Basis(Vector3.UP, k * PI * 0.5)
+				_add_box(st, Vector3(0.16, 0.11, 0.012), Transform3D(b, b * Vector3(0.0, -0.1, 0.0)))
+		&"frost_byte":
+			# A cluster of ice crystals: six-sided spikes.
+			for c: Array in [[0.0, 0.0, 0.34, 0.065], [0.45, 0.07, 0.24, 0.05], [-0.5, -0.06, 0.22, 0.048], [0.2, -0.6, 0.18, 0.04]]:
+				var b := Basis(Vector3.FORWARD, c[0]) * Basis(Vector3.RIGHT, c[1])
+				var h: float = c[2]
+				var r: float = c[3]
+				_add_cyl(st, r, r, h, b * Vector3(0, h * 0.5 - 0.12, 0), b, 6)
+				_add_cyl(st, 0.0, r, h * 0.45, b * Vector3(0, h + h * 0.225 - 0.12, 0), b, 6)
+		&"black_hole_generator":
+			# A mini black hole: a glowing accretion disc round a black core,
+			# a thin ring further out.
+			var tilt := Basis(Vector3.RIGHT, 0.35)
+			var disc := TorusMesh.new()
+			disc.inner_radius = 0.1
+			disc.outer_radius = 0.2
+			disc.rings = 24
+			disc.ring_segments = 6
+			st.append_from(disc, 0, Transform3D(tilt.scaled(Vector3(1, 0.35, 1)), Vector3.ZERO))
+			var ring := TorusMesh.new()
+			ring.inner_radius = 0.25
+			ring.outer_radius = 0.27
+			ring.rings = 28
+			ring.ring_segments = 4
+			st.append_from(ring, 0, Transform3D(Basis(Vector3.FORWARD, 0.5) * tilt, Vector3.ZERO))
+			core_black = true
+		_:
+			mesh = _bullet_mesh(def.accent_color)
+			_meshes[key] = mesh
+			return mesh
+	st.generate_normals()
+	st.set_material(holo)
+	st.commit(mesh)
+	if core_black:
+		var st2 := SurfaceTool.new()
+		st2.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var sph := SphereMesh.new()
+		sph.radius = 0.085
+		sph.height = 0.17
+		sph.radial_segments = 16
+		sph.rings = 8
+		st2.append_from(sph, 0, Transform3D.IDENTITY)
+		st2.set_material(_black_material())
+		st2.commit(mesh)
+	_meshes[key] = mesh
+	return mesh
+
+
+static func _add_cyl(st: SurfaceTool, top: float, bottom: float, h: float, at: Vector3, b := Basis(), segs := 12) -> void:
+	var c := CylinderMesh.new()
+	c.top_radius = top
+	c.bottom_radius = bottom
+	c.height = h
+	c.radial_segments = segs
+	c.rings = 1
+	st.append_from(c, 0, Transform3D(b, at))
+
+
+static func _add_box(st: SurfaceTool, size: Vector3, xf: Transform3D) -> void:
+	var b := BoxMesh.new()
+	b.size = size
+	st.append_from(b, 0, xf)
+
+
+## The mini black hole's core: unshaded black (the glitch flashes' kind of
+## material - no new shaders).
+static func _black_material() -> StandardMaterial3D:
+	if _meshes.has("black"):
+		return _meshes["black"]
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color(0.01, 0.0, 0.02)
+	m.disable_receive_shadows = true
+	_meshes["black"] = m
+	return m
+
+
 ## Bitcoin token: a small gold coin, the ₿ on both faces.
 static func _coin_mesh() -> Mesh:
 	var mesh := ArrayMesh.new()
@@ -501,6 +640,14 @@ static func warm_up_items() -> Array[Node3D]:
 	g.mesh = _mesh_for(Kind.HEALTH)
 	g.material_override = _glitch_material(0)
 	out.append(g)
+	# The holographic ammo (one model each; the black hole's has the core).
+	var bh := MeshInstance3D.new()
+	var reg := load("res://resources/weapons/weapon_registry.tres") as WeaponRegistry
+	for d: WeaponDefinition in (reg.weapons if reg else []):
+		if d.id == &"black_hole_generator":
+			bh.mesh = ammo_mesh(d)
+	if bh.mesh:
+		out.append(bh)
 	return out
 
 
@@ -570,6 +717,7 @@ func _animate(s: Shard, delta: float) -> void:
 	s.core.rotation.y = s.spin0 + s.age * (5.0 if s.kind == Kind.TOKEN else 3.0)
 	if s.kind == Kind.AMMO:
 		s.core.rotation.z = 0.3  # leaning a little as it turns
+		s.core.scale = s.core.scale if s.glitch_left > 0.0 else Vector3.ONE * 1.15
 	var bob := sin(s.age * 4.0 + s.spin0) * (0.04 if s.kind == Kind.TOKEN else 0.06)
 	s.glow.scale = Vector3.ONE * (0.45 if s.kind == Kind.TOKEN else 1.0) * (1.0 + 0.15 * sin(s.age * 7.0))
 	s.glitch_in -= delta
