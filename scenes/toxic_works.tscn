@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://scripts/world/flight_nav.gd" id="flightnav"]
 [ext_resource type="Resource" path="res://levels/slime_arena/gameplay/flight_graph.res" id="flightgraph"]
 [ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
+[ext_resource type="Script" path="res://scripts/world/health_pickup.gd" id="healthpickup"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -158,6 +159,40 @@ pit_barrier = false
 
 [node name="ArrivalCamera" type="Camera3D" parent="."]
 script = ExtResource("arrcam")
+
+[node name="HealthPickups" type="Node3D" parent="."]
+
+[node name="Health1" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28.91, 15.0, -214.05)
+script = ExtResource("healthpickup")
+
+[node name="Health2" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53.59, 7.0, -52.63)
+script = ExtResource("healthpickup")
+
+[node name="Health3" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52.66, 7.0, 53.87)
+script = ExtResource("healthpickup")
+
+[node name="Health4" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 53.99, 7.0, -51.8)
+script = ExtResource("healthpickup")
+
+[node name="Health5" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -46.51, 10.0, -166.88)
+script = ExtResource("healthpickup")
+
+[node name="Health6" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 52.07, 8.0, -143.05)
+script = ExtResource("healthpickup")
+
+[node name="Health7" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40.51, 7.5, 38.78)
+script = ExtResource("healthpickup")
+
+[node name="Health8" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.91, 7.0, -62.3)
+script = ExtResource("healthpickup")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

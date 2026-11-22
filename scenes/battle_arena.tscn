@@ -14,6 +14,7 @@
 [ext_resource type="Resource" path="res://resources/weapons/machine_gun.tres" id="mg"]
 [ext_resource type="Resource" path="res://resources/weapons/rocket_launcher.tres" id="rl"]
 [ext_resource type="Resource" path="res://resources/weapons/frost_byte.tres" id="fb"]
+[ext_resource type="Script" path="res://scripts/world/health_pickup.gd" id="healthpickup"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -122,6 +123,24 @@ mass = 150.0
 shape = 0
 size = Vector3(1.2, 1.2, 1.2)
 color = Color(0.4, 0.4, 0.45, 1)
+
+[node name="HealthPickups" type="Node3D" parent="."]
+
+[node name="Health1" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.0, 0.0, 18.0)
+script = ExtResource("healthpickup")
+
+[node name="Health2" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.0, 0.0, 18.0)
+script = ExtResource("healthpickup")
+
+[node name="Health3" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.0, 0.0, -18.0)
+script = ExtResource("healthpickup")
+
+[node name="Health4" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18.0, 0.0, -18.0)
+script = ExtResource("healthpickup")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

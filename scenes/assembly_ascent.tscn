@@ -10,6 +10,7 @@
 [ext_resource type="NavigationMesh" path="res://levels/assembly_ascent/gameplay/navmesh.res" id="navmesh"]
 [ext_resource type="Script" path="res://scripts/world/flight_nav.gd" id="flightnav"]
 [ext_resource type="Resource" path="res://levels/assembly_ascent/gameplay/flight_graph.res" id="flightgraph"]
+[ext_resource type="Script" path="res://scripts/world/health_pickup.gd" id="healthpickup"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -136,6 +137,36 @@ navigation_mesh = ExtResource("navmesh")
 [node name="FlightNav" type="Node" parent="."]
 script = ExtResource("flightnav")
 graph = ExtResource("flightgraph")
+
+[node name="HealthPickups" type="Node3D" parent="."]
+
+[node name="Health1" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 44.0, 22.05, -56.0)
+script = ExtResource("healthpickup")
+
+[node name="Health2" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40.0, 7.0, -50.0)
+script = ExtResource("healthpickup")
+
+[node name="Health3" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25.5, 7.0, -2.25)
+script = ExtResource("healthpickup")
+
+[node name="Health4" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.75, 18.0, -48.58)
+script = ExtResource("healthpickup")
+
+[node name="Health5" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.5, 7.0, -33.17)
+script = ExtResource("healthpickup")
+
+[node name="Health6" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.42, 6.0, 40.33)
+script = ExtResource("healthpickup")
+
+[node name="Health7" type="Node3D" parent="HealthPickups"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 47.0, 15.5, 62.0)
+script = ExtResource("healthpickup")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

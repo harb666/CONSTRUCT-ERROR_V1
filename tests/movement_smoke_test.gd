@@ -535,6 +535,7 @@ func _run() -> void:
 	await _frost_byte_tests(main)
 	await _cannon_vent_tests(main)
 	await _ammo_tests(main)
+	await _health_pickup_tests(main)
 	await _fall_tests(main)
 	var t := Node3D.new()
 	t.name = "Targets"
@@ -7943,16 +7944,34 @@ func _ammo_tests(main: Node) -> void:
 	var hud := main.get_node_or_null("UI/WeaponHud") as WeaponHud
 	if hud:
 		_check(hud.loadout() == lo, "HUD: the weapon panel reads the ammo")
-	# A gun kill drops no ammo (owner asked: only melee kills, DOOM Eternal
-	# style - else a weapon never runs down), but bitcoin tokens burst out.
+	# Every kill drops ammo now (owner asked; it was melee kills only): a
+	# gun kill one holographic pick-up of the weapon's own ammo - shotgun
+	# shells here - and bitcoin tokens burst out.
 	var a0 := drops.ammo_dropped
 	var t0 := drops.tokens_dropped
 	var b0 := p.bitcoins
 	var at := r.global_position
 	r.apply_damage(DamageInfo.make(9999.0, DamageInfo.Type.BULLET, at + Vector3.UP, Vector3.FORWARD, 1.0))
 	await _ticks(2)
-	_check(drops.ammo_dropped == a0 and drops.tokens_dropped == t0 + 4 and drops.active_count(RecoveryDrops.Kind.TOKEN) >= 4,
-		"ammo: a gun kill drops no ammo - but 4 bitcoin tokens burst out of the grunt")
+	var gun_cells := drops._pool.filter(func(s: RecoveryDrops.Shard) -> bool: return s.active and s.kind == RecoveryDrops.Kind.AMMO)
+	_check(drops.ammo_dropped == a0 + 1 and gun_cells.size() == 1 and (gun_cells[0] as RecoveryDrops.Shard).core.mesh == RecoveryDrops.ammo_mesh(sg)
+		and drops.tokens_dropped == t0 + 4 and drops.active_count(RecoveryDrops.Kind.TOKEN) >= 4,
+		"ammo: a gun kill drops one holographic ammo pick-up (shotgun shells) - and 4 bitcoin tokens burst out of the grunt")
+	# Each weapon's own ammo as a hologram (the mini black hole has its black
+	# core), no new shaders.
+	var models := {}
+	var holo := true
+	for w: WeaponDefinition in limited:
+		var mm := RecoveryDrops.ammo_mesh(w)
+		models[mm] = true
+		var m0 := mm.surface_get_material(0) as ShaderMaterial
+		holo = holo and m0 != null and m0.shader == Hologram.SHADER
+	var bh := load("res://resources/weapons/black_hole_generator.tres") as WeaponDefinition
+	_check(models.size() == limited.size() and holo and RecoveryDrops.ammo_mesh(bh).get_surface_count() == 2,
+		"ammo: each weapon's pick-up is a hologram of its own ammo - shells, belt, rocket, ice crystals, a mini black hole")
+	var bss := RobotBoss.new()
+	_check(RecoveryDrops.kill_ammo_packs(r, null) == 1 and RecoveryDrops.kill_ammo_packs(bss, null) == 4, "ammo: a gun kill 1, the boss 4")
+	bss.free()
 	var sk := RobotSkirmisher.new()
 	var sn := RobotSentinel.new()
 	var bs := RobotBoss.new()
@@ -7973,10 +7992,10 @@ func _ammo_tests(main: Node) -> void:
 	r2.apply_damage(mk)
 	await _ticks(2)
 	var cells := drops._pool.filter(func(s: RecoveryDrops.Shard) -> bool: return s.active and s.kind == RecoveryDrops.Kind.AMMO)
-	_check(drops.ammo_dropped == a0 + 2 and cells.size() == 2 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return s.weapon == sg and s.icon.visible),
-		"ammo: a melee kill drops ammo - 2 bullets for the empty shotgun")
+	_check(drops.ammo_dropped == a0 + 3 and cells.size() == 2 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return s.weapon == sg and s.icon.visible),
+		"ammo: a melee kill drops more - 2 for the shotgun")
 	await _ticks(90)
-	_check(lo.ammo_of(sg) == sg.ammo_pack * 2 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return not s.active), "ammo: picked up: +%d shells" % lo.ammo_of(sg))
+	_check(lo.ammo_of(sg) == sg.ammo_pack * 3 and cells.all(func(s: RecoveryDrops.Shard) -> bool: return not s.active), "ammo: picked up: +%d shells" % lo.ammo_of(sg))
 	await _ticks(30)
 	_check(lo.equipped("Right") == sg, "ammo: and the shotgun goes back on the arm it ran dry on")
 	# The wheel shows it; a full weapon wants none.
@@ -7988,6 +8007,48 @@ func _ammo_tests(main: Node) -> void:
 	for w: WeaponDefinition in reg.weapons:
 		lo.relock(w)
 	WeaponLoadout.unlimited_ammo = true
+
+
+## Holographic health pick-ups placed round every map (owner asked): walk
+## through one with health missing - healed, gone, back later; full health
+## leaves it.
+func _health_pickup_tests(main: Node) -> void:
+	var p: PlayerController = main.players[1]
+	var counts := {}
+	for path in ["res://scenes/battle_arena.tscn", "res://scenes/skyforge_arena.tscn", "res://scenes/toxic_works.tscn", "res://scenes/assembly_ascent.tscn"]:
+		var st := (load(path) as PackedScene).get_state()
+		var n := 0
+		for i in st.get_node_count():
+			if String(st.get_node_path(i)).begins_with("./HealthPickups/"):
+				n += 1
+		counts[path.get_file()] = n
+	_check(counts["battle_arena.tscn"] == 4 and counts.values().all(func(n: int) -> bool: return n >= 4)
+		and counts.values().reduce(func(a: int, b: int) -> int: return a + b) >= 25,
+		"health pick-ups: placed round every map %s" % [counts])
+	var hp := HealthPickup.new()
+	main.add_child(hp)
+	hp.global_position = Vector3(-30, 0, -29.5)
+	await _ticks(2)
+	var spot := hp.global_position + Vector3.UP * 0.1
+	var cross_ok := hp.cross.mesh.surface_get_material(0) is ShaderMaterial and (hp.cross.mesh.surface_get_material(0) as ShaderMaterial).shader == Hologram.SHADER
+	p.health = p.max_health
+	p.global_position = spot
+	p.velocity = Vector3.ZERO
+	p.reset_physics_interpolation()
+	await _ticks(5)
+	_check(hp.available and cross_ok, "health pick-ups: a holographic cross on its projector; full health leaves it")
+	p.health = 40.0
+	await _ticks(5)
+	_check(not hp.available and is_equal_approx(p.health, 40.0 + hp.heal) and hp.taken == 1,
+		"health pick-ups: walked through with health missing: +%d, gone" % int(hp.heal))
+	p.health = p.max_health
+	p.global_position = spot + Vector3(6, 0, 0)
+	p.reset_physics_interpolation()
+	hp._back_in = 0.05
+	await _ticks(10)
+	_check(hp.available, "health pick-ups: back after %d s (materialising)" % int(hp.respawn_time))
+	hp.queue_free()
+	await _ticks(3)
 
 
 ## Falling (owner asked): a fall costs one of the health bar's 10 bars.
