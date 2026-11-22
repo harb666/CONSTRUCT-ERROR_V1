@@ -625,10 +625,21 @@
   6 + 5 grunts + skirmishers, up to 8 alive each - were 2-3 waves of 2-6;
   hunting over `gameplay/navmesh.res`, `bake_skyforge_navmesh.gd --
   --level=ascent`), each started the first time a player steps onto its deck
-  (the ring in the robot yard, the upper deck, the arena); clearing the
-  upper deck's opens the exit's laser gate. The arena surges up out of the
-  slime when a player reaches the overlook; on it the jet screen flies over,
-  and walking up to its big red button opens the yard's laser gate. On the
+  (the ring in the robot yard, the upper deck, the arena). Both laser gates
+  (the yard's and the exit's) open when the mini boss dies (owner asked;
+  the map maker opened the exit on the upper deck's waves cleared and the
+  yard's from the button). The arena surges up out of the slime when a
+  player reaches the overlook; on it the jet screen flies over, and walking
+  up to its big red button slows the saws over the yard bridge to 0.4 of
+  their speed, for good (owner asked: "just to slow down the saws so the
+  player can jump across in time"; `slow_saws`, apply_effects
+  `saw_speed`). Saws (owner: "buggy, spinning around the room" - each arm
+  joint swung by its own amplitude about pivots off to the side, flinging
+  the blades up past the beams and across each other): each blade now
+  sweeps flat across the bridge at its rest height (the wrist follows a
+  side-to-side path, shoulder / elbow solved for it, the head kept level:
+  apply_effects `SAW_SWEEPS`, `_saw_ik`), clear of the bridge at one end of
+  each swing, the two alternating. On the
   showcase deck the boss lift comes down its shaft (13 s) with the mini boss
   - the robot boss (`RobotBoss`, no respawn) - standing on it (owner asked:
   "make sure the mini boss comes down on lift"): it steps onto the car up
@@ -888,7 +899,8 @@
   ring) throws a faint beam up into a big green holographic "+" (~0.6 m,
   hologram.gdshader) that bobs, turns and glitches now and then. Walked
   through with health missing: +25 (2.5 bars), gone, back 30 s later
-  materialising (`Hologram.teleport_in`). Each device its own (co-op:
+  materialising (`Hologram.teleport_in`). Not drawn beyond 45 m
+  (`draw_distance`; five draws each). Each device its own (co-op:
   every player has their own). No sound (no owner sound for it). Spots
   chosen by `tools/place_health_pickups.gd` (still open floor linked over
   the navmesh to where players / robots start; no slime, hazards, moving

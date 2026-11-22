@@ -5689,6 +5689,21 @@ func _assembly_ascent_tests() -> void:
 	put.call(Vector3(-10, 3.0, 25))
 	await _ticks(90)
 	_check(p.global_position.distance_to(spawn) < 1.5 and p.health < h0, "ascent: the slime sends a player back to the door, a bar down (%s, %.1f -> %.1f)" % [p.global_position, h0, p.health])
+	# The saws (owner: "buggy, spinning around the room"): each blade sweeps
+	# flat across the yard bridge at its rest height, clear of it at one end.
+	var saw_y := true
+	var saw_x := {}
+	for i in 40:
+		await _ticks(5)
+		for sr in fx.get("_saws"):
+			var w: Dictionary = sr[0]
+			var at: Vector3 = (sr[2] as Node3D).global_position
+			saw_y = saw_y and absf(at.y - float(w["center"][1])) < 0.15
+			var r: Vector2 = saw_x.get(w["id"], Vector2(INF, -INF))
+			saw_x[w["id"]] = Vector2(minf(r.x, at.x), maxf(r.y, at.x))
+	_check(saw_y and saw_x.size() == 2 and saw_x.values().all(func(r: Vector2) -> bool: return r.y - r.x > 7.0 and r.x > -41.0 and r.y < -23.0)
+		and (saw_x["Saw_West"] as Vector2).x < -36.8 and (saw_x["Saw_East"] as Vector2).y > -27.6,
+		"ascent: the saws sweep flat across the yard bridge, clearing it each swing %s" % [saw_x])
 	# The conveyor ramps run faster than a sprint, down into the spikes.
 	put.call(Vector3(25.5, 15.6, -36.3))
 	await _ticks(1)
@@ -5747,6 +5762,9 @@ func _assembly_ascent_tests() -> void:
 		await _ticks(20)
 		_check(aa.boss_beaten and (p.global_position - b0).length() < 0.1 and float(fx.get("_belts")[0][4]["k"]) == 0.0,
 			"ascent: with the mini boss down the conveyors stop - climbable to the exit")
+		var still_blocked := main.get_tree().get_nodes_in_group(&"laser_gate").filter(func(n: Node) -> bool: return not n.is_queued_for_deletion())
+		_check(aa.gates_open.has("Yard_Laser") and aa.gates_open.has("Exit_Laser") and still_blocked.is_empty(),
+			"ascent: and both laser gates open (owner asked) %s" % [still_blocked.map(func(n: Node) -> String: return String(n.name))])
 	# The arena: up out of the slime from the overlook, then its fight and the
 	# jet screen; its big red button opens the yard gate.
 	put.call(Vector3(43.2, 16.0, 51.2))
@@ -5761,7 +5779,9 @@ func _assembly_ascent_tests() -> void:
 		"ascent: the arena rises from the overlook, its fight starts and the jet screen flies over")
 	put.call(Vector3(29.965, 16.0, 35.34))
 	await _ticks(30)
-	_check(aa.terminals_used.has("Jet_Screen_Button") and aa.gates_open.has("Yard_Laser"), "ascent: the jet screen's big red button opens the yard gate")
+	await _ticks(100)
+	_check(aa.terminals_used.has("Jet_Screen_Button") and aa.saws_slowed and float(fx.get("saw_speed")) < 0.5,
+		"ascent: the jet screen's big red button slows the saws (owner asked; %.2f of their speed)" % float(fx.get("saw_speed")))
 	# The upper deck's fight, cleared, opens the exit gate.
 	put.call(Vector3(21, 18.3, -51))
 	var d: WaveDirector = main.get_node("DeckWaves")
@@ -5772,7 +5792,7 @@ func _assembly_ascent_tests() -> void:
 				r.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, r.global_position, Vector3.DOWN, 0.0))
 		await _ticks(10)
 		t += 10
-	_check(aa.encounters_done.has("Deck_Waves") and aa.gates_open.has("Exit_Laser"), "ascent: clearing the upper deck's waves opens the exit gate")
+	_check(aa.encounters_done.has("Deck_Waves") and aa.gates_open.has("Exit_Laser"), "ascent: the upper deck's waves can be cleared, the exit gate open")
 	main.queue_free()
 	await _ticks(5)
 	# The Toxic Works' exit now leads here, the squad carried over.

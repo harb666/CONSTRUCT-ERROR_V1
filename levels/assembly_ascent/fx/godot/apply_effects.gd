@@ -1152,18 +1152,39 @@ func _update_belts(delta: float) -> void:  # (same as viewer.html: travel p += s
 			(bm as BaseMaterial3D).uv1_offset = Vector3(0.0, fposmod(-float(st["p"]) / float(b["spacing"]), 1.0), 0.0)
 
 
+## Construct Error: the saws' arms swung each joint by its own amplitude
+## about pivots off to the side, flinging the blades up past the ceiling
+## beams and across each other ("spinning around the room", owner), only
+## low at the far ends. Now each blade sweeps flat across its walkway at
+## its rest height (the wrist follows a side-to-side path; shoulder and
+## elbow angles solved for it, the saw head kept level), far enough each
+## side to clear the bridge for a moment - the two alternate.
+## `saw_speed` slows them (the game's button: owner asked "just to slow down
+## the saws so the player can jump across in time").
+const SAW_SWEEPS := {"Saw_West": [-34.9, 4.6], "Saw_East": [-28.8, 4.8]}  # blade centre x: middle, half-width
+var saw_speed := 1.0
+var _saw_t := 0.0
+
+
 func _update_saws() -> void:
+	_saw_t += get_process_delta_time() * saw_speed
 	for sr in _saws:
 		var w: Dictionary = sr[0]
 		var A := Vector3(w["axis"][0], w["axis"][1], w["axis"][2]).normalized()
 		var C := Vector3(w["center"][0], w["center"][1], w["center"][2])
-		var ph := TAU * (_t + float(w["phase"])) / float(w["period"])
-		var M := Transform3D.IDENTITY
+		var ph := TAU * (_saw_t + float(w["phase"])) / float(w["period"])
 		var links: Array = sr[1]
+		var angles: Array = []
+		for k in links.size():
+			angles.append(deg_to_rad(float(links[k][0]["amp"])) * sin(ph - float(links[k][0]["lag"])))
+		if SAW_SWEEPS.has(String(w["id"])) and links.size() == 3 and A.is_equal_approx(Vector3(0, 0, 1)):
+			var sw: Array = SAW_SWEEPS[String(w["id"])]
+			angles = _saw_ik(links, Vector2(float(sw[0]) + float(sw[1]) * sin(ph), C.y))
+		var M := Transform3D.IDENTITY
 		for k in links.size():
 			var j: Dictionary = links[k][0]
 			var P := Vector3(j["pivot"][0], j["pivot"][1], j["pivot"][2])
-			var q := Basis(A, deg_to_rad(float(j["amp"])) * sin(ph - float(j["lag"])))
+			var q := Basis(A, float(angles[k]))
 			M = M * Transform3D(q, P - q * P)  # each joint turns about its own (already moved) hinge
 			var T := M
 			if k == links.size() - 1 and (sr[3] as Array).is_empty():  # the blade also spins about its axis through its centre
@@ -1177,6 +1198,29 @@ func _update_saws() -> void:
 			for nr in sr[3]:
 				(nr[0] as Node3D).transform = Tb * (nr[1] as Transform3D)
 		(sr[2] as Area3D).global_transform = Transform3D(Basis(Quaternion(Vector3.UP, A)), M * C)  # the kill cylinder's axis = the blade's
+
+
+## Construct Error: shoulder / elbow / wrist angles (about +Z, in the XY
+## plane) putting the wrist joint at `target`, the elbow on the side it
+## rests on, the wrist turned back so the saw head stays level.
+func _saw_ik(links: Array, target: Vector2) -> Array:
+	var p: Array[Vector2] = []
+	for k in 3:
+		var pv: Array = links[k][0]["pivot"]
+		p.append(Vector2(float(pv[0]), float(pv[1])))
+	var S := p[0]
+	var E0 := p[1]
+	var W0 := p[2]
+	var L1 := S.distance_to(E0)
+	var L2 := E0.distance_to(W0)
+	var v := target - S
+	var d := clampf(v.length(), absf(L1 - L2) + 0.01, L1 + L2 - 0.01)
+	var a := acos(clampf((L1 * L1 + d * d - L2 * L2) / (2.0 * L1 * d), -1.0, 1.0))
+	var side := signf((W0 - S).angle_to(E0 - S))
+	var E := S + v.normalized().rotated(side * a) * L1
+	var a1 := (E0 - S).angle_to(E - S)
+	var a2 := (W0 - E0).rotated(a1).angle_to(target - E)
+	return [a1, a2, -(a1 + a2)]
 
 
 func _riser(r: Dictionary) -> void:

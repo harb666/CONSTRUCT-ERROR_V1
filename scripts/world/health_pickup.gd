@@ -21,6 +21,9 @@ const GREEN := Color(0.25, 1.0, 0.4)
 ## Taken by a player within this (m, across) and `reach_up` above / below.
 @export var radius := 1.2
 @export var reach_up := 1.8
+## Not drawn beyond this (m): five draws each, and level 3's fights were
+## already heavy on phones (owner: "the fps drops significantly").
+@export var draw_distance := 45.0
 
 var available := true
 var taken := 0
@@ -99,6 +102,8 @@ func _build() -> void:
 	_glow.material_override = Vfx.material("glow", GREEN * 0.45, BaseMaterial3D.BILLBOARD_ENABLED)
 	_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_holder.add_child(_glow)
+	for gi: GeometryInstance3D in find_children("*", "GeometryInstance3D", true, false):
+		gi.visibility_range_end = draw_distance
 
 
 ## The big holographic "+" (shared): a thick 3D cross ~0.6 m across.

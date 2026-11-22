@@ -18,16 +18,19 @@ extends Node3D
 ##   - three fights (collision.json "encounters"), each starting the first
 ##     time a player steps onto its deck (the robot yard's ring, the upper
 ##     deck, the arena that rises in front of the overlook) - a WaveDirector
-##     each; clearing the upper deck's opens the exit's laser gate;
+##     each (clearing the upper deck's would open the exit's laser gate -
+##     it's open by then: both gates open with the mini boss's death);
 ##   - on the arena the jet screen flies over; its big red button (walk up
-##     to it) opens the yard's laser gate;
+##     to it) slows the saws over the yard bridge (owner asked; the map
+##     maker had it open the yard's laser gate);
 ##   - the boss lift: the first time a player steps onto the showcase deck
 ##     it comes down its shaft with the mini boss (the robot boss) standing
 ##     on it (owner asked: "make sure the mini boss comes down on lift ...
 ##     make it epic"): it's carried down on the car, a shot from low on the
 ##     deck shows it coming out of the roof (BossIntroCamera), and it lands
-##     with a stomp; when the boss dies the conveyor ramps (faster than a
-##     sprint) spin down and stop, so they can be climbed to the exit;
+##     with a stomp; when the boss dies both laser gates open (owner asked)
+##     and the conveyor ramps (faster than a sprint) spin down and stop, so
+##     they can be climbed to the exit;
 ##   - flyers through the roof (owner asked: "2-3 flying robots that
 ##     continue to come through the roofs"): from the first fight on, Neon
 ##     Sentinels dive in through the round lattice skylight (or, once the
@@ -455,16 +458,31 @@ func use_terminal(id: String) -> void:
 		return
 	terminals_used.append(id)
 	Net.world_event(self, &"terminal", [id])
-	for t in col_data.get("terminals", []):
-		if String(t["id"]) == id:
-			for gid in t.get("activates", []):
-				if gate_fx.has(String(gid)) and is_instance_valid(gate_fx[String(gid)]):
-					(gate_fx[String(gid)] as LaserGateFX).open()
-				if not gates_open.has(String(gid)):
-					gates_open.append(String(gid))
+	# (The map maker had it open the yard's laser gate: the gates open when
+	# the mini boss dies now - owner asked. Its "activates" is emptied so the
+	# package's terminal handler - the jet screen flying home - opens none.)
+	var tms = mobile.get(&"_terminals")
+	if tms is Dictionary and (tms as Dictionary).has(id):
+		tms[id]["activates"] = []
 	mobile.call(&"activate_terminal", id)
+	slow_saws()
 	if hud:
-		hud.banner("BUTTON PRESSED", "THE YARD GATE IS OPEN")
+		hud.banner("BUTTON PRESSED", "THE SAWS ARE SLOWING DOWN")
+
+
+## The jet screen's button (owner asked: "just to slow down the saws so the
+## player can jump across in time"): the saws over the yard bridge ease down
+## to `saw_slow` of their speed, for good.
+@export var saw_slow := 0.4
+var saws_slowed := false
+
+
+func slow_saws() -> void:
+	if saws_slowed:
+		return
+	saws_slowed = true
+	var tw := create_tween()
+	tw.tween_property(effects, ^"saw_speed", saw_slow, 1.5).set_trans(Tween.TRANS_SINE)
 
 
 # --- The mini boss ----------------------------------------------------------
@@ -606,8 +624,11 @@ func boss_defeated() -> void:
 	boss_beaten = true
 	Net.world_event(self, &"boss_defeated")
 	effects.call(&"boss_defeated")
+	# The laser gates open with it (owner asked): the yard's and the exit's.
+	for g in col_data.get("gates", []):
+		open_gate(String(g["id"]))
 	if hud:
-		hud.banner("MINI BOSS DESTROYED", "THE CONVEYORS ARE STOPPING")
+		hud.banner("MINI BOSS DESTROYED", "LASER GATES OPEN - CONVEYORS STOPPING")
 
 
 # --- Flyers through the roof -------------------------------------------
