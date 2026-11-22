@@ -1757,13 +1757,19 @@ func _dual_wield_tests(main: Node) -> void:
 	l0 = wl.shots_fired
 	worst = Vector2(INF, INF)
 	Input.action_press("move_right")
+	# (Sampled over the run, not one frame: a step down on the way shows
+	# "Fall" for a frame or two - CI caught one once.)
+	var loco := 0
+	var seen := {}
 	for i in 70:
 		await _ticks(1)
 		if i > 30:
 			var k: Vector2 = await _cannon_clearance(p)
 			worst = Vector2(minf(worst.x, k.x), minf(worst.y, k.y))
+			loco += 1 if anim.current_state == "Locomotion" else 0
+			seen[anim.current_state] = true
 	_check(Vector2(p.velocity.x, p.velocity.z).length() > 5.0 and p.is_facing_yaw(-PI * 0.5, 0.35), "runs normally (legs follow movement) while dual locked")
-	_check(anim.current_state == "Locomotion", "locomotion animation keeps playing (%s)" % anim.current_state)
+	_check(loco >= 35, "locomotion animation keeps playing (%d of 39 frames, %s)" % [loco, seen.keys()])
 	Input.action_press("jump")
 	await _ticks(2)
 	Input.action_release("jump")
