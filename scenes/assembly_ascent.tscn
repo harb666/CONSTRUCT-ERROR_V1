@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://scripts/world/wave_director.gd" id="waves"]
 [ext_resource type="AudioStream" path="res://assets/audio/music/level_1_music.ogg" id="music1"]
 [ext_resource type="NavigationMesh" path="res://levels/assembly_ascent/gameplay/navmesh.res" id="navmesh"]
+[ext_resource type="Script" path="res://scripts/world/flight_nav.gd" id="flightnav"]
+[ext_resource type="Resource" path="res://levels/assembly_ascent/gameplay/flight_graph.res" id="flightgraph"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -96,40 +98,44 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 15.8, 32)
 script = ExtResource("waves")
 targets_path = NodePath("../YardTargets")
 spawns_path = NodePath("../YardSpawns")
-waves = Array[Vector2i]([Vector2i(2, 0), Vector2i(3, 1)])
+waves = Array[Vector2i]([Vector2i(4, 0), Vector2i(4, 2), Vector2i(5, 3)])
 first_wave_placed = false
 auto_start = false
 hunt_players = true
 min_player_distance = 6.0
 max_player_distance = 40.0
-max_active = 6
+max_active = 8
 
 [node name="DeckWaves" type="Node" parent="."]
 script = ExtResource("waves")
 targets_path = NodePath("../DeckTargets")
 spawns_path = NodePath("../DeckSpawns")
-waves = Array[Vector2i]([Vector2i(2, 1), Vector2i(3, 2)])
+waves = Array[Vector2i]([Vector2i(5, 3), Vector2i(6, 4), Vector2i(6, 5)])
 first_wave_placed = false
 auto_start = false
 hunt_players = true
 min_player_distance = 6.0
 max_player_distance = 40.0
-max_active = 6
+max_active = 8
 
 [node name="ArenaWaves" type="Node" parent="."]
 script = ExtResource("waves")
 targets_path = NodePath("../ArenaTargets")
 spawns_path = NodePath("../ArenaSpawns")
-waves = Array[Vector2i]([Vector2i(2, 1), Vector2i(3, 1), Vector2i(4, 2)])
+waves = Array[Vector2i]([Vector2i(4, 2), Vector2i(5, 3), Vector2i(6, 4)])
 first_wave_placed = false
 auto_start = false
 hunt_players = true
 min_player_distance = 6.0
 max_player_distance = 40.0
-max_active = 6
+max_active = 8
 
 [node name="Navigation" type="NavigationRegion3D" parent="."]
 navigation_mesh = ExtResource("navmesh")
+
+[node name="FlightNav" type="Node" parent="."]
+script = ExtResource("flightnav")
+graph = ExtResource("flightgraph")
 
 [node name="SpawnPoints" type="Node3D" parent="."]
 

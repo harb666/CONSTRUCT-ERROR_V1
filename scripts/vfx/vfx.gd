@@ -285,12 +285,15 @@ static func _warm(cam: Camera3D, seconds: float, lit: bool) -> void:
 		items[i].visible = false
 	fire.set_process(false)
 	# The robots first, one a frame.
-	for i in WARM_ROBOTS.size():
+	var robot_paths: Array[String] = []
+	robot_paths.append_array(WARM_ROBOTS)
+	robot_paths.append_array(level_robots)
+	for i in robot_paths.size():
 		if not await _wait_while_held(root):
 			return
 		if over_budget():
 			break
-		_warm_up_robot(root, i)
+		_warm_up_robot(root, robot_paths[i], i)
 		await tree.process_frame
 		if not _follow(root):
 			return
@@ -576,11 +579,15 @@ const WARM_ROBOTS: Array[String] = [
 	"res://scenes/enemies/robot_skirmisher.tscn",
 	"res://scenes/enemies/robot_sentinel.tscn",
 ]
+## Robots only the current level brings in later (Assembly Ascent's mini
+## boss, riding its lift down mid-level), warmed up with the others; set by
+## the level's script.
+static var level_robots: Array[String] = []
 static var _robot_materials: Array[Material] = []
 static var robots_warmed := 0
 
 
-static func _warm_up_robot(root: Node3D, i: int) -> void:
+static func _warm_up_robot(root: Node3D, path: String, i: int) -> void:
 	var holder := root.get_node_or_null("Robots") as Node3D
 	if holder == null:
 		holder = Node3D.new()
@@ -588,7 +595,7 @@ static func _warm_up_robot(root: Node3D, i: int) -> void:
 		root.add_child(holder)
 		holder.position = Vector3(0.0, 0.0, -0.5)
 		holder.scale = Vector3.ONE * 0.06
-	var r := (load(WARM_ROBOTS[i]) as PackedScene).instantiate() as Node3D
+	var r := (load(path) as PackedScene).instantiate() as Node3D
 	r.process_mode = Node.PROCESS_MODE_DISABLED
 	holder.add_child(r)
 	r.position = Vector3(i * 2.5, 0.0, 0.0)

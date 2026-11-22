@@ -22,9 +22,18 @@ extends Node3D
 ##   - on the arena the jet screen flies over; its big red button (walk up
 ##     to it) opens the yard's laser gate;
 ##   - the boss lift: the first time a player steps onto the showcase deck
-##     it comes down its shaft with the mini boss (the robot boss) on it;
-##     when the boss dies the conveyor ramps (faster than a sprint) spin
-##     down and stop, so they can be climbed to the exit;
+##     it comes down its shaft with the mini boss (the robot boss) standing
+##     on it (owner asked: "make sure the mini boss comes down on lift ...
+##     make it epic"): it's carried down on the car, a shot from low on the
+##     deck shows it coming out of the roof (BossIntroCamera), and it lands
+##     with a stomp; when the boss dies the conveyor ramps (faster than a
+##     sprint) spin down and stop, so they can be climbed to the exit;
+##   - flyers through the roof (owner asked: "2-3 flying robots that
+##     continue to come through the roofs"): from the first fight on, Neon
+##     Sentinels dive in through the round lattice skylight (or, once the
+##     boss lift is down, its open shaft) and hunt the squad - 2 at a time,
+##     3 once the mini boss has landed, another `sky_respawn` s after each
+##     one dies (routes: FlightNav over gameplay/flight_graph.res);
 ##   - slime, spikes, saws, the spinner, the press or falling off sends a
 ##     player back to the spawn one health bar down and kills a robot; the
 ##     exit leads to level 2, not made yet.
@@ -40,6 +49,7 @@ const APPLY_MOBILE := preload("res://levels/assembly_ascent/mobile/apply_mobile.
 const APPLY_EFFECTS := preload("res://levels/assembly_ascent/fx/godot/apply_effects.gd")
 const SKY_SHADER := preload("res://scripts/world/preview_sky.gdshader")
 const BOSS_SCENE := "res://scenes/enemies/robot_boss.tscn"
+const SENTINEL_SCENE := "res://scenes/enemies/robot_sentinel.tscn"
 
 ## Below this a player goes back to spawn and a robot dies (the slime is at
 ## 0-1 m, the floors at 6-25 m).
@@ -70,6 +80,37 @@ var encounter_triggers: Array[Area3D] = []
 ## The mini boss once it's down from its lift, and whether it's beaten.
 var boss: RobotBoss
 var boss_beaten := false
+## The boss lift has started down / landed (each device runs its own).
+var boss_lift_started := false
+var boss_lift_down := false
+## The boss is being carried down on the car (its own walking held).
+var boss_riding := false
+var _boss_detect := 45.0
+var intro_camera: BossIntroCamera
+## The boss intro shot is only for players this near the shaft (m).
+@export var intro_within := 45.0
+
+## Flyers through the roof (owner asked): how many at a time, before and
+## after the mini boss has landed, the first one's delay after the first
+## fight starts, the wait after one dies, and their dive in (m/s).
+@export var sky_hunters := 2
+@export var sky_hunters_late := 3
+@export var sky_first_delay := 3.0
+@export var sky_respawn := 6.0
+@export var sky_dive_speed := 15.0
+## The round lattice skylight over the conveyors (its opening's centre -
+## ~18 m across - and the ring flyers come in within: clear of its edge and
+## the lattice's middle hub), the
+## boss shaft (open once the lift is down), where they start (above the
+## roof, 34.5-35.5 m) and how low they dive.
+const DOME := Vector3(15.0, 0.0, -34.0)
+const DOME_RING := Vector2(4.0, 13.0)
+const SHAFT := Vector3(-30.0, 0.0, -39.5)
+const SKY_FROM_Y := 52.0
+const SKY_TO_Y := 24.0
+var sky: Array[RobotSentinel] = []
+var sky_spawned := 0
+var _sky_on := false
 var _exit_shown := false
 var _camera_far := 800.0
 
@@ -105,6 +146,9 @@ func _ready() -> void:
 	effects.set("environment", _world_environment())
 	add_child(effects)
 	effects.connect(&"boss_lift_landed", _on_boss_lift_landed)
+	# The mini boss is warmed up with the robots (its shaders made under the
+	# level's cover, not as the lift starts).
+	Vfx.level_robots = [BOSS_SCENE]
 	look = SkyforgePreviewLook.new()
 	look.name = "PreviewLook"
 	add_child(look)
@@ -123,6 +167,7 @@ func _ready() -> void:
 	out_of_bounds.add_child(cs)
 	add_child(out_of_bounds)
 	out_of_bounds.body_entered.connect(_on_fell)
+	_open_roof()
 	_connect_hazards.call_deferred()
 	_connect_terminals.call_deferred()
 	_build_encounters.call_deferred()
@@ -132,6 +177,38 @@ func _ready() -> void:
 		hud.name = "LevelFlowHud"
 		ui.add_child(hud)
 		ui.move_child(hud, 0)
+
+
+## The roof's colliders came in as convex hulls, which close its openings
+## - the round lattice skylight and the boss shaft (the flyers through the
+## roof couldn't get in): they get their exact shapes (collision.json's own
+## triangles), as in the Toxic Works. Nothing else changes.
+const ROOF_SLABS := ["Ceiling_Slab", "Ceiling_BossShaft_Slab"]
+var roof_opened := 0
+
+
+func _open_roof() -> void:
+	for c in col_data.get("colliders", []):
+		var nm := String(c.get("name", ""))
+		if not nm in ROOF_SLABS or c.get("shape") != "mesh":
+			continue
+		var body := collision.find_child(nm, true, false) as StaticBody3D
+		var shapes := body.find_children("*", "CollisionShape3D", true, false) if body else []
+		if shapes.is_empty():
+			continue
+		var node := shapes[0] as CollisionShape3D
+		var to_local := node.global_transform.affine_inverse()
+		var v: Array = c.get("vertices", [])
+		var faces := PackedVector3Array()
+		for f in c.get("faces", []):
+			for i in 3:
+				var q: Array = v[int(f[i])]
+				faces.append(to_local * Vector3(q[0], q[1], q[2]))
+		var shape := ConcavePolygonShape3D.new()
+		shape.backface_collision = true
+		shape.set_faces(faces)
+		node.shape = shape
+		roof_opened += 1
 
 
 # --- Hazards --------------------------------------------------------------
@@ -277,6 +354,7 @@ func start_encounter(id: String) -> void:
 	var d := get_parent().get_node_or_null(NodePath(String(DIRECTORS.get(id, "")))) as WaveDirector
 	if d:
 		d.begin()
+	start_sky()
 
 
 func _on_wave_started(index: int, total: int, id: String) -> void:
@@ -319,8 +397,10 @@ func open_gate(gate_id: String) -> void:
 	mobile.call(&"open_gate", gate_id)
 
 
-func _on_gate_opened(_gate_id: String) -> void:
-	pass
+func _on_gate_opened(gate_id: String) -> void:
+	var flight := get_parent().get_node_or_null(^"FlightNav") as FlightNav
+	if flight:
+		flight.open_gate(gate_id)
 
 
 ## The laser gates' look (LaserGateFX, as in the Toxic Works): over each
@@ -389,28 +469,129 @@ func use_terminal(id: String) -> void:
 
 # --- The mini boss ----------------------------------------------------------
 
-## The boss lift has landed on its dais (apply_effects.gd): the mini boss -
-## the robot boss - stands on it. When it dies the conveyor ramps stop.
-func _on_boss_lift_landed(_id: String, spawn: Vector3) -> void:
+## The boss lift (apply_effects.gd's, one): its state there.
+func _boss_lift() -> Dictionary:
+	var lifts = effects.get(&"_boss_lifts") if effects else null
+	return lifts[0] if lifts is Array and not (lifts as Array).is_empty() else {}
+
+
+## How far down the shaft the car is (0 parked up, 1 landed).
+func boss_lift_progress() -> float:
+	var B := _boss_lift()
+	if B.is_empty() or String(B["phase"]) == "top":
+		return 0.0
+	var d: Dictionary = B["d"]
+	var e := float(effects.get(&"_t")) - float(B["t0"]) - float(d["delay"]) - float(d["warn"])
+	return clampf(e / float(d["duration"]), 0.0, 1.0)
+
+
+## The top of the car's deck (where the boss stands), now.
+func boss_car_top() -> Vector3:
+	var B := _boss_lift()
+	if B.is_empty():
+		return SHAFT
+	return (B["body"] as Node3D).global_position + Vector3.UP * 0.7
+
+
+## The lift's under way (a player stepped onto the showcase deck): the
+## mini boss steps onto the car up the shaft and rides it down, and the
+## players near get the intro shot.
+func _on_boss_lift_started() -> void:
+	boss_lift_started = true
 	if hud:
-		hud.banner("WARNING", "MINI BOSS")
-	if not Net.is_authority() or boss != null:
-		return
+		hud.banner("WARNING", "HEAVY UNIT DESCENDING")
+	if Net.is_authority() and boss == null:
+		_spawn_boss(boss_car_top())
+	boss_riding = true
+	var me := _local_player()
+	var B := _boss_lift()
+	if me and not B.is_empty():
+		var c: Array = B["d"]["center"]
+		var ctr := Vector3(float(c[0]), float(B["d"]["deck_y"]), float(c[2]))
+		if Vector2(me.global_position.x - ctr.x, me.global_position.z - ctr.z).length() < intro_within:
+			intro_camera = BossIntroCamera.new()
+			intro_camera.name = "BossIntroCamera"
+			intro_camera.level = self
+			intro_camera.center = ctr
+			# (Starts as the car is about to come out of the roof.)
+			_intro_pending = true
+
+
+var _intro_pending := false
+
+
+func _spawn_boss(at: Vector3) -> void:
 	var scene := load(BOSS_SCENE) as PackedScene
 	if scene == null:
 		return
 	boss = scene.instantiate() as RobotBoss
 	boss.name = "MiniBoss"
 	boss.respawn_time = -1.0  # once beaten it stays down
+	# Facing the nearest player (down on the deck).
+	var yaw := 0.0
+	var near := _nearest_player(at)
+	if near:
+		var off := near.global_position - at
+		yaw = atan2(off.x, off.z)
+	boss.transform = Transform3D(Basis(Vector3.UP, yaw), at + Vector3.UP * 0.05)
 	var holder := get_parent().get_node_or_null(^"BossHolder")
 	if holder == null:
 		holder = get_parent()
 	holder.add_child(boss)
-	boss.global_position = spawn + Vector3.UP * 0.05
-	# Facing the way down the showcase deck (towards the players' side).
-	boss.look_at(spawn + Vector3(0, 0, 10), Vector3.UP)
 	Net.robot_spawned(boss, holder)
 	boss.died.connect(_on_boss_died, CONNECT_ONE_SHOT)
+
+
+## The boss here (the host's, or this device's copy of it).
+func _the_boss() -> RobotBoss:
+	if boss and is_instance_valid(boss):
+		return boss
+	var holder := get_parent().get_node_or_null(^"BossHolder") if get_parent() else null
+	if holder:
+		for c in holder.get_children():
+			if c is RobotBoss:
+				return c
+	return null
+
+
+## Carried down on the car: stands on its deck, not fighting yet.
+func _carry_boss() -> void:
+	var b := _the_boss()
+	if b == null or not b.alive:
+		return
+	if b.detect_range > 0.0:
+		_boss_detect = b.detect_range
+		b.detect_range = 0.0
+	var top := boss_car_top()
+	var p := b.global_position
+	b.global_position = Vector3(p.x, top.y + 0.05, p.z)
+	b.ground_y = top.y
+	b.linear_velocity = Vector3.ZERO
+
+
+## The boss lift has landed on its dais (apply_effects.gd): the mini boss
+## steps off fighting, with a stomp (its shockwave); the intro shot holds
+## on it, then hands back.
+func _on_boss_lift_landed(_id: String, spawn: Vector3) -> void:
+	boss_lift_down = true
+	boss_riding = false
+	if hud:
+		hud.banner("MINI BOSS", "DESTROY IT TO STOP THE CONVEYORS")
+	if intro_camera and is_instance_valid(intro_camera):
+		intro_camera.landed()
+	var b := _the_boss()
+	if b:
+		b.detect_range = _boss_detect
+		b.set(&"_spawn_xf", b.global_transform)  # holds its ground here
+		if Net.is_authority() and b.alive:
+			b.call(&"_start_stomp")
+	elif Net.is_authority() and boss == null:
+		# (The lift ran without the boss aboard - e.g. a test started it.)
+		_spawn_boss(spawn)
+		boss.set(&"_spawn_xf", boss.global_transform)
+	# One more flyer through the roof from now on.
+	if Net.is_authority() and _sky_on:
+		get_tree().create_timer(4.0, false).timeout.connect(_spawn_sky_hunter)
 
 
 func _on_boss_died(_info: DamageInfo = null) -> void:
@@ -427,6 +608,111 @@ func boss_defeated() -> void:
 	effects.call(&"boss_defeated")
 	if hud:
 		hud.banner("MINI BOSS DESTROYED", "THE CONVEYORS ARE STOPPING")
+
+
+# --- Flyers through the roof -------------------------------------------
+
+## From the first fight on (owner asked: "2-3 flying robots that continue
+## to come through the roofs").
+func start_sky() -> void:
+	if _sky_on or not Net.is_authority():
+		return
+	_sky_on = true
+	for i in sky_hunters:
+		get_tree().create_timer(sky_first_delay + 2.5 * i, false).timeout.connect(_spawn_sky_hunter)
+
+
+func sky_wanted() -> int:
+	return sky_hunters_late if boss_lift_down else sky_hunters
+
+
+## A Neon Sentinel diving in through a roof opening (the one nearest the
+## squad, now and then the other), hunting them wherever they are.
+func _spawn_sky_hunter() -> void:
+	if not is_inside_tree() or not Net.is_authority():
+		return
+	sky = sky.filter(func(r: RobotSentinel) -> bool: return is_instance_valid(r) and r.alive)
+	if sky.size() >= sky_wanted():
+		return
+	var way := sky_entry()
+	var from: Vector3 = way[0]
+	var to: Vector3 = way[1]
+	var scene := load(SENTINEL_SCENE) as PackedScene
+	var r := scene.instantiate() as RobotSentinel
+	sky_spawned += 1
+	r.name = "SkyHunter%d" % sky_spawned
+	r.respawn_time = -1.0
+	r.patrol_distance = 0.0
+	r.entry_speed = sky_dive_speed
+	var yaw := 0.0
+	var near := _nearest_player(to)
+	if near:
+		var off := near.global_position - to
+		yaw = atan2(off.x, off.z)
+	r.transform = Transform3D(Basis(Vector3.UP, yaw), from)
+	var holder := get_parent().get_node_or_null(^"Targets")
+	if holder == null:
+		holder = get_parent()
+	holder.add_child(r)
+	# Hunting: wherever the squad is, routed through the open air.
+	r.detect_range = 400.0
+	r.lose_range = 400.0
+	r.hunt_nav = true
+	r.fly_in(to)
+	Net.robot_spawned(r, holder)
+	sky.append(r)
+	r.died.connect(func(_info: DamageInfo) -> void:
+		if is_inside_tree():
+			get_tree().create_timer(sky_respawn, false).timeout.connect(_spawn_sky_hunter), CONNECT_ONE_SHOT)
+	if sky_spawned == 1:
+		_sky_banner()
+		Net.world_event(self, &"sky")
+	DebugHud.note("sky hunter %d" % sky_spawned)
+
+
+func _sky_banner() -> void:
+	if hud:
+		hud.banner("INCOMING", "FLYERS THROUGH THE ROOF")
+
+
+## [from, to]: above a roof opening and down through it - a spot in the
+## skylight's ring (clear of its edge and hub), or the
+## boss shaft once its lift is down; the one nearer the squad, a third of
+## the time the other.
+func sky_entry() -> Array:
+	var spots: Array[Vector3] = []
+	var a := randf() * TAU
+	var r := randf_range(DOME_RING.x, DOME_RING.y)
+	spots.append(DOME + Vector3(cos(a), 0.0, sin(a)) * r)
+	if boss_lift_down:
+		spots.append(SHAFT + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0)))
+	var squad := Vector3.ZERO
+	var n := 0
+	for pl in get_tree().get_nodes_in_group(&"players"):
+		squad += (pl as Node3D).global_position
+		n += 1
+	if n > 0:
+		squad /= n
+	spots.sort_custom(func(x: Vector3, y: Vector3) -> bool:
+		return Vector2(x.x - squad.x, x.z - squad.z).length() < Vector2(y.x - squad.x, y.z - squad.z).length())
+	var pick := spots[0] if spots.size() == 1 or randf() > 0.33 else spots[1]
+	return [Vector3(pick.x, SKY_FROM_Y, pick.z), Vector3(pick.x, SKY_TO_Y if pick.distance_to(SHAFT) > 5.0 else 20.0, pick.z)]
+
+
+func _nearest_player(at: Vector3) -> Node3D:
+	var best: Node3D = null
+	for pl in get_tree().get_nodes_in_group(&"players"):
+		var n := pl as Node3D
+		if n and (best == null or n.global_position.distance_to(at) < best.global_position.distance_to(at)):
+			best = n
+	return best
+
+
+func _local_player() -> PlayerController:
+	for pl in get_tree().get_nodes_in_group(&"local_player"):
+		if pl is PlayerController:
+			return pl
+	return null
 
 
 # --- Exit -----------------------------------------------------------------
@@ -455,6 +741,26 @@ func _process(delta: float) -> void:
 
 func _physics_process(_delta: float) -> void:
 	_check_terminals()
+	_watch_boss_lift()
+
+
+func _watch_boss_lift() -> void:
+	var B := _boss_lift()
+	if B.is_empty():
+		return
+	if not boss_lift_started and String(B["phase"]) != "top":
+		_on_boss_lift_started()
+	if boss_riding:
+		_carry_boss()
+	# The intro shot starts as the car's about to come out of the roof.
+	if _intro_pending and boss_lift_progress() >= 0.2:
+		_intro_pending = false
+		if intro_camera and is_instance_valid(intro_camera):
+			get_parent().add_child(intro_camera)
+
+
+func _exit_tree() -> void:
+	Vfx.level_robots = []
 
 
 ## The host's events, here too (online).
@@ -470,6 +776,8 @@ func net_event(kind: StringName, args: Array) -> void:
 			use_terminal(String(args[0]))
 		&"boss_defeated":
 			boss_defeated()
+		&"sky":
+			_sky_banner()
 
 
 # --- Set-up helpers (as ToxicWorks) ---------------------------------------

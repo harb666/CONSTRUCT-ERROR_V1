@@ -5655,11 +5655,39 @@ func _assembly_ascent_tests() -> void:
 	await _ticks(90)
 	_check(aa.encounters_started.has("Yard_Waves") and main.get_node("YardTargets").get_child_count() > 0,
 		"ascent: stepping onto the robot yard's ring starts its fight")
+	# Flyers through the roof (owner asked): from the first fight on, Neon
+	# Sentinels dive in through the skylight and hunt; 2 at a time.
+	var tt := 0
+	while aa.sky_spawned < 1 and tt < 60 * 8:
+		await _ticks(2)
+		tt += 2
+	var first: RobotSentinel = aa.sky[0] if not aa.sky.is_empty() else null
+	_check(first != null and first.entering and first.global_position.y > 40.0 and aa.roof_opened == 2
+		and Vector2(first.global_position.x - AssemblyAscent.DOME.x, first.global_position.z - AssemblyAscent.DOME.z).length() < AssemblyAscent.DOME_RING.y + 0.5,
+		"ascent: the first fight brings a Neon Sentinel diving in from above the roof's skylight (%s)" % (first.global_position if first else Vector3.INF))
+	await _ticks(60 * 7)
+	var flyers := aa.sky.filter(func(r: RobotSentinel) -> bool: return is_instance_valid(r) and r.alive)
+	_check(flyers.size() == 2 and flyers.all(func(r: RobotSentinel) -> bool: return not r.entering and r.hunt_nav and r.detect_range >= 400.0 and r.global_position.y < 34.4)
+		and main.get_node_or_null("FlightNav") != null and (main.get_node("FlightNav") as FlightNav).graph != null,
+		"ascent: 2 flyers in, under the roof, hunting the squad over the level's flight routes %s" % [flyers.map(func(r: RobotSentinel) -> String: return "%s entering %s nav %s y %.1f" % [r.name, r.entering, r.hunt_nav, r.global_position.y])])
+	if flyers.size() > 0:
+		(flyers[0] as RobotSentinel).apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, flyers[0].global_position, Vector3.DOWN, 0.0))
+	await _ticks(int(60 * (aa.sky_respawn + 1.0)))
+	_check(aa.sky_spawned == 3 and aa.sky.filter(func(r: RobotSentinel) -> bool: return is_instance_valid(r) and r.alive).size() == 2,
+		"ascent: they keep coming - another dives in after one is shot down")
+	# (Out of the way for the checks below.)
+	var drop_flyers := func() -> void:
+		for r in aa.sky:
+			if is_instance_valid(r) and r.alive:
+				r.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, r.global_position, Vector3.DOWN, 0.0))
+	aa.sky_hunters = 0
+	drop_flyers.call()
 	# Into the slime: back to the door one bar down.
+	p.health = p.max_health  # (the yard's robots and flyers have been at them)
 	var h0 := p.health
 	put.call(Vector3(-10, 3.0, 25))
 	await _ticks(90)
-	_check(p.global_position.distance_to(spawn) < 1.5 and p.health < h0, "ascent: the slime sends a player back to the door, a bar down")
+	_check(p.global_position.distance_to(spawn) < 1.5 and p.health < h0, "ascent: the slime sends a player back to the door, a bar down (%s, %.1f -> %.1f)" % [p.global_position, h0, p.health])
 	# The conveyor ramps run faster than a sprint, down into the spikes.
 	put.call(Vector3(25.5, 15.6, -36.3))
 	await _ticks(1)
@@ -5670,11 +5698,45 @@ func _assembly_ascent_tests() -> void:
 	# The boss lift: down its shaft with the mini boss onto the showcase deck.
 	put.call(Vector3(-30, 7.3, -30))
 	var t := 0
-	while aa.boss == null and t < 60 * 20:
-		await _ticks(10)
-		t += 10
-	_check(aa.boss != null and aa.boss.global_position.distance_to(Vector3(-30, 7.4, -39.5)) < 1.0 and aa.boss.respawn_time < 0.0,
-		"ascent: on the showcase deck the boss lift comes down with the mini boss (%.1f s)" % (t / 60.0))
+	while aa.boss == null and t < 60 * 10:
+		await _ticks(5)
+		t += 5
+	_check(aa.boss != null and aa.boss.global_position.y > 38.0 and aa.boss.respawn_time < 0.0,
+		"ascent: on the showcase deck the boss lift starts - the mini boss steps onto the car up the shaft (y %.1f)" % (aa.boss.global_position.y if aa.boss else 0.0))
+	var rode := true
+	var shot := false
+	var held := false
+	var scale_was := p.incoming_damage_scale
+	while not aa.boss_lift_down and t < 60 * 25:
+		await _ticks(5)
+		t += 5
+		if aa.boss and aa.boss_riding:
+			rode = rode and absf(aa.boss.global_position.y - aa.boss_car_top().y) < 0.4 and aa.boss.target == null
+		var cam := aa.intro_camera
+		if cam and is_instance_valid(cam) and cam.is_inside_tree() and cam.current:
+			shot = true
+			held = p.controls_locked and p.incoming_damage_scale == 0.0
+	_check(aa.boss != null and rode and aa.boss.global_position.distance_to(Vector3(-30, 7.4, -39.5)) < 1.0,
+		"ascent: the mini boss rides the car down the shaft, not fighting yet, onto the dais (%.1f s)" % (t / 60.0))
+	_check(shot and held, "ascent: a shot from low on the deck shows it coming down, the player held and unhurt meanwhile")
+	await _ticks(45)
+	_check(aa.boss != null and aa.boss.stomps >= 1 and aa.boss.detect_range > 40.0,
+		"ascent: it lands with a stomp and starts fighting")
+	t = 0
+	while aa.intro_camera and is_instance_valid(aa.intro_camera) and t < 60 * 8:
+		await _ticks(5)
+		t += 5
+	var rig_cam := main.get_viewport().get_camera_3d()
+	_check(not p.controls_locked and p.incoming_damage_scale == scale_was and rig_cam != null and rig_cam.get_parent() != main,
+		"ascent: then the view swoops back to the player's camera, controls and damage back")
+	# Once the lift's down, a third flyer at a time (now and then out of the
+	# boss shaft).
+	aa.sky_hunters = 2
+	_check(aa.sky_wanted() == 3, "ascent: with the mini boss down, 3 flyers at a time")
+	aa.sky_hunters = 0
+	aa.sky_hunters_late = 0
+	await _ticks(60 * 5)
+	drop_flyers.call()
 	if aa.boss:
 		aa.boss.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, aa.boss.global_position, Vector3.DOWN, 0.0))
 		await _ticks(180)
@@ -5709,7 +5771,7 @@ func _assembly_ascent_tests() -> void:
 				r.apply_damage(DamageInfo.make(1.0e6, DamageInfo.Type.ENERGY, r.global_position, Vector3.DOWN, 0.0))
 		await _ticks(10)
 		t += 10
-	_check(aa.encounters_done.has("Deck_Waves") and aa.gates_open.has("Exit_Laser"), "ascent: clearing the upper deck's 2 waves opens the exit gate")
+	_check(aa.encounters_done.has("Deck_Waves") and aa.gates_open.has("Exit_Laser"), "ascent: clearing the upper deck's waves opens the exit gate")
 	main.queue_free()
 	await _ticks(5)
 	# The Toxic Works' exit now leads here, the squad carried over.

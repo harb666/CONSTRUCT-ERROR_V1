@@ -1,20 +1,29 @@
 extends SceneTree
-## Bakes the Toxic Works' FlightGraph (the open air flying robots route
-## through, FlightNav) from the level's collision and saves it:
-## levels/slime_arena/gameplay/flight_graph.res. Run after the level's
+## Bakes a level's FlightGraph (the open air flying robots route through,
+## FlightNav) from its collision and saves it. Run after the level's
 ## collision changes:
-##   godot --headless --path . -s tools/bake_flight_graph.gd
+##   godot --headless --path . -s tools/bake_flight_graph.gd                  (Toxic Works)
+##   godot --headless --path . -s tools/bake_flight_graph.gd -- --level=ascent (Assembly Ascent)
 
-const SCENE := "res://scenes/toxic_works.tscn"
-const OUT := "res://levels/slime_arena/gameplay/flight_graph.res"
-const GATES := "res://levels/slime_arena/mobile/collision.json"
+## Level -> [scene, level node, output, its collision.json (gates), height range].
+const LEVELS := {
+	"works": ["res://scenes/toxic_works.tscn", "ToxicWorks", "res://levels/slime_arena/gameplay/flight_graph.res",
+		"res://levels/slime_arena/mobile/collision.json", Vector2(2.0, 26.0)],
+	# (Under its roof, ~34.5 m: the floors are 6-25 m up.)
+	"ascent": ["res://scenes/assembly_ascent.tscn", "AssemblyAscent", "res://levels/assembly_ascent/gameplay/flight_graph.res",
+		"res://levels/assembly_ascent/mobile/collision.json", Vector2(2.5, 32.5)],
+}
+var SCENE := ""
+var OUT := ""
+var GATES := ""
+var Y_RANGE := Vector2(2.0, 26.0)
+var LEVEL_NODE := ""
 const SPACING := 4.0
 ## Room a point needs round it, and the body flown between two (a Neon
 ## Sentinel's sphere is 0.68 m at 1.3x: 0.9 m, plus its wings).
 const ROOM := 1.3
 const BODY := 1.1
 const MASK := 1 | ShaftBarrier.LAYER
-const Y_RANGE := Vector2(2.0, 26.0)
 
 
 func _initialize() -> void:
@@ -22,12 +31,22 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	var which := "works"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--level="):
+			which = a.substr(8)
+	var L: Array = LEVELS[which]
+	SCENE = L[0]
+	LEVEL_NODE = L[1]
+	OUT = L[2]
+	GATES = L[3]
+	Y_RANGE = L[4]
 	RobotEnemy.ai_enabled = false
 	var main: Node = load(SCENE).instantiate()
 	root.add_child(main)
 	for i in 5:
 		await physics_frame
-	var tw := main.get_node("ToxicWorks") as ToxicWorks
+	var tw: Node = main.get_node(LEVEL_NODE)
 	# Baked with the laser gates open: their links are kept apart.
 	for g in get_nodes_in_group(&"laser_gate"):
 		g.free()
@@ -37,7 +56,7 @@ func _run() -> void:
 	await physics_frame
 	var box := AABB()
 	var first := true
-	for cs: CollisionShape3D in tw.collision.find_children("*", "CollisionShape3D", true, false):
+	for cs: CollisionShape3D in (tw.get(&"collision") as Node).find_children("*", "CollisionShape3D", true, false):
 		if cs.shape == null:
 			continue
 		var b := cs.global_transform * cs.shape.get_debug_mesh().get_aabb()

@@ -620,8 +620,9 @@
   the Works' exit (the squad walks out of the black hallway at the entrance
   door, facing into the robot yard). The map maker's gameplay:
   three fights (collision.json `encounters`), a WaveDirector each
-  (YardWaves 2 + 0 / 3 + 1, DeckWaves 2 + 1 / 3 + 2, ArenaWaves 2 + 1 /
-  3 + 1 / 4 + 2 grunts + skirmishers - the map maker gave the totals,
+  (owner asked for "suitable enemies", "make it epic": YardWaves 4 + 0 /
+  4 + 2 / 5 + 3, ArenaWaves 4 + 2 / 5 + 3 / 6 + 4, DeckWaves 5 + 3 / 6 + 4 /
+  6 + 5 grunts + skirmishers, up to 8 alive each - were 2-3 waves of 2-6;
   hunting over `gameplay/navmesh.res`, `bake_skyforge_navmesh.gd --
   --level=ascent`), each started the first time a player steps onto its deck
   (the ring in the robot yard, the upper deck, the arena); clearing the
@@ -629,7 +630,16 @@
   slime when a player reaches the overlook; on it the jet screen flies over,
   and walking up to its big red button opens the yard's laser gate. On the
   showcase deck the boss lift comes down its shaft (13 s) with the mini boss
-  - the robot boss (`RobotBoss`, no respawn) - on it; when it dies the
+  - the robot boss (`RobotBoss`, no respawn) - standing on it (owner asked:
+  "make sure the mini boss comes down on lift"): it steps onto the car up
+  the shaft as the lift starts ("WARNING / HEAVY UNIT DESCENDING") and is
+  carried down, not fighting (`_carry_boss`); players near get
+  `BossIntroCamera` - a crane shot from their side, level with the car as
+  it comes out of the roof, circling and closing in, down to low on the
+  deck looking up; it lands with its stomp (shockwave, the owner's stomp
+  sound, a kick of the view), "MINI BOSS", then the view swoops back.
+  Controls held and no damage during the shot. The boss is warmed up with
+  the robots under the level's cover (`Vfx.level_robots`). When it dies the
   conveyor ramps (15 m/s down into spike pits, faster than a sprint) spin
   down and stop (apply_effects `boss_defeated`), so they can be climbed to
   the exit. Sinking floating platforms (stand on one: it sinks into the
@@ -637,6 +647,21 @@
   saws, the spike press, spike pits, slime: a player back to the door a
   health bar down, robots die. The exit: "LEVEL 2 COMING SOON" (its target
   `level2_part1` isn't made yet).
+  Flyers through the roof (owner asked: "2-3 flying robots that continue to
+  come through the roofs"): from the first fight on, Neon Sentinels dive in
+  (15 m/s) from above the roof through the round lattice skylight over the
+  conveyors (or, once the boss lift is down, its open shaft - the opening
+  nearer the squad, a third of the time the other), startled as they
+  arrive, then hunt the squad anywhere ("INCOMING / FLYERS THROUGH THE
+  ROOF"): 2 at a time, 3 once the mini boss has landed, another 6 s after
+  each dies, for the rest of the level (`AssemblyAscent.sky_*`,
+  `_spawn_sky_hunter`). Routes through the open air: `FlightNav` over
+  `gameplay/flight_graph.res` (`tools/bake_flight_graph.gd --
+  --level=ascent`, 2.5-32.5 m; the yard's laser gate links open with it).
+  The roof's colliders (`Ceiling_Slab`, `Ceiling_BossShaft_Slab`) came in
+  as convex hulls that closed the skylight and shaft: they got their exact
+  shapes (`_open_roof`, as the Works' ceiling) - shots fired up through
+  them now fly out instead of stopping at an invisible lid.
 - Grunt cannons straightened (owner asked: "the weapons mesh is bent"):
   `tools/straighten_grunt_cannons.py` unbent Left_ / Right_Forearm_Weapon
   in `robot_enemy.glb` and `robot_enemy_far.glb` (housing was ~4 deg and
